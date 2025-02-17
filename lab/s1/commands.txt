@@ -1,0 +1,4 @@
+register_write IngressPipe.dst3 0 9223371667672137727
+table_add select_dst get_dst3 10.0.1.0/24 =>
+table_add select_port_from_index set_nhop 3 => 1
+table_add select_port_from_index set_nhop 4 => 2

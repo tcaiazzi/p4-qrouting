@@ -1,0 +1,7 @@
+register_write IngressPipe.row1 0 10
+register_write IngressPipe.row1 1 10
+register_write IngressPipe.row2 2 10
+register_write IngressPipe.row2 3 10
+register_write IngressPipe.row4 4 10
+register_write IngressPipe.row5 5 10
+register_write IngressPipe.row5 6 10
