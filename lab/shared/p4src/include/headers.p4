@@ -11,7 +11,6 @@ header ethernet_h {
     bit<16> ether_type;
 }
 
-
 header ipv4_h {
     bit<4>    version;
     bit<4>    ihl;
@@ -92,7 +91,6 @@ struct tcp_option_sack_top
     bit<8> kind;
     bit<8> length;
 }
-
 
 header udp_h {
     bit<16> src_port;

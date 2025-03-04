@@ -145,7 +145,6 @@ parser PktParser(packet_in packet,
             default: accept;
         }
     }
-
 }
 
 control PktDeparser(packet_out packet, in headers hdr) {
