@@ -102,6 +102,7 @@ parser PktParser(packet_in packet,
 
     state parse_ethernet {
         packet.extract(hdr.ethernet);
+        meta.qlearning_update = hdr.ethernet.dst_addr[47:40];
         transition select(hdr.ethernet.ether_type) {
             ETHERTYPE_IPV4: parse_ipv4;
             default: accept;
@@ -122,13 +123,27 @@ parser PktParser(packet_in packet,
         meta.l4_lookup = {hdr.tcp.src_port, hdr.tcp.dst_port};
         tcp_option_parser.apply(packet, hdr.tcp.data_offset,
                                 hdr.tcp_options_vec, hdr.tcp_options_padding);
-        transition accept;
+        transition select(meta.qlearning_update) {
+            1: parse_qlr_update;
+            default: accept;
+        }
     }
 
     state parse_udp {
         packet.extract(hdr.udp);
         meta.l4_lookup = {hdr.udp.src_port, hdr.udp.dst_port};
-        transition accept;
+        transition select(meta.qlearning_update) {
+            1: parse_qlr_update;
+            default: accept;
+        }
+    }
+
+    state parse_qlr_update {
+        packet.extract(hdr.qlr_updates.next); 
+        transition select(hdr.qlr_updates[hdr.qlr_updates.nextIndex].has_next) {
+            1: parse_qlr_update;
+            default: accept;
+        }
     }
 
 }
@@ -141,6 +156,7 @@ control PktDeparser(packet_out packet, in headers hdr) {
         packet.emit(hdr.tcp_options_vec);
         packet.emit(hdr.tcp_options_padding);
         packet.emit(hdr.udp);
+        packet.emit(hdr.qlr_updates);
     }
 }
 

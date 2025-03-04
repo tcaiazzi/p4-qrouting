@@ -101,9 +101,15 @@ header udp_h {
     bit<16> checksum;
 }
 
+header qlr_update_h {
+    bit<8> dst_id;
+    bit<8> value;
+    bit<8> has_next; 
+}
 
 struct metadata {
     l4_lookup_t l4_lookup;
+    bit<8> qlearning_update;
 }
 
 struct headers {
@@ -113,6 +119,7 @@ struct headers {
     tcp_option_stack tcp_options_vec;
     tcp_option_padding_h tcp_options_padding;
     udp_h udp;
+    qlr_update_h[NODES_NUM] qlr_updates;
 }
 
 #endif

@@ -31,27 +31,22 @@ control IngressPipe(inout headers hdr,
     
     action get_dst1() {
         dst_num = 1;
-        dst1.read(dst_value, 0);
     }
 
     action get_dst2() {
         dst_num = 2;
-        dst2.read(dst_value, 0);
     }
 
     action get_dst3() {
         dst_num = 3;
-        dst3.read(dst_value, 0);
     }
 
     action get_dst4() {
         dst_num = 4;
-        dst4.read(dst_value, 0);
     }
 
     action get_dst5() {
         dst_num = 5;
-        dst5.read(dst_value, 0);
     }
     
     table select_dst {
@@ -79,22 +74,23 @@ control IngressPipe(inout headers hdr,
         }
     }
 
-    bit<8> min_value;
-    bit<8> min_index;
-    action min8(bit<8> a, bit<8> b, bit<8> index) {
-        if(a < b){
-            min_value = a;
+    bit<8> max_value;
+    bit<8> max_index;
+    action max8(bit<8> a, bit<8> b, bit<8> index) {
+        if(a > b){
+            max_value = a;
         } else {
-            min_value = b;
-            min_index = index;
+            max_value = b;
+            max_index = index;
         }
-        log_msg("min8: {} {} {}", {a, b, min_value});
+        log_msg("max8: {} {} {}", {a, b, max_value});
     }
 
-
+    bit<8> max_selected_index;
     table select_port_from_index {
         key = {
-            min_index: exact;
+            max_selected_index: exact;
+            dst_num: exact;
         }
         actions = {
             set_nhop;
@@ -121,21 +117,126 @@ control IngressPipe(inout headers hdr,
         default_action = drop;
     }
 
-    apply {
-        if (select_dst.apply().hit) {
-            min_value = dst_value[7:0];
-            min_index = 0;
-            min8(min_value, dst_value[15:8], 1);
-            min8(min_value, dst_value[23:16], 2);
-            min8(min_value, dst_value[31:24], 3);
-            min8(min_value, dst_value[39:32], 4);
-            min8(min_value, dst_value[47:40], 5);
-            min8(min_value, dst_value[55:48], 6);
-            min8(min_value, dst_value[63:56], 7);
-            log_msg("min: {}", {min_value});
-            select_port_from_index.apply();
-            log_msg("selected port: {}", {standard_metadata.egress_spec});
+    table get_qdepth {
+        key = {
+            standard_metadata.egress_spec: exact;
         }
+        actions = {
+            set_qdepth;
+            drop;
+        }
+        size = 1024;
+        default_action = drop;
+    }
+
+
+    apply {
+        select_dst.apply();
+        
+        // TODO: add table to update registers
+        // update_registers.apply()
+
+        // move in action of update registers
+        // use named variable for each destination 
+        dst1.read(dst_value, 0);
+        max_value = dst_value[7:0];
+        max_index = 0;
+        max8(max_value, dst_value[15:8], 1);
+        max8(max_value, dst_value[23:16], 2);
+        max8(max_value, dst_value[31:24], 3);
+        max8(max_value, dst_value[39:32], 4);
+        max8(max_value, dst_value[47:40], 5);
+        max8(max_value, dst_value[55:48], 6);
+        max8(max_value, dst_value[63:56], 7);
+        log_msg("max: {}", {max_value});
+        
+        if (dst_num != 1) {
+            hdr.update_list[0].dst_id = 1;
+            hdr.update_list[0].value = max_value;
+        } else {
+            max_selected_index = max_index;
+        }
+
+        dst2.read(dst_value, 0);
+        max_value = dst_value[7:0];
+        max_index = 0;
+        max8(max_value, dst_value[15:8], 1);
+        max8(max_value, dst_value[23:16], 2);
+        max8(max_value, dst_value[31:24], 3);
+        max8(max_value, dst_value[39:32], 4);
+        max8(max_value, dst_value[47:40], 5);
+        max8(max_value, dst_value[55:48], 6);
+        max8(max_value, dst_value[63:56], 7);
+        log_msg("max: {}", {max_value});
+
+        if (dst_num != 2) {
+            hdr.update_list[1].dst_id = 2;
+            hdr.update_list[1].value = max_value;
+        } else {
+            max_selected_index = max_index;
+        }
+
+        dst3.read(dst_value, 0);
+        max_value = dst_value[7:0];
+        max_index = 0;
+        max8(max_value, dst_value[15:8], 1);
+        max8(max_value, dst_value[23:16], 2);
+        max8(max_value, dst_value[31:24], 3);
+        max8(max_value, dst_value[39:32], 4);
+        max8(max_value, dst_value[47:40], 5);
+        max8(max_value, dst_value[55:48], 6);
+        max8(max_value, dst_value[63:56], 7);
+        log_msg("max: {}", {max_value});
+        if (dst_num != 3) {
+            hdr.update_list[2].dst_id = 3;
+            hdr.update_list[2].value = max_value;
+        } else {
+            max_selected_index = max_index;
+        }
+
+        dst4.read(dst_value, 0);
+        max_value = dst_value[7:0];
+        max_index = 0;
+        max8(max_value, dst_value[15:8], 1);
+        max8(max_value, dst_value[23:16], 2);
+        max8(max_value, dst_value[31:24], 3);
+        max8(max_value, dst_value[39:32], 4);
+        max8(max_value, dst_value[47:40], 5);
+        max8(max_value, dst_value[55:48], 6);
+        max8(max_value, dst_value[63:56], 7);
+        log_msg("max: {}", {max_value});
+
+        if (dst_num != 4) {
+            hdr.update_list[3].dst_id = 4;
+            hdr.update_list[3].value = max_value;
+        } else {
+            max_selected_index = max_index;
+        }
+
+        dst5.read(dst_value, 0);
+        max_value = dst_value[7:0];
+        max_index = 0;
+        max8(max_value, dst_value[15:8], 1);
+        max8(max_value, dst_value[23:16], 2);
+        max8(max_value, dst_value[31:24], 3);
+        max8(max_value, dst_value[39:32], 4);
+        max8(max_value, dst_value[47:40], 5);
+        max8(max_value, dst_value[55:48], 6);
+        max8(max_value, dst_value[63:56], 7);
+        log_msg("max: {}", {max_value});
+
+        if (dst_num != 5) {
+            hdr.update_list[4].dst_id = 5;
+            hdr.update_list[4].value = max_value;
+        } else {
+            max_selected_index = max_index;
+        }
+
+        log_msg("selected destination: {}", {dst_num});
+        select_port_from_index.apply();
+        log_msg("selected port: {}", {standard_metadata.egress_spec});
+
+        // Activate update headers (using a table computed from the graphs)
     }
 }
 

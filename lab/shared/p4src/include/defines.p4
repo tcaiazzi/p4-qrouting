@@ -12,6 +12,7 @@ const bit<8> PROTO_SRV6 = 43;
 const bit<8> PROTO_IPV6 = 41;
 
 #define MAX_N_COL 1024
+#define NODES_NUM 5
 
 /* Struct to store L4 ports */
 struct l4_lookup_t {
