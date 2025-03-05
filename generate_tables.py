@@ -14,45 +14,58 @@ def generate_qmatrix_updates(path, node_list, perms):
 
     action_names = []
     actions = []
+    consts = []
     for items in perms:
-        items_str = "_".join(list([str(i) for i in items]))
-        action_name = f"qmatrix_update_{items_str}"
-        action_header = f"action {action_name}() {{\n"
+        items_str = "_".join(list([f"r{i}" for i in items]))
+        for col in range(1, num_nodes + 1):
+            action_name = f"qmatrix_update_{items_str}_c{col}"
+            action_header = f"action {action_name}() {{\n"
 
-        action_body = ""
-        idx = 0
-        for i in range (1, num_nodes + 1):
-            if i in items:
-                action_body += f"    row{i}.read(row{i}_value, 0);\n"
-                slice_start = 8 * (i - 1)
-                slice_end = (8 * i) - 1
-                # Bellman formula
-                row_slice = f"row{i}_value[{slice_end}:{slice_start}]"
-                action_body += f"    log_msg(\"updating row{i}_value - before: {{}}\", {{{row_slice}}});\n"
-                action_body += f"    {row_slice} = {row_slice} + (ig_qdepth + hdr.qlr_updates[{idx}].value - {row_slice});\n"
-                action_body += f"    log_msg(\"updating row{i}_value - after: {{}}\", {{{row_slice}}});\n"
-                action_body += f"    row{i}.write(0, row{i}_value);\n"
-                idx += 1
-            else:
-                action_body += f"    log_msg(\"reading row{i}_value\");\n"
-                action_body += f"    row{i}.read(row{i}_value, 0);\n"
-        
-        action_names.append(action_name)
-        actions.append(action_header + action_body + "}\n")
+            const_entry = []
+            action_body = ""
+            idx = 0
+            for i in range (1, num_nodes + 1):
+                if i in items:
+                    action_body += f"    row{i}.read(row{i}_value, 0);\n"
+                    slice_start = 8 * (col - 1)
+                    slice_end = (8 * col) - 1
+                    # Bellman formula
+                    row_slice = f"row{i}_value[{slice_end}:{slice_start}]"
+                    action_body += f"    log_msg(\"updating row{i}_value - before: {{}}\", {{{row_slice}}});\n"
+                    action_body += f"    {row_slice} = {row_slice} + (ig_qdepth + hdr.qlr_updates[{idx}].value - {row_slice});\n"
+                    action_body += f"    log_msg(\"updating row{i}_value - after: {{}}\", {{{row_slice}}});\n"
+                    action_body += f"    row{i}.write(0, row{i}_value);\n"
 
-        action_names_str = "\n".join([f"        {a};" for a in action_names])
+                    const_entry.append(f"true, {i}")
 
-        keys = ""
-        for node in node_list:
-            keys += f"        hdr.qlr_updates[{node - 1}].isValid(): exact;\n"
-            keys += f"        hdr.qlr_updates[{node - 1}].dst_id: exact;\n"
-        keys = keys[:-1]
+                    idx += 1
+                else:
+                    action_body += f"    log_msg(\"reading row{i}_value\");\n"
+                    action_body += f"    row{i}.read(row{i}_value, 0);\n"
+
+            const_entry.extend(["false, 0" for _ in range(1, num_nodes - len(const_entry) + 1)])
+
+            const_entry.append(str(col))
+
+            action_names.append(action_name)
+            actions.append(action_header + action_body + "}\n")
+            consts.append("(" + ", ".join(const_entry) + f"): {action_name}()")
+
+    action_names_str = "\n".join([f"        {a};" for a in action_names])
+
+    keys = ""
+    for node in node_list:
+        keys += f"        hdr.qlr_updates[{node - 1}].isValid(): exact;\n"
+        keys += f"        hdr.qlr_updates[{node - 1}].dst_id: exact;\n"
+    keys += "        ig_idx: exact;"
 
     action_read_all = "action read_all() {\n"
     for node in node_list:
         action_read_all += f"    log_msg(\"reading row{node}_value\");\n"
         action_read_all += f"    row{node}.read(row{node}_value, 0);\n"
     action_read_all += "}\n"
+
+    consts_str = "\n".join([f"        {c};" for c in consts])
 
     table_def = f"""table qmatrix_update {{
     key = {{
@@ -62,8 +75,10 @@ def generate_qmatrix_updates(path, node_list, perms):
 {action_names_str}
         read_all;
     }}
-    size = {len(action_names) + 1};
-    default_action = read_all;
+    const default_action = read_all;
+    const entries = {{
+{consts_str}
+    }}
 }}"""
 
     final_str = "#ifndef __QMATRIX_UPDATE__\n#define __QMATRIX_UPDATE__\n\n" + "\n".join(actions) + f"\n{action_read_all}\n" + table_def + "\n\n#endif"

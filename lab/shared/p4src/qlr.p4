@@ -34,6 +34,7 @@ control IngressPipe(inout headers hdr,
     register<bit<64>>(1) row3;
     register<bit<64>>(1) row4;
     register<bit<64>>(1) row5;
+    register<bit<8>>(NODES_NUM) ig_qdepths;
     
     action drop() {
         mark_to_drop(standard_metadata);
@@ -64,7 +65,7 @@ control IngressPipe(inout headers hdr,
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
 
-    table select_port_from_index {
+    table select_port_from_row_col {
         key = {
             row_num: exact;
             col_num: exact;
@@ -77,8 +78,23 @@ control IngressPipe(inout headers hdr,
         default_action = drop;
     }
 
-    /* TODO: Add table to get the ig_qdepth */
+    /* Get the ingress port qdepth and the port index */
     bit<8> ig_qdepth = 0;
+    bit<6> ig_idx = 0;
+    action get_ig_qdepth_and_idx(bit<6> idx) {
+        ig_qdepths.read(ig_qdepth, (bit<32>) idx);
+        ig_idx = idx;
+    }
+
+    table read_ig_qdepth {
+        key = {
+            standard_metadata.ingress_port: exact;
+        }
+        actions = {
+            get_ig_qdepth_and_idx;
+        }
+        size = 64;
+    }
 
     /* Include the qmatrix_update actions and table */
     bit<64> row1_value = 0;
@@ -102,11 +118,14 @@ control IngressPipe(inout headers hdr,
             max_index = index;
         }
 
-        log_msg("max8: {} {} {}", {a, b, max_value});
+        log_msg("max8: a={} b={} max_value={} idx={}", {a, b, max_value, max_index});
     }
 
     apply {
         if (select_row.apply().hit) {
+            /* Read ingress port qdepth and get the ingress port index */
+            read_ig_qdepth.apply();
+
             /* Update rows using the pkt information */
             qmatrix_update.apply();
 
@@ -117,7 +136,7 @@ control IngressPipe(inout headers hdr,
             MAX_VALUE(5, 4)
 
             log_msg("selected destination: {}", {row_num});
-            select_port_from_index.apply();
+            select_port_from_row_col.apply();
             log_msg("selected port: {}", {standard_metadata.egress_spec});
 
             /* Activate update headers (table is populated from the DAGs) */
