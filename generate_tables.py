@@ -28,9 +28,9 @@ def generate_qmatrix_updates(path, node_list, perms):
                 slice_end = (8 * i) - 1
                 # Bellman formula
                 row_slice = f"row{i}_value[{slice_end}:{slice_start}]"
-                action_body += f"    log_msg(\"updating row{i}_value - before: {{}}\", {row_slice});\n"
-                action_body += f"    {row_slice} = {row_slice} + (ig_qdepth + 0.9 * hdr.qlr_updates[{idx}].value - {row_slice});\n"
-                action_body += f"    log_msg(\"updating row{i}_value - after: {{}}\", {row_slice});\n"
+                action_body += f"    log_msg(\"updating row{i}_value - before: {{}}\", {{{row_slice}}});\n"
+                action_body += f"    {row_slice} = {row_slice} + (ig_qdepth + hdr.qlr_updates[{idx}].value - {row_slice});\n"
+                action_body += f"    log_msg(\"updating row{i}_value - after: {{}}\", {{{row_slice}}});\n"
                 action_body += f"    row{i}.write(0, row{i}_value);\n"
                 idx += 1
             else:
@@ -86,7 +86,7 @@ def generate_qlr_updates(path, node_list, perms):
         action_body = ""
         for i, item in enumerate(items):
             action_body += f"    hdr.qlr_updates[{item - 1}].setValid();\n"
-            action_body += f"    hdr.qlr_updates.has_next = " + ("0" if i == len(items) - 1 else "1") + ";\n"
+            action_body += f"    hdr.qlr_updates[{item - 1}].has_next = " + ("0" if i == len(items) - 1 else "1") + ";\n"
             action_body += f"    log_msg(\"set valid: hdr.qlr_updates[{item - 1}]\");\n"
 
         action_names.append(action_name)

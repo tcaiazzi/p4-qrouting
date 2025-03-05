@@ -140,7 +140,7 @@ parser PktParser(packet_in packet,
 
     state parse_qlr_update {
         packet.extract(hdr.qlr_updates.next); 
-        transition select(hdr.qlr_updates[hdr.qlr_updates.nextIndex].has_next) {
+        transition select(hdr.qlr_updates.last.has_next) {
             1: parse_qlr_update;
             default: accept;
         }

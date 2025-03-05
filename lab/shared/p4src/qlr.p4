@@ -7,6 +7,25 @@
 #include "include/parser.p4"
 #include "include/checksums.p4"
 
+#define MAX_VALUE(i, j)                                       \
+    max_value = row##i##_value[7:0];                          \
+    max_index = 0;                                            \
+    max8(max_value, row##i##_value[15:8], 1);                 \
+    max8(max_value, row##i##_value[23:16], 2);                \
+    max8(max_value, row##i##_value[31:24], 3);                \
+    max8(max_value, row##i##_value[39:32], 4);                \
+    max8(max_value, row##i##_value[47:40], 5);                \
+    max8(max_value, row##i##_value[55:48], 6);                \
+    max8(max_value, row##i##_value[63:56], 7);                \
+    log_msg("row ##i max: {}", {max_value});                  \
+    if (row_num != i) {                                       \
+        hdr.qlr_updates[j].dst_id = i;                        \
+        hdr.qlr_updates[j].value = max_value;                 \
+    } else {                                                  \
+        col_num = max_index;                                  \
+    }
+
+
 control IngressPipe(inout headers hdr,
                     inout metadata meta,
                     inout standard_metadata_t standard_metadata) {
@@ -22,7 +41,7 @@ control IngressPipe(inout headers hdr,
     
     /* Convert the IP prefix to a row number */
     bit<8> row_num = 0;    
-    action get_row_num(num) {
+    action get_row_num(bit<8> num) {
         row_num = num;
     }
     
@@ -39,7 +58,7 @@ control IngressPipe(inout headers hdr,
     }
 
     /* Selects the outgoing port of this packet */
-    bit<8> col_num;
+    bit<8> col_num = 0;
     action set_nhop(bit<9> port) {
         standard_metadata.egress_spec = port;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
@@ -70,7 +89,7 @@ control IngressPipe(inout headers hdr,
     #include "lut/qmatrix_update.p4"
 
     /* Include the qlr_pkt_updates actions and table */
-    #include "lut/qlr_updates.p4"
+    #include "lut/qlr_pkt_updates.p4"
 
     /* Helper to compute the max value */
     bit<8> max_value = 0;
@@ -87,98 +106,15 @@ control IngressPipe(inout headers hdr,
     }
 
     apply {
-        if (select_dst.apply().hit) {
+        if (select_row.apply().hit) {
             /* Update rows using the pkt information */
             qmatrix_update.apply();
 
-            max_value = row1_value[7:0];
-            max_index = 0;
-            max8(max_value, row1_value[15:8], 1);
-            max8(max_value, row1_value[23:16], 2);
-            max8(max_value, row1_value[31:24], 3);
-            max8(max_value, row1_value[39:32], 4);
-            max8(max_value, row1_value[47:40], 5);
-            max8(max_value, row1_value[55:48], 6);
-            max8(max_value, row1_value[63:56], 7);
-            log_msg("row1 max: {}", {max_value});
-            
-            if (row_num != 1) {
-                hdr.qlr_updates[0].dst_id = 1;
-                hdr.qlr_updates[0].value = max_value;
-            } else {
-                col_num = max_index;
-            }
-
-            max_value = row2_value[7:0];
-            max_index = 0;
-            max8(max_value, row2_value[15:8], 1);
-            max8(max_value, row2_value[23:16], 2);
-            max8(max_value, row2_value[31:24], 3);
-            max8(max_value, row2_value[39:32], 4);
-            max8(max_value, row2_value[47:40], 5);
-            max8(max_value, row2_value[55:48], 6);
-            max8(max_value, row2_value[63:56], 7);
-            log_msg("row2 max: {}", {max_value});
-
-            if (row_num != 2) {
-                hdr.qlr_updates[1].dst_id = 2;
-                hdr.qlr_updates[1].value = max_value;
-            } else {
-                col_num = max_index;
-            }
-
-            max_value = row3_value[7:0];
-            max_index = 0;
-            max8(max_value, row3_value[15:8], 1);
-            max8(max_value, row3_value[23:16], 2);
-            max8(max_value, row3_value[31:24], 3);
-            max8(max_value, row3_value[39:32], 4);
-            max8(max_value, row3_value[47:40], 5);
-            max8(max_value, row3_value[55:48], 6);
-            max8(max_value, row3_value[63:56], 7);
-            log_msg("row3 max: {}", {max_value});
-            if (row_num != 3) {
-                hdr.qlr_updates[2].dst_id = 3;
-                hdr.qlr_updates[2].value = max_value;
-            } else {
-                col_num = max_index;
-            }
-
-            max_value = row4_value[7:0];
-            max_index = 0;
-            max8(max_value, row4_value[15:8], 1);
-            max8(max_value, row4_value[23:16], 2);
-            max8(max_value, row4_value[31:24], 3);
-            max8(max_value, row4_value[39:32], 4);
-            max8(max_value, row4_value[47:40], 5);
-            max8(max_value, row4_value[55:48], 6);
-            max8(max_value, row4_value[63:56], 7);
-            log_msg("row4 max: {}", {max_value});
-
-            if (row_num != 4) {
-                hdr.qlr_updates[3].dst_id = 4;
-                hdr.qlr_updates[3].value = max_value;
-            } else {
-                col_num = max_index;
-            }
-
-            max_value = row5_value[7:0];
-            max_index = 0;
-            max8(max_value, row5_value[15:8], 1);
-            max8(max_value, row5_value[23:16], 2);
-            max8(max_value, row5_value[31:24], 3);
-            max8(max_value, row5_value[39:32], 4);
-            max8(max_value, row5_value[47:40], 5);
-            max8(max_value, row5_value[55:48], 6);
-            max8(max_value, row5_value[63:56], 7);
-            log_msg("row5 max: {}", {max_value});
-
-            if (row_num != 5) {
-                hdr.qlr_updates[4].dst_id = 5;
-                hdr.qlr_updates[4].value = max_value;
-            } else {
-                col_num = max_index;
-            }
+            MAX_VALUE(1, 0)
+            MAX_VALUE(2, 1)
+            MAX_VALUE(3, 2)
+            MAX_VALUE(4, 3)
+            MAX_VALUE(5, 4)
 
             log_msg("selected destination: {}", {row_num});
             select_port_from_index.apply();
