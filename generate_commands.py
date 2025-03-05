@@ -1,79 +1,77 @@
 import struct
 
-import networkx as nx
 import matplotlib.pyplot as plt
+import networkx as nx
 
-def generate_node_commands_from_dag(dag: nx.DiGraph, node, goal):
-    commands = []
-    row_slice = [0, 0, 0, 0, 0, 0, 0, 0]
-    for edge in dag.edges:
-        if node == edge[0]:
-            iface_num = nodes[node][edge[1]]
-            row_slice[iface_num] = 1
-    
-    for i, slice in enumerate(row_slice): 
-        if slice > 0:
-            commands.append(f"table_add select_port_from_row_col set_nhop {goal} {i} => {i+1}")
 
-    row_slice.reverse()
-    packed_bytes = struct.pack(">" + ("B" * len(row_slice)), *row_slice)
+def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int) -> list[str]:
+    cmd = []
+    row_slices = [0, 0, 0, 0, 0, 0, 0, 0]
+    for e in node_dag.edges:
+        if start == e[0]:
+            iface_num = net[start][e[1]]
+            row_slices[iface_num] = 1
 
-    commands.append(f"register_write IngressPipe.row{goal+1} 0 {int.from_bytes(packed_bytes)}")
-    return commands   
+    for i, row_slice in enumerate(row_slices):
+        if row_slice > 0:
+            cmd.append(f"table_add select_port_from_row_col set_nhop {goal} {i} => {i + 1}")
+
+    row_slices.reverse()
+    packed_bytes = struct.pack(">" + ("B" * len(row_slices)), *row_slices)
+
+    cmd.append(f"register_write IngressPipe.row{goal + 1} 0 {int.from_bytes(packed_bytes)}")
+
+    return cmd
 
 
 if __name__ == "__main__":
-    nodes = {
-        0: { 1: 0, 2: 1 },
-        1: { 0: 0, 2: 1, 3: 2 },
-        2: { 0: 0, 1: 1, 3: 2, 4: 3},
-        3: { 1: 0, 2: 1, 4: 2},
-        4: { 3: 0, 2: 1},
+    network = {
+        0: {1: 0, 2: 1},
+        1: {0: 0, 2: 1, 3: 2},
+        2: {0: 0, 1: 1, 3: 2, 4: 3},
+        3: {1: 0, 2: 1, 4: 2},
+        4: {3: 0, 2: 1},
     }
 
-    dags = {}
+    dags = {k: nx.DiGraph() for k in network}
 
-    dag0 = nx.DiGraph()
-    dag0.add_nodes_from(nodes.keys())
-    edges = [(3, 1), (3, 4), (4, 2), (1, 0), (2, 0)]
-    dag0.add_edges_from(edges)
-    dags[0] = dag0
+    dags[0].add_nodes_from(network.keys())
+    dags[0].add_edges_from([(3, 1), (3, 4), (4, 2), (1, 0), (2, 0)])
 
-    dag1 = nx.DiGraph()
-    dag1.add_nodes_from(nodes.keys())
-    edges = [(0, 1), (2, 0), (2, 1), (4, 2), (3, 1), (3, 4)]
-    dag1.add_edges_from(edges)
-    dags[1] = dag1
+    dags[1].add_nodes_from(network.keys())
+    dags[1].add_edges_from([(0, 1), (2, 0), (2, 1), (4, 2), (3, 1), (3, 4)])
 
-    dag3 = nx.DiGraph()
-    dag3.add_nodes_from(nodes.keys())
-    edges = [(0, 1), (1, 3), (3, 2), (3, 4), (2, 4)]
-    dag3.add_edges_from(edges)
-    dags[3] = dag3
+    dags[2].add_nodes_from(network.keys())
+    dags[2].add_edges_from([(0, 1), (0, 2), (1, 2), (1, 3), (3, 2), (4, 2), (4, 3)])
 
-    #Commands for B
+    dags[3].add_network_from(network.keys())
+    dags[3].add_edges_from([(0, 1), (0, 2), (1, 3), (2, 4), (2, 3), (4, 3)])
+
+    dags[4].add_network_from(network.keys())
+    dags[4].add_edges_from([(0, 1), (1, 3), (3, 2), (3, 4), (2, 4)])
+
+    # Commands for B
     commands = []
-    commands.extend(generate_node_commands_from_dag(dag0, 1, 0))
-    #commands.extend(generate_node_commands_from_dag(dag1, 1, 1))
-    commands.extend(generate_node_commands_from_dag(dag3, 1, 3))
+    commands.extend(generate_node_commands_from_dag(dags[0], network, 1, 0))
+    # commands.extend(generate_node_commands_from_dag(dag1, network, 1, 1))
+    commands.extend(generate_node_commands_from_dag(dags[3], network, 1, 3))
 
     node_name = 1
-    for dst in dags.keys(): 
-        if dst == node_name: 
+    for dst in dags.keys():
+        if dst == node_name:
             continue
+        headers_to_activate = set()
         for update_node, dag in dags.items():
-            if dst == update_node: 
+            if dst == update_node:
                 continue
-            headers_to_activate = set()
-            for edge in dag.edges: 
+            for edge in dag.edges:
                 if edge[1] == node_name:
                     headers_to_activate.add(str(update_node + 1))
         headers_to_activate = sorted(list(headers_to_activate))
-        command = f"table_add qlr_pkt_updates {dst + 1} => qlr_pkt_set_" + "_".join(headers_to_activate)
-        print(command)
+        commands.append(f"table_add qlr_pkt_updates {dst + 1} => qlr_pkt_set_" + "_".join(headers_to_activate))
 
     print(commands)
-    
+
     # plt.figure(figsize=(6, 4))
     # pos = nx.kamada_kawai_layout(dag1)  # Kamada-Kawai layout to minimize edge crossings
 

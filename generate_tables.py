@@ -24,7 +24,7 @@ def generate_qmatrix_updates(path, node_list, perms):
             const_entry = []
             action_body = ""
             idx = 0
-            for i in range (1, num_nodes + 1):
+            for i in range(1, num_nodes + 1):
                 if i in items:
                     action_body += f"    row{i}.read(row{i}_value, 0);\n"
                     slice_start = 8 * (col - 1)
