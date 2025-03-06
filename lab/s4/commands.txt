@@ -1,6 +1,14 @@
-register_write IngressPipe.row1 0 10
-register_write IngressPipe.row1 1 10
-register_write IngressPipe.row2 3 10
-register_write IngressPipe.row3 2 10
-register_write IngressPipe.row3 4 10
-register_write IngressPipe.row5 5 10
+table_add select_port_from_row_col set_nhop 0 0 => 1
+table_add select_port_from_row_col set_nhop 1 0 => 1
+register_write IngressPipe.row1 0 65537
+register_write IngressPipe.row2 0 65537
+register_write IngressPipe.row5 0 65792
+table_add select_port_from_row_col set_nhop 4 1 => 2
+table_add qlr_pkt_updates 2 => qlr_pkt_set_3_4_5
+table_add qlr_pkt_updates 3 => qlr_pkt_set_4
+table_add select_port_from_row_col set_nhop 0 2 => 3
+register_write IngressPipe.row3 0 256
+table_add select_port_from_row_col set_nhop 1 2 => 3
+table_add qlr_pkt_updates 5 => qlr_pkt_set_3_4
+table_add select_port_from_row_col set_nhop 2 1 => 2
+table_add select_port_from_row_col set_nhop 4 2 => 3

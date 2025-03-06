@@ -1,4 +1,5 @@
 import struct
+import os
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -49,34 +50,42 @@ if __name__ == "__main__":
 
     dags[4].add_nodes_from(network.keys())
     dags[4].add_edges_from([(0, 1), (1, 3), (3, 2), (3, 4), (2, 4)])
-
+    
     for node_name in network:
-        commands = []
+        commands = set()
         for tgt in network:
             if node_name == tgt:
                 continue
             # Commands for B
             
             tgt_commands = generate_node_commands_from_dag(dags[tgt], network, node_name, tgt)
-            commands.extend(tgt_commands)
+            commands.update(tgt_commands)
             # commands.extend(generate_node_commands_from_dag(dag1, network, 1, 1))
             # commands.extend(generate_node_commands_from_dag(dags[tgt], network, node_name, tgt))
 
         for dst in network:
             if dst == node_name:
                 continue
-            headers_to_activate = set()
-            for update_node, dag in dags.items():
-                if dst == update_node or update_node == node_name:
-                    continue
-                for edge in dag.edges:
-                    if edge[0] != dst and edge[1] == node_name:
-                        print(f"node_name={node_name}", f"dst={dst}", f"update={update_node}", f"edge={edge}")
 
-                        headers_to_activate.add(str(update_node + 1))
-            headers_to_activate = sorted(list(headers_to_activate))
-            commands.append(f"table_add qlr_pkt_updates {dst + 1} => qlr_pkt_set_" + "_".join(headers_to_activate))
-            print(commands[-1])
-        
-        print("src=", node_name, commands)
-        # exit()
+            paths = list(nx.all_simple_paths(dags[dst], source=node_name, target=dst))
+            neighbors = set(map(lambda x: x[1], paths))
+            #print(f"node_name={node_name}", f"dst={dst}", f"neighbors={neighbors}")
+            for neighbor in neighbors:
+                #print(f"Processing neighbor: {neighbor}")
+                headers_to_activate = set()
+                for update_node, dag in dags.items():
+                    if dst == update_node:
+                        continue
+                    for edge in dag.edges:
+                        if edge[1] == node_name and edge[0]==neighbor:
+                            #print(f"node_name={node_name}", f"dst={dst}", f"update={update_node}", f"edge={edge}")
+
+                            headers_to_activate.add(str(update_node + 1))
+                if headers_to_activate:
+                    headers_to_activate = sorted(list(headers_to_activate))
+                    commands.add(f"table_add qlr_pkt_updates {neighbor + 1} => qlr_pkt_set_" + "_".join(headers_to_activate))
+                    
+        commands_path = os.path.join("lab", f"s{node_name+1}", "commands.txt")
+        with open(commands_path, "w") as f: 
+            f.write("\n".join(commands))
+       
