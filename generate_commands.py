@@ -3,7 +3,7 @@ import os
 
 import matplotlib.pyplot as plt
 import networkx as nx
-
+import ipaddress
 
 def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int) -> list[str]:
     cmd = []
@@ -51,6 +51,10 @@ if __name__ == "__main__":
     dags[4].add_nodes_from(network.keys())
     dags[4].add_edges_from([(0, 1), (1, 3), (3, 2), (3, 4), (2, 4)])
     
+    subnets = ipaddress.ip_network("10.0.0.0/16").subnets(prefixlen_diff=8)
+
+    node_to_network = {k: next(subnets) for k in network}
+    
     for node_name in network:
         commands = set()
         for tgt in network:
@@ -84,8 +88,13 @@ if __name__ == "__main__":
                 if headers_to_activate:
                     headers_to_activate = sorted(list(headers_to_activate))
                     commands.add(f"table_add qlr_pkt_updates {neighbor + 1} => qlr_pkt_set_" + "_".join(headers_to_activate))
-                    
+
+        for node, subnet in node_to_network.items():
+            if node == node_name:
+                continue
+            commands.add(f"table_add select_row {str(subnet)} => get_row_num {node+1}")
+
         commands_path = os.path.join("lab", f"s{node_name+1}", "commands.txt")
         with open(commands_path, "w") as f: 
-            f.write("\n".join(commands))
+            f.write("\n".join(sorted(list(commands))))
        
