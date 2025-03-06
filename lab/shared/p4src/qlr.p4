@@ -22,9 +22,10 @@
         hdr.qlr_updates[j].dst_id = i;                        \
         hdr.qlr_updates[j].value = max_value;                 \
     } else {                                                  \
+        hdr.qlr_updates[j].dst_id = i;                        \
+        hdr.qlr_updates[j].value = 0;                         \
         col_num = max_index;                                  \
     }
-
 
 control IngressPipe(inout headers hdr,
                     inout metadata meta,
@@ -83,7 +84,7 @@ control IngressPipe(inout headers hdr,
     bit<6> ig_idx = 0;
     action get_ig_qdepth_and_idx(bit<6> idx) {
         ig_qdepths.read(ig_qdepth, (bit<32>) idx);
-        ig_idx = idx;
+        ig_idx = idx + 1;
     }
 
     table read_ig_qdepth {

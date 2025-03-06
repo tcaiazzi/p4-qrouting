@@ -5,6 +5,9 @@ register_write IngressPipe.row5 0 65536
 table_add qlr_pkt_updates 1 => qlr_pkt_set_2_3_4_5
 table_add qlr_pkt_updates 3 => qlr_pkt_set_2
 table_add qlr_pkt_updates 4 => qlr_pkt_set_1_2
+table_add read_ig_qdepth 1 => get_ig_qdepth_and_idx 0
+table_add read_ig_qdepth 2 => get_ig_qdepth_and_idx 1
+table_add read_ig_qdepth 3 => get_ig_qdepth_and_idx 2
 table_add select_port_from_row_col set_nhop 0 0 => 1
 table_add select_port_from_row_col set_nhop 2 1 => 2
 table_add select_port_from_row_col set_nhop 2 2 => 3
