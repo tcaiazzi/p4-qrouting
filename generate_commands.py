@@ -44,37 +44,39 @@ if __name__ == "__main__":
     dags[2].add_nodes_from(network.keys())
     dags[2].add_edges_from([(0, 1), (0, 2), (1, 2), (1, 3), (3, 2), (4, 2), (4, 3)])
 
-    dags[3].add_network_from(network.keys())
+    dags[3].add_nodes_from(network.keys())
     dags[3].add_edges_from([(0, 1), (0, 2), (1, 3), (2, 4), (2, 3), (4, 3)])
 
-    dags[4].add_network_from(network.keys())
+    dags[4].add_nodes_from(network.keys())
     dags[4].add_edges_from([(0, 1), (1, 3), (3, 2), (3, 4), (2, 4)])
 
-    # Commands for B
-    commands = []
-    commands.extend(generate_node_commands_from_dag(dags[0], network, 1, 0))
-    # commands.extend(generate_node_commands_from_dag(dag1, network, 1, 1))
-    commands.extend(generate_node_commands_from_dag(dags[3], network, 1, 3))
-
-    node_name = 1
-    for dst in dags.keys():
-        if dst == node_name:
-            continue
-        headers_to_activate = set()
-        for update_node, dag in dags.items():
-            if dst == update_node:
+    for node_name in network:
+        commands = []
+        for tgt in network:
+            if node_name == tgt:
                 continue
-            for edge in dag.edges:
-                if edge[1] == node_name:
-                    headers_to_activate.add(str(update_node + 1))
-        headers_to_activate = sorted(list(headers_to_activate))
-        commands.append(f"table_add qlr_pkt_updates {dst + 1} => qlr_pkt_set_" + "_".join(headers_to_activate))
+            # Commands for B
+            
+            tgt_commands = generate_node_commands_from_dag(dags[tgt], network, node_name, tgt)
+            commands.extend(tgt_commands)
+            # commands.extend(generate_node_commands_from_dag(dag1, network, 1, 1))
+            # commands.extend(generate_node_commands_from_dag(dags[tgt], network, node_name, tgt))
 
-    print(commands)
+        for dst in network:
+            if dst == node_name:
+                continue
+            headers_to_activate = set()
+            for update_node, dag in dags.items():
+                if dst == update_node or update_node == node_name:
+                    continue
+                for edge in dag.edges:
+                    if edge[0] != dst and edge[1] == node_name:
+                        print(f"node_name={node_name}", f"dst={dst}", f"update={update_node}", f"edge={edge}")
 
-    # plt.figure(figsize=(6, 4))
-    # pos = nx.kamada_kawai_layout(dag1)  # Kamada-Kawai layout to minimize edge crossings
-
-    # nx.draw(dag1, pos=pos, with_labels=True, node_color='lightblue', edge_color='red', node_size=2000, font_size=12)
-    # plt.title("NetworkX Undirected Graph Representation")
-    # plt.savefig("network.pdf")
+                        headers_to_activate.add(str(update_node + 1))
+            headers_to_activate = sorted(list(headers_to_activate))
+            commands.append(f"table_add qlr_pkt_updates {dst + 1} => qlr_pkt_set_" + "_".join(headers_to_activate))
+            print(commands[-1])
+        
+        print("src=", node_name, commands)
+        # exit()
