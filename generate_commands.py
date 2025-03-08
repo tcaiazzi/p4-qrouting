@@ -1,9 +1,8 @@
+import ipaddress
 import struct
 import os
 
-import matplotlib.pyplot as plt
 import networkx as nx
-import ipaddress
 
 
 def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int) -> list[str]:
@@ -16,12 +15,12 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
 
     for i, row_slice in enumerate(row_slices):
         if row_slice > 0:
-            cmd.append(f"table_add select_port_from_row_col set_nhop {goal} {i} => {i + 1}")
+            cmd.append(f"table_add select_port_from_row_col set_nhop {goal + 1} {i} => {i + 1}")
 
     row_slices.reverse()
     packed_bytes = struct.pack(">" + ("B" * len(row_slices)), *row_slices)
 
-    cmd.append(f"register_write IngressPipe.row{goal + 1} 0 {int.from_bytes(packed_bytes)}")
+    cmd.append(f"register_write row{goal + 1} 0 {int.from_bytes(packed_bytes)}")
 
     return cmd
 
@@ -64,36 +63,50 @@ if __name__ == "__main__":
             tgt_commands = generate_node_commands_from_dag(dags[tgt], network, node_name, tgt)
             commands.update(tgt_commands)
 
+        dst_iface_to_headers = {}
         for dst in network:
             if dst == node_name:
                 continue
 
             paths = list(nx.all_simple_paths(dags[dst], source=node_name, target=dst))
             neighbors = set(map(lambda x: x[1], paths))
-            #print(f"node_name={node_name}", f"dst={dst}", f"neighbors={neighbors}")
+            # print(f"node_name={node_name}", f"dst={dst}", f"neighbors={neighbors}")
             for neighbor in neighbors:
-                #print(f"Processing neighbor: {neighbor}")
+                # print(f"Processing neighbor: {neighbor}")
                 headers_to_activate = set()
                 for update_node, dag in dags.items():
                     if dst == update_node:
                         continue
                     for edge in dag.edges:
-                        if edge[1] == node_name and edge[0]==neighbor:
-                            #print(f"node_name={node_name}", f"dst={dst}", f"update={update_node}", f"edge={edge}")
-                            headers_to_activate.add(str(update_node + 1))
+                        if edge[1] == node_name and edge[0] == neighbor:
+                            if dst not in dst_iface_to_headers:
+                                dst_iface_to_headers[dst] = {}
 
+                            iface = network[node_name][edge[0]]
+                            if iface not in dst_iface_to_headers[dst]:
+                                dst_iface_to_headers[dst][iface] = set()
+
+                            print(f"node_name={node_name}", f"dst={dst}", f"update={update_node}", f"edge={edge}", f"iface={iface}")
+
+                            dst_iface_to_headers[dst][iface].add(str(update_node + 1))
+
+        for dst, iface_to_headers in dst_iface_to_headers.items():
+            for iface, headers_to_activate in iface_to_headers.items():
                 if headers_to_activate:
                     headers_to_activate = sorted(list(headers_to_activate))
-                    commands.add(f"table_add qlr_pkt_updates {neighbor + 1} => qlr_pkt_set_" + "_".join(headers_to_activate))
+
+                    commands.add(f"table_add qlr_pkt_updates qlr_pkt_set_" + "_".join(headers_to_activate) + f" {dst + 1} {iface + 1} => ")
 
         for node, subnet in node_to_network.items():
             if node == node_name:
                 continue
-            commands.add(f"table_add select_row {subnet} => get_row_num {node + 1}")
+            commands.add(f"table_add select_row get_row_num {subnet} => {node + 1}")
+        max_iface = max(network[node_name].values()) + 1
+        commands.add(f"table_set_default select_row set_nhop {max_iface + 1}")
 
         for iface in network[node_name].values():
-            commands.add(f"table_add read_ig_qdepth {iface + 1} => get_ig_qdepth_and_idx {iface}")
+            commands.add(f"table_add read_ig_qdepth get_ig_qdepth_and_idx {iface + 1} => {iface}")
 
-        commands_path = os.path.join("lab", f"s{node_name + 1}", "commands.txt")
+        commands_path = os.path.join("emulator", "lab", f"s{node_name + 1}", "commands.txt")
         with open(commands_path, "w") as f: 
             f.write("\n".join(sorted(list(commands))))

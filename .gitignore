@@ -169,3 +169,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+*.pcap
+emulator/lab/shared/*.txt
+emulator/lab/shared/p4src/
+.DS_Store

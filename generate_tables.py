@@ -98,11 +98,17 @@ def generate_qlr_updates(path, node_list, perms):
         action_name = f"qlr_pkt_set_{items_str}"
         action_header = f"action {action_name}() {{\n"
         
-        action_body = ""
-        for i, item in enumerate(items):
-            action_body += f"    hdr.qlr_updates[{item - 1}].setValid();\n"
-            action_body += f"    hdr.qlr_updates[{item - 1}].has_next = " + ("0" if i == len(items) - 1 else "1") + ";\n"
-            action_body += f"    log_msg(\"set valid: hdr.qlr_updates[{item - 1}]\");\n"
+        item_idx = 0
+        action_body = "    hdr.ethernet.dst_addr[47:40] = 0x1;\n"
+        for i in range(1, num_nodes + 1):
+            if i in items:
+                action_body += f"    hdr.qlr_updates[{i - 1}].has_next = " + ("0" if item_idx == len(items) - 1 else "1") + ";\n"
+                action_body += f"    log_msg(\"set valid: hdr.qlr_updates[{i - 1}]\");\n"
+                item_idx += 1
+            else:
+                action_body += f"    hdr.qlr_updates[{i - 1}].setInvalid();\n"
+                action_body += f"    hdr.qlr_updates[{i - 1}].dst_id = 0;\n"
+                action_body += f"    log_msg(\"set invalid: hdr.qlr_updates[{i - 1}]\");\n"
 
         action_names.append(action_name)
         actions.append(action_header + action_body + "}\n")
@@ -112,6 +118,7 @@ def generate_qlr_updates(path, node_list, perms):
     table_def = f"""table qlr_pkt_updates {{
     key = {{
         row_num: exact;
+        standard_metadata.egress_spec: exact;
     }}
     actions = {{
 {action_names_str}
@@ -143,8 +150,7 @@ def main(n):
     all_perms.extend([tuple(n_list)])
     all_perms.sort()
 
-    lut_path = os.path.join("lab", "shared", "p4src", "lut")
-
+    lut_path = os.path.join("p4src", "lut")
     generate_qmatrix_updates(lut_path, n_list, all_perms)
     generate_qlr_updates(lut_path, n_list, all_perms)
 

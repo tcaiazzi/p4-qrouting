@@ -1,0 +1,21 @@
+register_write row1 0 256
+register_write row2 0 256
+register_write row3 0 257
+register_write row4 0 1
+table_add qlr_pkt_updates qlr_pkt_set_1_2_5 3 1 => 
+table_add qlr_pkt_updates qlr_pkt_set_1_2_5 4 1 => 
+table_add qlr_pkt_updates qlr_pkt_set_4_5 1 2 => 
+table_add qlr_pkt_updates qlr_pkt_set_4_5 2 2 => 
+table_add qlr_pkt_updates qlr_pkt_set_4_5 3 2 => 
+table_add read_ig_qdepth get_ig_qdepth_and_idx 1 => 0
+table_add read_ig_qdepth get_ig_qdepth_and_idx 2 => 1
+table_add select_port_from_row_col set_nhop 1 1 => 2
+table_add select_port_from_row_col set_nhop 2 1 => 2
+table_add select_port_from_row_col set_nhop 3 0 => 1
+table_add select_port_from_row_col set_nhop 3 1 => 2
+table_add select_port_from_row_col set_nhop 4 0 => 1
+table_add select_row get_row_num 10.0.0.0/24 => 1
+table_add select_row get_row_num 10.0.1.0/24 => 2
+table_add select_row get_row_num 10.0.2.0/24 => 3
+table_add select_row get_row_num 10.0.3.0/24 => 4
+table_set_default select_row set_nhop 3
