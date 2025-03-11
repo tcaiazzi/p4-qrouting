@@ -49,9 +49,16 @@ control IngressPipe(inout headers hdr,
         row_num = num;
     }
 
-    action set_nhop(bit<9> port) {
+    action set_nhop_and_clear_qlr(bit<9> port) {
         standard_metadata.egress_spec = port;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+
+        hdr.ethernet.dst_addr[47:40] = 0x0;
+        hdr.qlr_updates[0].setInvalid();
+        hdr.qlr_updates[1].setInvalid();
+        hdr.qlr_updates[2].setInvalid();
+        hdr.qlr_updates[3].setInvalid();
+        hdr.qlr_updates[4].setInvalid();
     }
     
     table select_row {
@@ -60,13 +67,18 @@ control IngressPipe(inout headers hdr,
         }
         actions = {
             get_row_num;
-            set_nhop;
+            set_nhop_and_clear_qlr;
             drop;
         }
         size = NODES_NUM;
     }
 
     /* Selects the outgoing port of this packet */
+    action set_nhop(bit<9> port) {
+        standard_metadata.egress_spec = port;
+        hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+    }
+
     bit<8> col_num = 0;
     table select_port_from_row_col {
         key = {
@@ -114,14 +126,14 @@ control IngressPipe(inout headers hdr,
     bit<8> max_value = 0;
     bit<8> max_index = 0;
     action max8(bit<8> a, bit<8> b, bit<8> index) {
-        if (a > b) {
+        if (a >= b) {
             max_value = a;
         } else {
             max_value = b;
             max_index = index;
         }
 
-        log_msg("max8: a={} b={} max_value={} idx={}", {a, b, max_value, max_index});
+        log_msg("max8: a={} b={} curr_index={} max_value={} max_index={}", {a, b, index, max_value, max_index});
     }
 
     apply {

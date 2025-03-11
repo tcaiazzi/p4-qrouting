@@ -4,7 +4,7 @@ run:
 	rm -Rf $$(pwd)/emulator/lab/shared/p4src
 	rm -Rf $$(pwd)/emulator/lab/shared/*.txt
 	cp -r p4src $$(pwd)/emulator/lab/shared
-	kathara lstart -d $$(pwd)/emulator/lab s1 s2 h1 h5
+	kathara lstart -d $$(pwd)/emulator/lab s1 s2 s3 s4 s5 h1 h5
 
 clean:
 	kathara lclean -d $$(pwd)/emulator/lab

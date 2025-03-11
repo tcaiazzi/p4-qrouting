@@ -4,21 +4,21 @@ import sys
 import random
 import struct
 
-from scapy.all import sendp, get_if_hwaddr
-from scapy.all import Ether, IP, UDP, TCP
+from scapy.all import *
 
 def main():
-    if len(sys.argv) != 2:
-        print('pass 2 arguments: <destination>')
+    if len(sys.argv) != 3:
+        print('Usage: send.py <mac> <ip>')
         exit(1)
 
-    addr = sys.argv[1]
+    mac_addr = sys.argv[1]
+    ip_addr = sys.argv[2]
     iface = "eth0"
 
-    print("sending on interface %s to %s" % (iface, str(addr)))
+    print(f"sending on interface {iface} to mac={mac_addr} ip={ip_addr}")
 
-    pkt = Ether(src=get_if_hwaddr(iface), dst='00:00:00:01:01:00')
-    pkt = pkt /IP(dst=addr) / UDP(dport=random.randint(5000,60000), sport=random.randint(49152,65535))
+    pkt = Ether(src=get_if_hwaddr(iface), dst=mac_addr)
+    pkt = pkt / IP(dst=ip_addr, ttl=255) / ICMP()
     sendp(pkt, iface=iface, verbose=True)
 
 if __name__ == '__main__':
