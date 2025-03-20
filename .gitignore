@@ -174,3 +174,4 @@ cython_debug/
 emulator/lab/shared/*.txt
 emulator/lab/shared/p4src/
 .DS_Store
+.vscode/
