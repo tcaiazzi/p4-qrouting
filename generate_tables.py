@@ -158,7 +158,7 @@ def main(n):
 if __name__ == '__main__':
     if len(sys.argv) != 2:
         print(
-            "Usage: plot.py <num_nodes>"
+            "Usage: generate_tables.py <num_nodes>"
         )
         exit(1)
 
