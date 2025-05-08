@@ -953,55 +953,8 @@ header tcp_h {
     bit<16> urgent_ptr;
 }
 
-header tcp_option_end_h {
-    bit<8> kind;
-}
-
-header tcp_option_nop_h {
-    bit<8> kind;
-}
-
-header tcp_option_ss_h {
-    bit<8> kind;
-    bit<32> maxSegmentSize;
-}
-
-header tcp_option_s_h {
-    bit<8> kind;
-    bit<24> scale;
-}
-
-header tcp_option_sack_h {
-    bit<8> kind;
-    bit<8> length;
-    varbit<256> sack;
-}
-
-header_union tcp_option_h {
-    tcp_option_end_h end;
-    tcp_option_nop_h nop;
-    tcp_option_ss_h ss;
-    tcp_option_s_h s;
-    tcp_option_sack_h sack;
-}
-
-// Defines a stack of 10 tcp options
-typedef tcp_option_h[10] tcp_option_stack;
-
-header tcp_option_padding_h {
-    varbit<256> padding;
-}
-
-error {
-    TcpDataOffsetTooSmall,
-    TcpOptionTooLongForHeader,
-    TcpBadSackOptionLength
-}
-
-struct tcp_option_sack_top
-{
-    bit<8> kind;
-    bit<8> length;
+header tcp_options_h {
+    varbit<256> options;
 }
 
 header udp_h {
@@ -1009,6 +962,10 @@ header udp_h {
     bit<16> dst_port;
     bit<16> len;
     bit<16> checksum;
+}
+
+header qlr_h {
+    bit<8> last_byte;
 }
 
 header qlr_update_h {
@@ -1026,9 +983,9 @@ struct headers {
     ethernet_h ethernet;
     ipv4_h ipv4;
     tcp_h tcp;
-    tcp_option_stack tcp_options_vec;
-    tcp_option_padding_h tcp_options_padding;
+    tcp_options_h tcp_options;
     udp_h udp;
+    qlr_h qlr;
     qlr_update_h[5] qlr_updates;
 }
 # 7 "./qlr.p4" 2
@@ -1037,94 +994,6 @@ struct headers {
 
 
 
-
-parser tcp_option_parser(packet_in b,
-                         in bit<4> tcp_hdr_data_offset,
-                         out tcp_option_stack vec,
-                         out tcp_option_padding_h padding)
-{
-    bit<7> tcp_hdr_bytes_left;
-
-    state start {
-        // RFC 793 - the Data Offset field is the length of the TCP
-        // header in units of 32-bit words.  It must be at least 5 for
-        // the minimum length TCP header, and since it is 4 bits in
-        // size, can be at most 15, for a maximum TCP header length of
-        // 15*4 = 60 bytes.
-        verify(tcp_hdr_data_offset >= 5, error.TcpDataOffsetTooSmall);
-        tcp_hdr_bytes_left = 4 * (bit<7>) (tcp_hdr_data_offset - 5);
-        // always true here: 0 <= tcp_hdr_bytes_left <= 40
-        transition next_option;
-    }
-    state next_option {
-        transition select(tcp_hdr_bytes_left) {
-            0 : accept; // no TCP header bytes left
-            default : next_option_part2;
-        }
-    }
-    state next_option_part2 {
-        // precondition: tcp_hdr_bytes_left >= 1
-        transition select(b.lookahead<bit<8>>()) {
-            0: parse_tcp_option_end;
-            1: parse_tcp_option_nop;
-            2: parse_tcp_option_ss;
-            3: parse_tcp_option_s;
-            5: parse_tcp_option_sack;
-        }
-    }
-    state parse_tcp_option_end {
-        b.extract(vec.next.end);
-        // TBD: This code is an example demonstrating why it would be
-        // useful to have sizeof(vec.next.end) instead of having to
-        // put in a hard-coded length for each TCP option.
-        tcp_hdr_bytes_left = tcp_hdr_bytes_left - 1;
-        transition consume_remaining_tcp_hdr_and_accept;
-    }
-    state consume_remaining_tcp_hdr_and_accept {
-        // A more picky sub-parser implementation would verify that
-        // all of the remaining bytes are 0, as specified in RFC 793,
-        // setting an error and rejecting if not.  This one skips past
-        // the rest of the TCP header without checking this.
-
-        // tcp_hdr_bytes_left might be as large as 40, so multiplying
-        // it by 8 it may be up to 320, which requires 9 bits to avoid
-        // losing any information.
-        b.extract(padding, (bit<32>) (8 * (bit<9>) tcp_hdr_bytes_left));
-        transition accept;
-    }
-    state parse_tcp_option_nop {
-        b.extract(vec.next.nop);
-        tcp_hdr_bytes_left = tcp_hdr_bytes_left - 1;
-        transition next_option;
-    }
-    state parse_tcp_option_ss {
-        verify(tcp_hdr_bytes_left >= 5, error.TcpOptionTooLongForHeader);
-        tcp_hdr_bytes_left = tcp_hdr_bytes_left - 5;
-        b.extract(vec.next.ss);
-        transition next_option;
-    }
-    state parse_tcp_option_s {
-        verify(tcp_hdr_bytes_left >= 4, error.TcpOptionTooLongForHeader);
-        tcp_hdr_bytes_left = tcp_hdr_bytes_left - 4;
-        b.extract(vec.next.s);
-        transition next_option;
-    }
-    state parse_tcp_option_sack {
-        bit<8> n_sack_bytes = b.lookahead<tcp_option_sack_top>().length;
-        // I do not have global knowledge of all TCP SACK
-        // implementations, but from reading the RFC, it appears that
-        // the only SACK option lengths that are legal are 2+8*n for
-        // n=1, 2, 3, or 4, so set an error if anything else is seen.
-        verify(n_sack_bytes == 10 || n_sack_bytes == 18 ||
-               n_sack_bytes == 26 || n_sack_bytes == 34,
-               error.TcpBadSackOptionLength);
-        verify(tcp_hdr_bytes_left >= (bit<7>) n_sack_bytes,
-               error.TcpOptionTooLongForHeader);
-        tcp_hdr_bytes_left = tcp_hdr_bytes_left - (bit<7>) n_sack_bytes;
-        b.extract(vec.next.sack, (bit<32>) (8 * n_sack_bytes - 16));
-        transition next_option;
-    }
-}
 
 parser PktParser(packet_in packet,
                  out headers hdr,
@@ -1156,10 +1025,10 @@ parser PktParser(packet_in packet,
     state parse_tcp {
         packet.extract(hdr.tcp);
         meta.l4_lookup = {hdr.tcp.src_port, hdr.tcp.dst_port};
-        tcp_option_parser.apply(packet, hdr.tcp.data_offset,
-                                hdr.tcp_options_vec, hdr.tcp_options_padding);
+        bit<7> tcp_hdr_bytes_left = 4 * (bit<7>) (hdr.tcp.data_offset - 5);
+        packet.extract(hdr.tcp_options, (bit<32>) (8 * (bit<32>) tcp_hdr_bytes_left));
         transition select(meta.qlearning_update) {
-            1: parse_qlr_update;
+            1: parse_qlr;
             default: accept;
         }
     }
@@ -1168,9 +1037,14 @@ parser PktParser(packet_in packet,
         packet.extract(hdr.udp);
         meta.l4_lookup = {hdr.udp.src_port, hdr.udp.dst_port};
         transition select(meta.qlearning_update) {
-            1: parse_qlr_update;
+            1: parse_qlr;
             default: accept;
         }
+    }
+
+    state parse_qlr {
+        packet.extract(hdr.qlr);
+        transition parse_qlr_update;
     }
 
     state parse_qlr_update {
@@ -1187,9 +1061,9 @@ control PktDeparser(packet_out packet, in headers hdr) {
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
         packet.emit(hdr.tcp);
-        packet.emit(hdr.tcp_options_vec);
-        packet.emit(hdr.tcp_options_padding);
+        packet.emit(hdr.tcp_options);
         packet.emit(hdr.udp);
+        packet.emit(hdr.qlr);
         packet.emit(hdr.qlr_updates);
     }
 }
@@ -1230,7 +1104,8 @@ control IngressPipe(inout headers hdr,
         standard_metadata.egress_spec = port;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
 
-        hdr.ethernet.dst_addr[47:40] = 0x0;
+        hdr.ethernet.dst_addr[47:40] = hdr.qlr.last_byte;
+        hdr.qlr.setInvalid();
         hdr.qlr_updates[0].setInvalid();
         hdr.qlr_updates[1].setInvalid();
         hdr.qlr_updates[2].setInvalid();
@@ -4857,7 +4732,7 @@ table qmatrix_update {
         (true, 5, false, 0, false, 0, false, 0, false, 0, 5): qmatrix_update_r5_c5();
     }
 }
-# 121 "./qlr.p4" 2
+# 122 "./qlr.p4" 2
 
     /* Include the qlr_pkt_updates actions and table */
 # 1 "./lut/qlr_pkt_updates.p4" 1
@@ -4865,6 +4740,8 @@ table qmatrix_update {
 
 
 action qlr_pkt_set_1() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 0;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -4883,6 +4760,8 @@ action qlr_pkt_set_1() {
 }
 
 action qlr_pkt_set_1_2() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -4900,6 +4779,8 @@ action qlr_pkt_set_1_2() {
 }
 
 action qlr_pkt_set_1_2_3() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -4916,6 +4797,8 @@ action qlr_pkt_set_1_2_3() {
 }
 
 action qlr_pkt_set_1_2_3_4() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -4931,6 +4814,8 @@ action qlr_pkt_set_1_2_3_4() {
 }
 
 action qlr_pkt_set_1_2_3_4_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -4945,6 +4830,8 @@ action qlr_pkt_set_1_2_3_4_5() {
 }
 
 action qlr_pkt_set_1_2_3_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -4960,6 +4847,8 @@ action qlr_pkt_set_1_2_3_5() {
 }
 
 action qlr_pkt_set_1_2_4() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -4976,6 +4865,8 @@ action qlr_pkt_set_1_2_4() {
 }
 
 action qlr_pkt_set_1_2_4_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -4991,6 +4882,8 @@ action qlr_pkt_set_1_2_4_5() {
 }
 
 action qlr_pkt_set_1_2_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -5007,6 +4900,8 @@ action qlr_pkt_set_1_2_5() {
 }
 
 action qlr_pkt_set_1_3() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -5024,6 +4919,8 @@ action qlr_pkt_set_1_3() {
 }
 
 action qlr_pkt_set_1_3_4() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -5040,6 +4937,8 @@ action qlr_pkt_set_1_3_4() {
 }
 
 action qlr_pkt_set_1_3_4_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -5055,6 +4954,8 @@ action qlr_pkt_set_1_3_4_5() {
 }
 
 action qlr_pkt_set_1_3_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -5071,6 +4972,8 @@ action qlr_pkt_set_1_3_5() {
 }
 
 action qlr_pkt_set_1_4() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -5088,6 +4991,8 @@ action qlr_pkt_set_1_4() {
 }
 
 action qlr_pkt_set_1_4_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -5104,6 +5009,8 @@ action qlr_pkt_set_1_4_5() {
 }
 
 action qlr_pkt_set_1_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].has_next = 1;
     log_msg("set valid: hdr.qlr_updates[0]");
@@ -5121,6 +5028,8 @@ action qlr_pkt_set_1_5() {
 }
 
 action qlr_pkt_set_2() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5139,6 +5048,8 @@ action qlr_pkt_set_2() {
 }
 
 action qlr_pkt_set_2_3() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5156,6 +5067,8 @@ action qlr_pkt_set_2_3() {
 }
 
 action qlr_pkt_set_2_3_4() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5172,6 +5085,8 @@ action qlr_pkt_set_2_3_4() {
 }
 
 action qlr_pkt_set_2_3_4_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5187,6 +5102,8 @@ action qlr_pkt_set_2_3_4_5() {
 }
 
 action qlr_pkt_set_2_3_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5203,6 +5120,8 @@ action qlr_pkt_set_2_3_5() {
 }
 
 action qlr_pkt_set_2_4() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5220,6 +5139,8 @@ action qlr_pkt_set_2_4() {
 }
 
 action qlr_pkt_set_2_4_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5236,6 +5157,8 @@ action qlr_pkt_set_2_4_5() {
 }
 
 action qlr_pkt_set_2_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5253,6 +5176,8 @@ action qlr_pkt_set_2_5() {
 }
 
 action qlr_pkt_set_3() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5271,6 +5196,8 @@ action qlr_pkt_set_3() {
 }
 
 action qlr_pkt_set_3_4() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5288,6 +5215,8 @@ action qlr_pkt_set_3_4() {
 }
 
 action qlr_pkt_set_3_4_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5304,6 +5233,8 @@ action qlr_pkt_set_3_4_5() {
 }
 
 action qlr_pkt_set_3_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5321,6 +5252,8 @@ action qlr_pkt_set_3_5() {
 }
 
 action qlr_pkt_set_4() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5339,6 +5272,8 @@ action qlr_pkt_set_4() {
 }
 
 action qlr_pkt_set_4_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5356,6 +5291,8 @@ action qlr_pkt_set_4_5() {
 }
 
 action qlr_pkt_set_5() {
+    hdr.qlr.setValid();
+    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];
     hdr.ethernet.dst_addr[47:40] = 0x1;
     hdr.qlr_updates[0].setInvalid();
     hdr.qlr_updates[0].dst_id = 0;
@@ -5413,7 +5350,7 @@ table qlr_pkt_updates {
     }
     size = 31;
 }
-# 124 "./qlr.p4" 2
+# 125 "./qlr.p4" 2
 
     /* Helper to compute the max value */
     bit<8> max_value = 0;

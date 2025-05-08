@@ -1,8 +1,0 @@
-rm -f /shared/s3.txt
-make all
-simple_switch -i 1@eth0 -i 2@eth1 -i 3@eth2 -i 4@eth3 -i 5@eth4 /build/qlr.json --log-file /shared/s3 &
-
-while [[ $(pgrep simple_switch) -eq 0 ]]; do sleep 1; done
-until simple_switch_CLI <<< "EOF"; do sleep 1; done
-
-simple_switch_CLI <<< $(cat commands.txt)

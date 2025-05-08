@@ -1,0 +1,46 @@
+/home/tommaso/.cache/JetBrains/RemoteDev/dist/a6c214fdf5d60_CLion-251.23774.281-aarch64/bin/cmake/linux/aarch64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/home/tommaso/.cache/JetBrains/RemoteDev/dist/a6c214fdf5d60_CLion-251.23774.281-aarch64/bin/ninja/linux/aarch64/ninja --profiling-format=google-trace --profiling-output=CMakeFiles/clion-event-trace.json -G Ninja -S /home/tommaso/workspace/p4-qrouting/sim/ns-3.40 -B /home/tommaso/workspace/p4-qrouting/sim/ns-3.40/cmake-build-debug-event-trace
+-- The CXX compiler identification is GNU 13.3.0
+-- The C compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Using default output directory /home/tommaso/workspace/p4-qrouting/sim/ns-3.40/build
+-- Proceeding without cmake-format
+-- Performing Test MISSING_OSTREAM_NULLPTR_OPERATOR
+-- Performing Test MISSING_OSTREAM_NULLPTR_OPERATOR - Failed
+-- Performing Test FILESYSTEM_LIBRARY_IS_LINKED
+-- Performing Test FILESYSTEM_LIBRARY_IS_LINKED - Success
+-- Found Git: /usr/bin/git (found version "2.43.0")
+-- find_external_library: SQLite3 was not found. Missing headers: "sqlite3.h" and missing libraries: "sqlite3".
+-- SQLite was not found
+-- Eigen was not found
+-- Harfbuzz is required by GTK3 and was not found.
+-- LibXML2 was not found. Continuing without it.
+-- Visualizer: Python Bindings are disabled
+CMake Error: Could not open file for write in copy operation /home/tommaso/workspace/p4-qrouting/sim/ns-3.40/build/include/ns3/config-store-config.h.tmp
+CMake Error: : System Error: Inappropriate ioctl for device
+CMake Error at build-support/macros-and-definitions.cmake:1105 (configure_file):
+  configure_file Problem configuring file
+Call Stack (most recent call first):
+  CMakeLists.txt:149 (process_options)
+
+
+-- Processing src/antenna
+CMake Error at build-support/custom-modules/ns3-module-macros.cmake:75 (if):
+  if given arguments:
+
+    "AND" "(" "NOT" "FALSE" ")"
+
+  Unknown arguments specified
+Call Stack (most recent call first):
+  src/antenna/CMakeLists.txt:1 (build_lib)
+
+
+-- Configuring incomplete, errors occurred!

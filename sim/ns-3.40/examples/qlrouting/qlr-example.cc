@@ -120,9 +120,10 @@ addArpEntriesFromInterfaceAddresses(Ptr<Ipv4Interface> nodeInterface,
     Ipv4StaticRoutingHelper ipv4StaticRouting;
     Ptr<Ipv4StaticRouting> routing = ipv4StaticRouting.GetStaticRouting(
         nodeInterface->GetDevice()->GetNode()->GetObject<Ipv4>());
-    for (uint32_t i = 1; i < ipv4Interface->GetNAddresses(); i++)
-    {
+    for (uint32_t i = 0; i < ipv4Interface->GetNAddresses(); i++)
+    {   
         Ipv4Address address = ipv4Interface->GetAddress(i).GetAddress();
+        std::cout << "Add ARP Entry for " << address << std::endl;
         addIpv4ArpEntry(nodeInterface,
                         address,
                         convertToMacAddress(ipv4Interface->GetDevice()->GetAddress()));
@@ -130,8 +131,10 @@ addArpEntriesFromInterfaceAddresses(Ptr<Ipv4Interface> nodeInterface,
         routing->AddHostRouteTo(address, 1);
     }
 
-    if (verbose)
+    // if (verbose)
     {
+        std::cout << "Routes for " << Names::FindName(nodeInterface->GetDevice()->GetNode())
+                  << std::endl;
         printRoutes(routing);
     }
 }
@@ -187,13 +190,13 @@ class QLRDeparser : public P4PacketDeparser
             next_hdr = ipv4.GetProtocol();
         }
 
-        if (next_hdr == 6)
+        if (next_hdr == 6 || next_hdr == 152)
         {
             tcp.Deserialize(it);
             it.Next(tcp.GetSerializedSize());
             offset += tcp.GetSerializedSize();
         }
-        else if (next_hdr == 17)
+        else if (next_hdr == 17 || next_hdr == 163)
         {
             udp.Deserialize(it);
             it.Next(udp.GetSerializedSize());
@@ -202,16 +205,18 @@ class QLRDeparser : public P4PacketDeparser
 
         Ptr<Packet> p = Create<Packet>(bm_buf + offset, len - offset);
         /* Headers are added in reverse order */
-        if (next_hdr == 6)
+        if (next_hdr == 6 || next_hdr == 152)
             p->AddHeader(tcp);
-        else if (next_hdr == 17)
+        else if (next_hdr == 17 || next_hdr == 163)
             p->AddHeader(udp);
 
         if (ether_type == 0x0800)
             p->AddHeader(ipv4);
 
         p->AddHeader(eth);
-
+        
+        p->Print(std::cout);
+        
         return p;
     }
 };
@@ -227,6 +232,9 @@ main(int argc, char* argv[])
     float endTime = 20.0f;
     std::string activeRateTcp = "50Kbps";
     uint32_t maxBytes = 15000000;
+
+    Packet::EnablePrinting();
+
 
     CommandLine cmd;
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
@@ -244,8 +252,8 @@ main(int argc, char* argv[])
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
+        LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
 
     NS_LOG_INFO("#### RUN PARAMETERS ####");
@@ -261,7 +269,7 @@ main(int argc, char* argv[])
     Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
     Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
-    // Config::SetDefault("ns3::FifoQueueDisc::MaxSize", QueueSizeValue(QueueSize("100p")));
+    Config::SetDefault("ns3::FifoQueueDisc::MaxSize", QueueSizeValue(QueueSize("100p")));
 
     std::filesystem::create_directories(resultsPath);
 
@@ -282,6 +290,12 @@ main(int argc, char* argv[])
 
     Ptr<Node> s2 = switches.Get(1);
     Names::Add("s2", s2);
+
+    Ptr<Node> sender = senders.Get(0);
+    Names::Add("sender", sender);
+
+    Ptr<Node> receiver = receivers.Get(0);
+    Names::Add("receiver", receiver);
 
     CsmaHelper csma;
     csma.SetChannelAttribute("DataRate", StringValue(defaultBandwidth));
@@ -349,23 +363,40 @@ main(int argc, char* argv[])
                                  StringValue("/ns3/ns-3.40/examples/qlrouting/qlr_build/qlr.json"));
     qlrHelper.SetDeviceAttribute("PacketDeparser", PointerValue(CreateObject<QLRDeparser>()));
 
-    std::string s1Commands = "table_set_default select_row set_nhop_and_clear_qlr 2";
-    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(s1Commands));
+
+    std::ostringstream s1Commands; 
+    s1Commands << "register_write row2 0 256\n"
+    << "table_add qlr_pkt_updates qlr_pkt_set_1 2 2 =>\n" 
+    << "table_add read_ig_qdepth get_ig_qdepth_and_idx 2 => 1\n"
+    << "table_add select_port_from_row_col set_nhop 2 1 => 2\n"
+    << "table_add select_row get_row_num 10.0.2.0/24 => 2\n"
+    << "table_set_default select_row set_nhop_and_clear_qlr 1";
+
+    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(s1Commands.str()));
     NetDeviceContainer s1p4Cont = qlrHelper.Install(s1, s1Interfaces);
     Ptr<P4SwitchNetDevice> s1p4 = DynamicCast<P4SwitchNetDevice>(s1p4Cont.Get(0));
     s1p4->m_mmu->SetAlphaIngress(1.0 / 8);
     s1p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
     s1p4->m_mmu->SetIngressPool(64 * 1024 * 1024);
+    s1p4->m_mmu->SetAlphaEgress(1.0 / 8);
     s1p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s1p4->m_mmu->node_id = s1p4->GetNode()->GetId();
 
-    std::string s2Commands = "table_set_default select_row set_nhop_and_clear_qlr 2";
-    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(s2Commands));
+    std::ostringstream s2Commands; 
+    s2Commands << "register_write row1 0 1\n"
+    << "table_add qlr_pkt_updates qlr_pkt_set_2 1 1 =>\n" 
+    << "table_add read_ig_qdepth get_ig_qdepth_and_idx 1 => 0\n"
+    << "table_add select_port_from_row_col set_nhop 1 0 => 1\n"
+    << "table_add select_row get_row_num 10.0.1.0/24 => 1\n"
+    << "table_set_default select_row set_nhop_and_clear_qlr 2";
+    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(s2Commands.str()));
+
     NetDeviceContainer s2p4Cont = qlrHelper.Install(s2, s2Interfaces);
     Ptr<P4SwitchNetDevice> s2p4 = DynamicCast<P4SwitchNetDevice>(s2p4Cont.Get(0));
     s2p4->m_mmu->SetAlphaIngress(1.0 / 8);
     s2p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
     s2p4->m_mmu->SetIngressPool(64 * 1024 * 1024);
+    s2p4->m_mmu->SetAlphaEgress(1.0 / 8);
     s2p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s2p4->m_mmu->node_id = s2p4->GetNode()->GetId();
 

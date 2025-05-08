@@ -53,7 +53,8 @@ control IngressPipe(inout headers hdr,
         standard_metadata.egress_spec = port;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
 
-        hdr.ethernet.dst_addr[47:40] = 0x0;
+        hdr.ethernet.dst_addr[47:40] = hdr.qlr.last_byte;
+        hdr.qlr.setInvalid();
         hdr.qlr_updates[0].setInvalid();
         hdr.qlr_updates[1].setInvalid();
         hdr.qlr_updates[2].setInvalid();
