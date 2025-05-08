@@ -8,8 +8,13 @@ import networkx as nx
 def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int) -> list[str]:
     cmd = []
     row_slices = [0, 0, 0, 0, 0, 0, 0, 0]
+    print("Generating commands for node:", start, "to goal:", goal)
+    print(f"Node {start} neighbors:", net[start])
+
     for e in node_dag.edges:
+        print(f"Processing edge: {e}")
         if start == e[0]:
+           
             iface_num = net[start][e[1]]
             row_slices[iface_num] = 1
 
@@ -27,24 +32,32 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
 
 if __name__ == "__main__":
     network = {
-        0: {1: 0, 2: 1},
-        1: {0: 0, 3: 1},
-        2: {0: 0, 3: 1},
-        3: {1: 0, 2: 1},
+        0: {1: 1, 2: 2},
+        1: {0: 1, 2: 1, 3: 2},
+        2: {0: 1, 1: 2, 3: 3, 4: 4},
+        3: {1: 1, 2: 2, 4: 3},
+        4: {2: 1, 3: 2},
     }
 
     dags = {k: nx.DiGraph() for k in network}
 
     dags[0].add_nodes_from(network.keys())
-    dags[0].add_edges_from([(0,1), (1,3), (0,2), (2,3)])
+    dags[0].add_edges_from([(1,0), (2,0), (3,1), (3,4), (4,2)])
 
     dags[1].add_nodes_from(network.keys())
-    dags[1].add_edges_from([(0,1), (1,3), (0,2), (2,3)])
+    dags[1].add_edges_from([(0,1), (2,1), (2,0), (3,1), (3,4), (4,2)])
+
+    dags[2].add_nodes_from(network.keys())
+    dags[2].add_edges_from([(0,2), (0,1), (1,2), (1,3), (3,2), (4,2), (4,3)])
 
     dags[3].add_nodes_from(network.keys())
-    dags[3].add_edges_from([(1,0)])
+    dags[3].add_edges_from([(0,1), (0,2), (1,3), (2,3), (2,4), (4,3)])
+
+    dags[4].add_nodes_from(network.keys())
+    dags[4].add_edges_from([(0,1), (1,3), (2,4), (3,2), (3,4)])
     
     subnets = ipaddress.ip_network("10.0.0.0/16").subnets(prefixlen_diff=8)
+    next(subnets)
     node_to_network = {k: next(subnets) for k in network}
     
     for node_name in network:
@@ -95,11 +108,11 @@ if __name__ == "__main__":
                 continue
             commands.add(f"table_add select_row get_row_num {subnet} => {node + 1}")
         max_iface = max(network[node_name].values()) + 1
-        commands.add(f"table_set_default select_row set_nhop_and_clear_qlr {max_iface + 1}")
+        commands.add(f"table_set_default select_row set_nhop_and_clear_qlr 0")
 
         for iface in network[node_name].values():
             commands.add(f"table_add read_ig_qdepth get_ig_qdepth_and_idx {iface + 1} => {iface}")
 
-        commands_path = os.path.join("emulator", "lab", f"s{node_name + 1}", "commands.txt")
+        commands_path = os.path.join("emulator", "lab_5_nodes", f"s{node_name + 1}", "commands.txt")
         with open(commands_path, "w") as f: 
             f.write("\n".join(sorted(list(commands))))

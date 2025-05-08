@@ -157,6 +157,26 @@ getPath(std::string directory, std::string file)
     return SystemPath::Append(directory, file);
 }
 
+std::string
+loadCommands(std::string path)
+{
+    std::ifstream commandFile(path);
+    std::ostringstream commands;
+
+    if (!commandFile) {
+        throw std::runtime_error("Failed to open commands file: " + path);
+        
+    }
+
+    std::string line;
+    while (std::getline(commandFile, line)) {
+        commands << line << "\n";
+    }
+
+    return commands.str();
+}
+
+
 class QLRDeparser : public P4PacketDeparser
 {
   public:
@@ -227,7 +247,7 @@ main(int argc, char* argv[])
 {
     uint32_t activeFlows = 1;
     std::string defaultBandwidth = "50Kbps";
-    std::string resultsPath = "examples/qlrouting/results/";
+    std::string resultsPath = "examples/qlrouting/results/5-nodes";
     float flowEndTime = 11.0f;
     float endTime = 20.0f;
     std::string activeRateTcp = "50Kbps";
@@ -276,14 +296,11 @@ main(int argc, char* argv[])
     randomGen = std::mt19937(seed);
     distribution = std::uniform_real_distribution(0.0, (double)flowEndTime);
 
-    NodeContainer senders;
-    senders.Create(activeFlows);
-
-    NodeContainer receivers;
-    receivers.Create(activeFlows);
+    NodeContainer hosts;
+    hosts.Create(5);
 
     NodeContainer switches;
-    switches.Create(2);
+    switches.Create(5);
 
     Ptr<Node> s1 = switches.Get(0);
     Names::Add("s1", s1);
@@ -291,72 +308,178 @@ main(int argc, char* argv[])
     Ptr<Node> s2 = switches.Get(1);
     Names::Add("s2", s2);
 
-    Ptr<Node> sender = senders.Get(0);
-    Names::Add("sender", sender);
+    Ptr<Node> s3 = switches.Get(2);
+    Names::Add("s3", s3);
 
-    Ptr<Node> receiver = receivers.Get(0);
-    Names::Add("receiver", receiver);
+    Ptr<Node> s4 = switches.Get(3);
+    Names::Add("s4", s4);
+
+    Ptr<Node> s5 = switches.Get(4);
+    Names::Add("s5", s5);
+
+    Ptr<Node> host1 = hosts.Get(0);
+    Names::Add("host1", host1);
+
+    Ptr<Node> host2 = hosts.Get(1);
+    Names::Add("host2", host2);
+
+    Ptr<Node> host3 = hosts.Get(2);
+    Names::Add("host3", host3);
+
+    Ptr<Node> host4 = hosts.Get(3);
+    Names::Add("host4", host4);
+
+    Ptr<Node> host5 = hosts.Get(4);
+    Names::Add("host5", host5);
 
     CsmaHelper csma;
     csma.SetChannelAttribute("DataRate", StringValue(defaultBandwidth));
     csma.SetDeviceAttribute("Mtu", UintegerValue(1500));
     // csma.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(defaultBuffer));
 
-    NetDeviceContainer senderInterfaces;
-    NetDeviceContainer receiverInterfaces;
+    NetDeviceContainer host1Interfaces;
+    NetDeviceContainer host2Interfaces;
+    NetDeviceContainer host3Interfaces;
+    NetDeviceContainer host4Interfaces;
+    NetDeviceContainer host5Interfaces;
     NetDeviceContainer s1Interfaces;
     NetDeviceContainer s2Interfaces;
+    NetDeviceContainer s3Interfaces;
+    NetDeviceContainer s4Interfaces;
+    NetDeviceContainer s5Interfaces;
+
 
     NetDeviceContainer link;
-    for (uint32_t i = 0; i < activeFlows; i++)
-    {
-        Ptr<Node> sender = senders.Get(i);
-        link = csma.Install(NodeContainer(sender, s1));
-        senderInterfaces.Add(link.Get(0));
-        s1Interfaces.Add(link.Get(1));
-    }
+    link = csma.Install(NodeContainer(host1, s1));
+    host1Interfaces.Add(link.Get(0));
+    s1Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(host2, s2));
+    host2Interfaces.Add(link.Get(0));
+    s2Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(host3, s3));
+    host3Interfaces.Add(link.Get(0));
+    s3Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(host4, s4));
+    host4Interfaces.Add(link.Get(0));
+    s4Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(host5, s5));
+    host5Interfaces.Add(link.Get(0));
+    s5Interfaces.Add(link.Get(1));
 
     link = csma.Install(NodeContainer(s1, s2));
     s1Interfaces.Add(link.Get(0));
     s2Interfaces.Add(link.Get(1));
 
-    for (uint32_t i = 0; i < activeFlows; i++)
-    {
-        Ptr<Node> receiver = receivers.Get(i);
-        link = csma.Install(NodeContainer(receiver, s2));
-        receiverInterfaces.Add(link.Get(0));
-        s2Interfaces.Add(link.Get(1));
-    }
+    link = csma.Install(NodeContainer(s1, s3));
+    s1Interfaces.Add(link.Get(0));
+    s3Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(s2, s3));
+    s2Interfaces.Add(link.Get(0));
+    s3Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(s2, s4));
+    s2Interfaces.Add(link.Get(0));
+    s4Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(s3, s4));
+    s3Interfaces.Add(link.Get(0));
+    s4Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(s3, s5));
+    s3Interfaces.Add(link.Get(0));
+    s5Interfaces.Add(link.Get(1));
+
+    link = csma.Install(NodeContainer(s4, s5));
+    s4Interfaces.Add(link.Get(0));
+    s5Interfaces.Add(link.Get(1));
+
 
     InternetStackHelper inetStack;
     inetStack.SetIpv4StackInstall(true);
     inetStack.SetIpv6StackInstall(false);
-    inetStack.Install(senders);
-    inetStack.Install(receivers);
+    inetStack.Install(hosts);
 
-    Ipv4AddressHelper senderIpv4Helper;
-    senderIpv4Helper.SetBase(Ipv4Address("10.0.1.0"), Ipv4Mask("/24"));
-    senderIpv4Helper.Assign(senderInterfaces);
+    Ipv4AddressHelper host1Ipv4Helper;
+    host1Ipv4Helper.SetBase(Ipv4Address("10.0.1.0"), Ipv4Mask("/24"));
+    host1Ipv4Helper.Assign(host1Interfaces);
 
-    Ipv4AddressHelper receiverIpv4Helper;
-    receiverIpv4Helper.SetBase(Ipv4Address("10.0.2.0"), Ipv4Mask("/24"));
-    receiverIpv4Helper.Assign(receiverInterfaces);
+    Ipv4AddressHelper host2Ipv4Helper;
+    host2Ipv4Helper.SetBase(Ipv4Address("10.0.2.0"), Ipv4Mask("/24"));
+    host2Ipv4Helper.Assign(host2Interfaces);
 
-    std::vector<Ptr<Ipv4Interface>> senderIpv4Interfaces;
-    std::vector<Ptr<Ipv4Interface>> receiverIpv4Interfaces;
-    for (uint32_t i = 0; i < activeFlows; i++)
-    {
-        Ptr<Ipv4Interface> senderIpv4Interface = getIpv4Interface(senderInterfaces.Get(i));
-        addIpv4Address(senderIpv4Interface, &senderIpv4Helper);
-        senderIpv4Interfaces.push_back(senderIpv4Interface);
+    Ipv4AddressHelper host3Ipv4Helper;
+    host3Ipv4Helper.SetBase(Ipv4Address("10.0.3.0"), Ipv4Mask("/24"));
+    host3Ipv4Helper.Assign(host3Interfaces);
 
-        Ptr<Ipv4Interface> receiverIpv4Interface = getIpv4Interface(receiverInterfaces.Get(i));
-        addIpv4Address(receiverIpv4Interface, &receiverIpv4Helper);
-        receiverIpv4Interfaces.push_back(receiverIpv4Interface);
+    Ipv4AddressHelper host4Ipv4Helper;
+    host4Ipv4Helper.SetBase(Ipv4Address("10.0.4.0"), Ipv4Mask("/24"));
+    host4Ipv4Helper.Assign(host4Interfaces);
 
-        addArpEntriesFromInterfaceAddresses(senderIpv4Interface, receiverIpv4Interface);
-        addArpEntriesFromInterfaceAddresses(receiverIpv4Interface, senderIpv4Interface);
-    }
+    Ipv4AddressHelper host5Ipv4Helper;
+    host5Ipv4Helper.SetBase(Ipv4Address("10.0.5.0"), Ipv4Mask("/24"));
+    host5Ipv4Helper.Assign(host5Interfaces);
+
+    std::vector<Ptr<Ipv4Interface>> host1Ipv4Interfaces;
+    std::vector<Ptr<Ipv4Interface>> host2Ipv4Interfaces;
+    std::vector<Ptr<Ipv4Interface>> host3Ipv4Interfaces;
+    std::vector<Ptr<Ipv4Interface>> host4Ipv4Interfaces;
+    std::vector<Ptr<Ipv4Interface>> host5Ipv4Interfaces;
+
+    Ptr<Ipv4Interface> host1Ipv4Interface = getIpv4Interface(host1Interfaces.Get(0));
+    addIpv4Address(host1Ipv4Interface, &host1Ipv4Helper);
+    host1Ipv4Interfaces.push_back(host1Ipv4Interface);
+
+    Ptr<Ipv4Interface> host2Ipv4Interface = getIpv4Interface(host2Interfaces.Get(0));
+    addIpv4Address(host2Ipv4Interface, &host2Ipv4Helper);
+    host2Ipv4Interfaces.push_back(host2Ipv4Interface);
+    
+    Ptr<Ipv4Interface> host3Ipv4Interface = getIpv4Interface(host3Interfaces.Get(0));
+    addIpv4Address(host3Ipv4Interface, &host3Ipv4Helper);
+    host3Ipv4Interfaces.push_back(host3Ipv4Interface);
+
+    Ptr<Ipv4Interface> host4Ipv4Interface = getIpv4Interface(host4Interfaces.Get(0));
+    addIpv4Address(host4Ipv4Interface, &host4Ipv4Helper);
+    host4Ipv4Interfaces.push_back(host4Ipv4Interface);
+
+    Ptr<Ipv4Interface> host5Ipv4Interface = getIpv4Interface(host5Interfaces.Get(0));
+    addIpv4Address(host5Ipv4Interface, &host5Ipv4Helper);
+    host5Ipv4Interfaces.push_back(host5Ipv4Interface);
+
+    // Add arp entries for the hosts
+    addArpEntriesFromInterfaceAddresses(host1Ipv4Interface, host2Ipv4Interface);
+    addArpEntriesFromInterfaceAddresses(host2Ipv4Interface, host1Ipv4Interface);
+
+    addArpEntriesFromInterfaceAddresses(host1Ipv4Interface, host3Ipv4Interface);
+    addArpEntriesFromInterfaceAddresses(host3Ipv4Interface, host1Ipv4Interface);
+
+    addArpEntriesFromInterfaceAddresses(host1Ipv4Interface, host4Ipv4Interface);
+    addArpEntriesFromInterfaceAddresses(host4Ipv4Interface, host1Ipv4Interface);
+
+    addArpEntriesFromInterfaceAddresses(host1Ipv4Interface, host5Ipv4Interface);
+    addArpEntriesFromInterfaceAddresses(host5Ipv4Interface, host1Ipv4Interface);
+
+    addArpEntriesFromInterfaceAddresses(host2Ipv4Interface, host3Ipv4Interface);
+    addArpEntriesFromInterfaceAddresses(host3Ipv4Interface, host2Ipv4Interface);
+
+    addArpEntriesFromInterfaceAddresses(host2Ipv4Interface, host4Ipv4Interface);
+    addArpEntriesFromInterfaceAddresses(host4Ipv4Interface, host2Ipv4Interface);
+
+    addArpEntriesFromInterfaceAddresses(host2Ipv4Interface, host5Ipv4Interface);
+    addArpEntriesFromInterfaceAddresses(host5Ipv4Interface, host2Ipv4Interface);
+
+    addArpEntriesFromInterfaceAddresses(host3Ipv4Interface, host4Ipv4Interface);
+    addArpEntriesFromInterfaceAddresses(host4Ipv4Interface, host3Ipv4Interface);
+
+    addArpEntriesFromInterfaceAddresses(host3Ipv4Interface, host5Ipv4Interface);
+    addArpEntriesFromInterfaceAddresses(host5Ipv4Interface, host3Ipv4Interface);
+
+    addArpEntriesFromInterfaceAddresses(host4Ipv4Interface, host5Ipv4Interface);
+    addArpEntriesFromInterfaceAddresses(host5Ipv4Interface, host4Ipv4Interface);
 
     P4SwitchHelper qlrHelper;
     qlrHelper.SetDeviceAttribute("PipelineJson",
@@ -364,15 +487,21 @@ main(int argc, char* argv[])
     qlrHelper.SetDeviceAttribute("PacketDeparser", PointerValue(CreateObject<QLRDeparser>()));
 
 
-    std::ostringstream s1Commands; 
-    s1Commands << "register_write row2 0 256\n"
-    << "table_add qlr_pkt_updates qlr_pkt_set_1 2 2 =>\n" 
-    << "table_add read_ig_qdepth get_ig_qdepth_and_idx 2 => 1\n"
-    << "table_add select_port_from_row_col set_nhop 2 1 => 2\n"
-    << "table_add select_row get_row_num 10.0.2.0/24 => 2\n"
-    << "table_set_default select_row set_nhop_and_clear_qlr 1";
+    std::ifstream commandFile("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s1.txt");
+    std::ostringstream s1Commands;
 
-    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(s1Commands.str()));
+    if (!commandFile) {
+        std::cerr << "Failed to open commands.txt" << std::endl;
+        return 1;
+    }
+
+    std::string line;
+    while (std::getline(commandFile, line)) {
+        s1Commands << line << "\n";
+    }
+
+
+    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s1.txt")));
     NetDeviceContainer s1p4Cont = qlrHelper.Install(s1, s1Interfaces);
     Ptr<P4SwitchNetDevice> s1p4 = DynamicCast<P4SwitchNetDevice>(s1p4Cont.Get(0));
     s1p4->m_mmu->SetAlphaIngress(1.0 / 8);
@@ -382,15 +511,7 @@ main(int argc, char* argv[])
     s1p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s1p4->m_mmu->node_id = s1p4->GetNode()->GetId();
 
-    std::ostringstream s2Commands; 
-    s2Commands << "register_write row1 0 1\n"
-    << "table_add qlr_pkt_updates qlr_pkt_set_2 1 1 =>\n" 
-    << "table_add read_ig_qdepth get_ig_qdepth_and_idx 1 => 0\n"
-    << "table_add select_port_from_row_col set_nhop 1 0 => 1\n"
-    << "table_add select_row get_row_num 10.0.1.0/24 => 1\n"
-    << "table_set_default select_row set_nhop_and_clear_qlr 2";
-    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(s2Commands.str()));
-
+    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s2.txt")));
     NetDeviceContainer s2p4Cont = qlrHelper.Install(s2, s2Interfaces);
     Ptr<P4SwitchNetDevice> s2p4 = DynamicCast<P4SwitchNetDevice>(s2p4Cont.Get(0));
     s2p4->m_mmu->SetAlphaIngress(1.0 / 8);
@@ -400,6 +521,36 @@ main(int argc, char* argv[])
     s2p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s2p4->m_mmu->node_id = s2p4->GetNode()->GetId();
 
+    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s3.txt")));
+    NetDeviceContainer s3p4Cont = qlrHelper.Install(s3, s3Interfaces);
+    Ptr<P4SwitchNetDevice> s3p4 = DynamicCast<P4SwitchNetDevice>(s3p4Cont.Get(0));
+    s3p4->m_mmu->SetAlphaIngress(1.0 / 8);
+    s3p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
+    s3p4->m_mmu->SetIngressPool(64 * 1024 * 1024);
+    s3p4->m_mmu->SetAlphaEgress(1.0 / 8);
+    s3p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
+    s3p4->m_mmu->node_id = s3p4->GetNode()->GetId();
+
+    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s4.txt")));
+    NetDeviceContainer s4p4Cont = qlrHelper.Install(s4, s4Interfaces);
+    Ptr<P4SwitchNetDevice> s4p4 = DynamicCast<P4SwitchNetDevice>(s4p4Cont.Get(0));
+    s4p4->m_mmu->SetAlphaIngress(1.0 / 8);
+    s4p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
+    s4p4->m_mmu->SetIngressPool(64 * 1024 * 1024);
+    s4p4->m_mmu->SetAlphaEgress(1.0 / 8);
+    s4p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
+    s4p4->m_mmu->node_id = s4p4->GetNode()->GetId();
+
+    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s5.txt")));
+    NetDeviceContainer s5p4Cont = qlrHelper.Install(s5, s2Interfaces);
+    Ptr<P4SwitchNetDevice> s5p4 = DynamicCast<P4SwitchNetDevice>(s5p4Cont.Get(0));
+    s5p4->m_mmu->SetAlphaIngress(1.0 / 8);
+    s5p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
+    s5p4->m_mmu->SetIngressPool(64 * 1024 * 1024);
+    s5p4->m_mmu->SetAlphaEgress(1.0 / 8);
+    s5p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
+    s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
+
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
     uint16_t activePort = 20000;
@@ -407,14 +558,14 @@ main(int argc, char* argv[])
     if (activeFlows > 0)
     {
         ApplicationContainer activeReceiverApp =
-            createSinkTcpApplication(activePort, receivers.Get(0));
+            createSinkTcpApplication(activePort, host2);
         activeReceiverApp.Start(Seconds(0.0));
         activeReceiverApp.Stop(Seconds(flowEndTime + 1));
 
         ApplicationContainer activeSenderApp =
-            createTcpApplication(receiverIpv4Interfaces[0]->GetAddress(1).GetAddress(),
+            createTcpApplication(host2Ipv4Interfaces[0]->GetAddress(1).GetAddress(),
                                  activePort,
-                                 senders.Get(0),
+                                 host1,
                                  activeRateTcp,
                                  maxBytes,
                                  "ns3::TcpCubic");
