@@ -151,7 +151,7 @@ control IngressPipe(inout headers hdr,
             MAX_VALUE(4, 3)
             MAX_VALUE(5, 4)
 
-            log_msg("selected destination: {}", {row_num});
+            log_msg("selected destination: {} - selected col: {}", {row_num, col_num});
             select_port_from_row_col.apply();
             log_msg("selected port: {}", {standard_metadata.egress_spec});
 

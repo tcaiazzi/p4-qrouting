@@ -108,11 +108,11 @@ if __name__ == "__main__":
                 continue
             commands.add(f"table_add select_row get_row_num {subnet} => {node + 1}")
         max_iface = max(network[node_name].values()) + 1
-        commands.add(f"table_set_default select_row set_nhop_and_clear_qlr 0")
+        commands.add(f"table_set_default select_row set_nhop_and_clear_qlr 1")
 
         for iface in network[node_name].values():
             commands.add(f"table_add read_ig_qdepth get_ig_qdepth_and_idx {iface + 1} => {iface}")
 
-        commands_path = os.path.join("emulator", "lab_5_nodes", f"s{node_name + 1}", "commands.txt")
+        commands_path = os.path.join("sim", "ns-3.40", f"examples", "qlrouting", "resources", "5_nodes", f"s{node_name + 1}.txt")
         with open(commands_path, "w") as f: 
             f.write("\n".join(sorted(list(commands))))

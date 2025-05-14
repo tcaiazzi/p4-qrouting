@@ -18,4 +18,4 @@ table_add select_row get_row_num 10.0.1.0/24 => 1
 table_add select_row get_row_num 10.0.2.0/24 => 2
 table_add select_row get_row_num 10.0.3.0/24 => 3
 table_add select_row get_row_num 10.0.4.0/24 => 4
-table_set_default select_row set_nhop_and_clear_qlr 0
+table_set_default select_row set_nhop_and_clear_qlr 1

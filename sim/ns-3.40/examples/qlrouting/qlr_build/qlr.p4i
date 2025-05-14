@@ -1079,7 +1079,7 @@ control PktComputeChecksum(inout headers hdr, inout metadata meta) {
     }
 }
 # 9 "./qlr.p4" 2
-# 32 "./qlr.p4"
+# 31 "./qlr.p4"
 control IngressPipe(inout headers hdr,
                     inout metadata meta,
                     inout standard_metadata_t standard_metadata) {
@@ -4732,7 +4732,7 @@ table qmatrix_update {
         (true, 5, false, 0, false, 0, false, 0, false, 0, 5): qmatrix_update_r5_c5();
     }
 }
-# 122 "./qlr.p4" 2
+# 121 "./qlr.p4" 2
 
     /* Include the qlr_pkt_updates actions and table */
 # 1 "./lut/qlr_pkt_updates.p4" 1
@@ -5350,7 +5350,7 @@ table qlr_pkt_updates {
     }
     size = 31;
 }
-# 125 "./qlr.p4" 2
+# 124 "./qlr.p4" 2
 
     /* Helper to compute the max value */
     bit<8> max_value = 0;
@@ -5374,13 +5374,13 @@ table qlr_pkt_updates {
             /* Update rows using the pkt information */
             qmatrix_update.apply();
 
-            max_value = row1_value[7:0]; max_index = 0; max8(max_value, row1_value[15:8], 1); max8(max_value, row1_value[23:16], 2); max8(max_value, row1_value[31:24], 3); max8(max_value, row1_value[39:32], 4); max8(max_value, row1_value[47:40], 5); max8(max_value, row1_value[55:48], 6); max8(max_value, row1_value[63:56], 7); log_msg("row {} max: {} - max_index: {}", {(bit<8>)1, max_value, max_index}); if (row_num != 1) { hdr.qlr_updates[0].setValid(); hdr.qlr_updates[0].dst_id = 1; hdr.qlr_updates[0].value = max_value; } else { hdr.qlr_updates[0].setValid(); hdr.qlr_updates[0].dst_id = 1; hdr.qlr_updates[0].value = 0; col_num = max_index; }
-            max_value = row2_value[7:0]; max_index = 0; max8(max_value, row2_value[15:8], 1); max8(max_value, row2_value[23:16], 2); max8(max_value, row2_value[31:24], 3); max8(max_value, row2_value[39:32], 4); max8(max_value, row2_value[47:40], 5); max8(max_value, row2_value[55:48], 6); max8(max_value, row2_value[63:56], 7); log_msg("row {} max: {} - max_index: {}", {(bit<8>)2, max_value, max_index}); if (row_num != 2) { hdr.qlr_updates[1].setValid(); hdr.qlr_updates[1].dst_id = 2; hdr.qlr_updates[1].value = max_value; } else { hdr.qlr_updates[1].setValid(); hdr.qlr_updates[1].dst_id = 2; hdr.qlr_updates[1].value = 0; col_num = max_index; }
-            max_value = row3_value[7:0]; max_index = 0; max8(max_value, row3_value[15:8], 1); max8(max_value, row3_value[23:16], 2); max8(max_value, row3_value[31:24], 3); max8(max_value, row3_value[39:32], 4); max8(max_value, row3_value[47:40], 5); max8(max_value, row3_value[55:48], 6); max8(max_value, row3_value[63:56], 7); log_msg("row {} max: {} - max_index: {}", {(bit<8>)3, max_value, max_index}); if (row_num != 3) { hdr.qlr_updates[2].setValid(); hdr.qlr_updates[2].dst_id = 3; hdr.qlr_updates[2].value = max_value; } else { hdr.qlr_updates[2].setValid(); hdr.qlr_updates[2].dst_id = 3; hdr.qlr_updates[2].value = 0; col_num = max_index; }
-            max_value = row4_value[7:0]; max_index = 0; max8(max_value, row4_value[15:8], 1); max8(max_value, row4_value[23:16], 2); max8(max_value, row4_value[31:24], 3); max8(max_value, row4_value[39:32], 4); max8(max_value, row4_value[47:40], 5); max8(max_value, row4_value[55:48], 6); max8(max_value, row4_value[63:56], 7); log_msg("row {} max: {} - max_index: {}", {(bit<8>)4, max_value, max_index}); if (row_num != 4) { hdr.qlr_updates[3].setValid(); hdr.qlr_updates[3].dst_id = 4; hdr.qlr_updates[3].value = max_value; } else { hdr.qlr_updates[3].setValid(); hdr.qlr_updates[3].dst_id = 4; hdr.qlr_updates[3].value = 0; col_num = max_index; }
-            max_value = row5_value[7:0]; max_index = 0; max8(max_value, row5_value[15:8], 1); max8(max_value, row5_value[23:16], 2); max8(max_value, row5_value[31:24], 3); max8(max_value, row5_value[39:32], 4); max8(max_value, row5_value[47:40], 5); max8(max_value, row5_value[55:48], 6); max8(max_value, row5_value[63:56], 7); log_msg("row {} max: {} - max_index: {}", {(bit<8>)5, max_value, max_index}); if (row_num != 5) { hdr.qlr_updates[4].setValid(); hdr.qlr_updates[4].dst_id = 5; hdr.qlr_updates[4].value = max_value; } else { hdr.qlr_updates[4].setValid(); hdr.qlr_updates[4].dst_id = 5; hdr.qlr_updates[4].value = 0; col_num = max_index; }
+            max_value = row1_value[7:0]; max8(max_value, row1_value[15:8], 1); max8(max_value, row1_value[23:16], 2); max8(max_value, row1_value[31:24], 3); max8(max_value, row1_value[39:32], 4); max8(max_value, row1_value[47:40], 5); max8(max_value, row1_value[55:48], 6); max8(max_value, row1_value[63:56], 7); log_msg("row {} max: {} - max_index: {}", {(bit<8>)1, max_value, max_index}); if (row_num != 1) { hdr.qlr_updates[0].setValid(); hdr.qlr_updates[0].dst_id = 1; hdr.qlr_updates[0].value = max_value; } else { hdr.qlr_updates[0].setValid(); hdr.qlr_updates[0].dst_id = 1; hdr.qlr_updates[0].value = 0; col_num = max_index; }
+            max_value = row2_value[7:0]; max8(max_value, row2_value[15:8], 1); max8(max_value, row2_value[23:16], 2); max8(max_value, row2_value[31:24], 3); max8(max_value, row2_value[39:32], 4); max8(max_value, row2_value[47:40], 5); max8(max_value, row2_value[55:48], 6); max8(max_value, row2_value[63:56], 7); log_msg("row {} max: {} - max_index: {}", {(bit<8>)2, max_value, max_index}); if (row_num != 2) { hdr.qlr_updates[1].setValid(); hdr.qlr_updates[1].dst_id = 2; hdr.qlr_updates[1].value = max_value; } else { hdr.qlr_updates[1].setValid(); hdr.qlr_updates[1].dst_id = 2; hdr.qlr_updates[1].value = 0; col_num = max_index; }
+            max_value = row3_value[7:0]; max8(max_value, row3_value[15:8], 1); max8(max_value, row3_value[23:16], 2); max8(max_value, row3_value[31:24], 3); max8(max_value, row3_value[39:32], 4); max8(max_value, row3_value[47:40], 5); max8(max_value, row3_value[55:48], 6); max8(max_value, row3_value[63:56], 7); log_msg("row {} max: {} - max_index: {}", {(bit<8>)3, max_value, max_index}); if (row_num != 3) { hdr.qlr_updates[2].setValid(); hdr.qlr_updates[2].dst_id = 3; hdr.qlr_updates[2].value = max_value; } else { hdr.qlr_updates[2].setValid(); hdr.qlr_updates[2].dst_id = 3; hdr.qlr_updates[2].value = 0; col_num = max_index; }
+            max_value = row4_value[7:0]; max8(max_value, row4_value[15:8], 1); max8(max_value, row4_value[23:16], 2); max8(max_value, row4_value[31:24], 3); max8(max_value, row4_value[39:32], 4); max8(max_value, row4_value[47:40], 5); max8(max_value, row4_value[55:48], 6); max8(max_value, row4_value[63:56], 7); log_msg("row {} max: {} - max_index: {}", {(bit<8>)4, max_value, max_index}); if (row_num != 4) { hdr.qlr_updates[3].setValid(); hdr.qlr_updates[3].dst_id = 4; hdr.qlr_updates[3].value = max_value; } else { hdr.qlr_updates[3].setValid(); hdr.qlr_updates[3].dst_id = 4; hdr.qlr_updates[3].value = 0; col_num = max_index; }
+            max_value = row5_value[7:0]; max8(max_value, row5_value[15:8], 1); max8(max_value, row5_value[23:16], 2); max8(max_value, row5_value[31:24], 3); max8(max_value, row5_value[39:32], 4); max8(max_value, row5_value[47:40], 5); max8(max_value, row5_value[55:48], 6); max8(max_value, row5_value[63:56], 7); log_msg("row {} max: {} - max_index: {}", {(bit<8>)5, max_value, max_index}); if (row_num != 5) { hdr.qlr_updates[4].setValid(); hdr.qlr_updates[4].dst_id = 5; hdr.qlr_updates[4].value = max_value; } else { hdr.qlr_updates[4].setValid(); hdr.qlr_updates[4].dst_id = 5; hdr.qlr_updates[4].value = 0; col_num = max_index; }
 
-            log_msg("selected destination: {}", {row_num});
+            log_msg("selected destination: {} - selected col: {}", {row_num, col_num});
             select_port_from_row_col.apply();
             log_msg("selected port: {}", {standard_metadata.egress_spec});
 

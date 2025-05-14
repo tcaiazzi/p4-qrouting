@@ -234,9 +234,7 @@ class QLRDeparser : public P4PacketDeparser
             p->AddHeader(ipv4);
 
         p->AddHeader(eth);
-        
-        p->Print(std::cout);
-        
+    
         return p;
     }
 };
@@ -253,7 +251,7 @@ main(int argc, char* argv[])
     std::string activeRateTcp = "50Kbps";
     uint32_t maxBytes = 15000000;
 
-    Packet::EnablePrinting();
+    // Packet::EnablePrinting();
 
 
     CommandLine cmd;
@@ -272,8 +270,8 @@ main(int argc, char* argv[])
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
-        LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
+        LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
+        //LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
 
     NS_LOG_INFO("#### RUN PARAMETERS ####");
@@ -486,21 +484,6 @@ main(int argc, char* argv[])
                                  StringValue("/ns3/ns-3.40/examples/qlrouting/qlr_build/qlr.json"));
     qlrHelper.SetDeviceAttribute("PacketDeparser", PointerValue(CreateObject<QLRDeparser>()));
 
-
-    std::ifstream commandFile("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s1.txt");
-    std::ostringstream s1Commands;
-
-    if (!commandFile) {
-        std::cerr << "Failed to open commands.txt" << std::endl;
-        return 1;
-    }
-
-    std::string line;
-    while (std::getline(commandFile, line)) {
-        s1Commands << line << "\n";
-    }
-
-
     qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s1.txt")));
     NetDeviceContainer s1p4Cont = qlrHelper.Install(s1, s1Interfaces);
     Ptr<P4SwitchNetDevice> s1p4 = DynamicCast<P4SwitchNetDevice>(s1p4Cont.Get(0));
@@ -542,7 +525,7 @@ main(int argc, char* argv[])
     s4p4->m_mmu->node_id = s4p4->GetNode()->GetId();
 
     qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s5.txt")));
-    NetDeviceContainer s5p4Cont = qlrHelper.Install(s5, s2Interfaces);
+    NetDeviceContainer s5p4Cont = qlrHelper.Install(s5, s5Interfaces);
     Ptr<P4SwitchNetDevice> s5p4 = DynamicCast<P4SwitchNetDevice>(s5p4Cont.Get(0));
     s5p4->m_mmu->SetAlphaIngress(1.0 / 8);
     s5p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
@@ -557,19 +540,33 @@ main(int argc, char* argv[])
 
     if (activeFlows > 0)
     {
-        ApplicationContainer activeReceiverApp =
-            createSinkTcpApplication(activePort, host2);
-        activeReceiverApp.Start(Seconds(0.0));
-        activeReceiverApp.Stop(Seconds(flowEndTime + 1));
+        // ApplicationContainer host5ReceiverApp =
+        //     createSinkTcpApplication(activePort, host5);
+        // host5ReceiverApp.Start(Seconds(0.0));
+        // host5ReceiverApp.Stop(Seconds(flowEndTime + 1));
 
-        ApplicationContainer activeSenderApp =
-            createTcpApplication(host2Ipv4Interfaces[0]->GetAddress(1).GetAddress(),
+        ApplicationContainer host1ReceiverApp =
+            createSinkTcpApplication(activePort, host1);
+        host1ReceiverApp.Start(Seconds(0.0));
+        host1ReceiverApp.Stop(Seconds(flowEndTime + 1));
+
+        // ApplicationContainer host15SenderApp =
+        //     createTcpApplication(host5Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
+        //                          activePort,
+        //                          host1,
+        //                          activeRateTcp,
+        //                          maxBytes,
+        //                          "ns3::TcpCubic");
+        // host15SenderApp.Start(Seconds(1.0));
+
+        ApplicationContainer host51SenderApp =
+            createTcpApplication(host1Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
                                  activePort,
-                                 host1,
+                                 host5,
                                  activeRateTcp,
                                  maxBytes,
                                  "ns3::TcpCubic");
-        activeSenderApp.Start(Seconds(1.0));
+        host51SenderApp.Start(Seconds(1.0));
     }
 
     // if (dumpTraffic)
