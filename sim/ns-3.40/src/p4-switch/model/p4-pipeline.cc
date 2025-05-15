@@ -153,7 +153,6 @@ P4Pipeline::P4Pipeline(std::string jsonFile, std::string name)
 std::string
 P4Pipeline::run_cli_commands(std::string commands)
 {
-    // Run the CLI commands to populate table entries
     int port = get_runtime_port();
     std::string cmd =
         "run_bmv2_CLI --thrift_port " + std::to_string(port) + " \"" + commands + "\"";

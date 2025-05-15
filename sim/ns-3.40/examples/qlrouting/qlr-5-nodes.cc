@@ -121,7 +121,7 @@ addArpEntriesFromInterfaceAddresses(Ptr<Ipv4Interface> nodeInterface,
     Ptr<Ipv4StaticRouting> routing = ipv4StaticRouting.GetStaticRouting(
         nodeInterface->GetDevice()->GetNode()->GetObject<Ipv4>());
     for (uint32_t i = 0; i < ipv4Interface->GetNAddresses(); i++)
-    {   
+    {
         Ipv4Address address = ipv4Interface->GetAddress(i).GetAddress();
         std::cout << "Add ARP Entry for " << address << std::endl;
         addIpv4ArpEntry(nodeInterface,
@@ -163,19 +163,32 @@ loadCommands(std::string path)
     std::ifstream commandFile(path);
     std::ostringstream commands;
 
-    if (!commandFile) {
+    if (!commandFile)
+    {
         throw std::runtime_error("Failed to open commands file: " + path);
-        
     }
 
     std::string line;
-    while (std::getline(commandFile, line)) {
+    while (std::getline(commandFile, line))
+    {
         commands << line << "\n";
     }
 
     return commands.str();
 }
 
+void
+updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
+{
+    P4Pipeline* pline = p4Device->m_p4_pipeline;
+    if (pline != nullptr)
+    {
+        /* TODO: Update qdepths here */
+        std::string res = pline->run_cli_commands("register_write ig_qdepths 0 77");
+    }
+
+    Simulator::Schedule(Seconds(1), &updateQdepth, p4Device);
+}
 
 class QLRDeparser : public P4PacketDeparser
 {
@@ -210,13 +223,13 @@ class QLRDeparser : public P4PacketDeparser
             next_hdr = ipv4.GetProtocol();
         }
 
-        if (next_hdr == 6 || next_hdr == 152)
+        if (next_hdr == 6)
         {
             tcp.Deserialize(it);
             it.Next(tcp.GetSerializedSize());
             offset += tcp.GetSerializedSize();
         }
-        else if (next_hdr == 17 || next_hdr == 163)
+        else if (next_hdr == 17)
         {
             udp.Deserialize(it);
             it.Next(udp.GetSerializedSize());
@@ -225,16 +238,16 @@ class QLRDeparser : public P4PacketDeparser
 
         Ptr<Packet> p = Create<Packet>(bm_buf + offset, len - offset);
         /* Headers are added in reverse order */
-        if (next_hdr == 6 || next_hdr == 152)
+        if (next_hdr == 6)
             p->AddHeader(tcp);
-        else if (next_hdr == 17 || next_hdr == 163)
+        else if (next_hdr == 17)
             p->AddHeader(udp);
 
         if (ether_type == 0x0800)
             p->AddHeader(ipv4);
 
         p->AddHeader(eth);
-    
+
         return p;
     }
 };
@@ -252,7 +265,6 @@ main(int argc, char* argv[])
     uint32_t maxBytes = 15000000;
 
     // Packet::EnablePrinting();
-
 
     CommandLine cmd;
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
@@ -272,7 +284,7 @@ main(int argc, char* argv[])
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
         LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_INFO);
         // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
-        //LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
 
     NS_LOG_INFO("#### RUN PARAMETERS ####");
@@ -347,7 +359,6 @@ main(int argc, char* argv[])
     NetDeviceContainer s4Interfaces;
     NetDeviceContainer s5Interfaces;
 
-
     NetDeviceContainer link;
     link = csma.Install(NodeContainer(host1, s1));
     host1Interfaces.Add(link.Get(0));
@@ -397,7 +408,6 @@ main(int argc, char* argv[])
     s4Interfaces.Add(link.Get(0));
     s5Interfaces.Add(link.Get(1));
 
-
     InternetStackHelper inetStack;
     inetStack.SetIpv4StackInstall(true);
     inetStack.SetIpv6StackInstall(false);
@@ -436,7 +446,7 @@ main(int argc, char* argv[])
     Ptr<Ipv4Interface> host2Ipv4Interface = getIpv4Interface(host2Interfaces.Get(0));
     addIpv4Address(host2Ipv4Interface, &host2Ipv4Helper);
     host2Ipv4Interfaces.push_back(host2Ipv4Interface);
-    
+
     Ptr<Ipv4Interface> host3Ipv4Interface = getIpv4Interface(host3Interfaces.Get(0));
     addIpv4Address(host3Ipv4Interface, &host3Ipv4Helper);
     host3Ipv4Interfaces.push_back(host3Ipv4Interface);
@@ -485,7 +495,9 @@ main(int argc, char* argv[])
                                  StringValue("/ns3/ns-3.40/examples/qlrouting/qlr_build/qlr.json"));
     qlrHelper.SetDeviceAttribute("PacketDeparser", PointerValue(CreateObject<QLRDeparser>()));
 
-    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s1.txt")));
+    qlrHelper.SetDeviceAttribute(
+        "PipelineCommands",
+        StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s1.txt")));
     NetDeviceContainer s1p4Cont = qlrHelper.Install(s1, s1Interfaces);
     Ptr<P4SwitchNetDevice> s1p4 = DynamicCast<P4SwitchNetDevice>(s1p4Cont.Get(0));
     s1p4->m_mmu->SetAlphaIngress(1.0 / 8);
@@ -495,7 +507,9 @@ main(int argc, char* argv[])
     s1p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s1p4->m_mmu->node_id = s1p4->GetNode()->GetId();
 
-    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s2.txt")));
+    qlrHelper.SetDeviceAttribute(
+        "PipelineCommands",
+        StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s2.txt")));
     NetDeviceContainer s2p4Cont = qlrHelper.Install(s2, s2Interfaces);
     Ptr<P4SwitchNetDevice> s2p4 = DynamicCast<P4SwitchNetDevice>(s2p4Cont.Get(0));
     s2p4->m_mmu->SetAlphaIngress(1.0 / 8);
@@ -505,7 +519,9 @@ main(int argc, char* argv[])
     s2p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s2p4->m_mmu->node_id = s2p4->GetNode()->GetId();
 
-    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s3.txt")));
+    qlrHelper.SetDeviceAttribute(
+        "PipelineCommands",
+        StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s3.txt")));
     NetDeviceContainer s3p4Cont = qlrHelper.Install(s3, s3Interfaces);
     Ptr<P4SwitchNetDevice> s3p4 = DynamicCast<P4SwitchNetDevice>(s3p4Cont.Get(0));
     s3p4->m_mmu->SetAlphaIngress(1.0 / 8);
@@ -515,7 +531,9 @@ main(int argc, char* argv[])
     s3p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s3p4->m_mmu->node_id = s3p4->GetNode()->GetId();
 
-    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s4.txt")));
+    qlrHelper.SetDeviceAttribute(
+        "PipelineCommands",
+        StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s4.txt")));
     NetDeviceContainer s4p4Cont = qlrHelper.Install(s4, s4Interfaces);
     Ptr<P4SwitchNetDevice> s4p4 = DynamicCast<P4SwitchNetDevice>(s4p4Cont.Get(0));
     s4p4->m_mmu->SetAlphaIngress(1.0 / 8);
@@ -525,7 +543,9 @@ main(int argc, char* argv[])
     s4p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s4p4->m_mmu->node_id = s4p4->GetNode()->GetId();
 
-    qlrHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s5.txt")));
+    qlrHelper.SetDeviceAttribute(
+        "PipelineCommands",
+        StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s5.txt")));
     NetDeviceContainer s5p4Cont = qlrHelper.Install(s5, s5Interfaces);
     Ptr<P4SwitchNetDevice> s5p4 = DynamicCast<P4SwitchNetDevice>(s5p4Cont.Get(0));
     s5p4->m_mmu->SetAlphaIngress(1.0 / 8);
@@ -534,6 +554,9 @@ main(int argc, char* argv[])
     s5p4->m_mmu->SetAlphaEgress(1.0 / 8);
     s5p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
+
+    /* TODO: Add All */
+    Simulator::Schedule(Seconds(1), &updateQdepth, s1p4);
 
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
@@ -546,8 +569,7 @@ main(int argc, char* argv[])
         // host5ReceiverApp.Start(Seconds(0.0));
         // host5ReceiverApp.Stop(Seconds(flowEndTime + 1));
 
-        ApplicationContainer host1ReceiverApp =
-            createSinkTcpApplication(activePort, host1);
+        ApplicationContainer host1ReceiverApp = createSinkTcpApplication(activePort, host1);
         host1ReceiverApp.Start(Seconds(0.0));
         host1ReceiverApp.Stop(Seconds(flowEndTime + 1));
 
