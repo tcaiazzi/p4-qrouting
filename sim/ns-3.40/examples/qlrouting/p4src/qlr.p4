@@ -9,6 +9,7 @@
 
 #define MAX_VALUE(i, j)                                                                 \
     max_value = row##i##_value[7:0];                                                    \
+    max_index = 0;                                                                      \
     max8(max_value, row##i##_value[15:8], 1);                                           \
     max8(max_value, row##i##_value[23:16], 2);                                          \
     max8(max_value, row##i##_value[31:24], 3);                                          \

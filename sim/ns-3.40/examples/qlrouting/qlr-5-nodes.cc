@@ -270,7 +270,8 @@ main(int argc, char* argv[])
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
+        LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_INFO);
+        // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         //LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
 

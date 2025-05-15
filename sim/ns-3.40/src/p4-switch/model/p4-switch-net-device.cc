@@ -146,8 +146,8 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
 
     uint32_t port_n = GetPortN(incomingPort);
     uint32_t port_idx = port_n - 1; // port_n starts from 1
-    NS_LOG_LOGIC(node_name << " | ReceiveFromDevice port " << port_n
-                           << " sending through P4 pipeline");
+    NS_LOG_INFO(node_name << " | ReceiveFromDevice port " << port_n
+                          << " sending through P4 pipeline");
 
     // Re-append Ethernet header, removed by CsmaNetDevice
     Ptr<Packet> full_packet = packet->Copy();
@@ -163,64 +163,65 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
     uint32_t pkt_size = full_packet->GetSize();
 
     // Check if the ingress can admit the packet
-    // qIndex=0 is high priority, so we start from 1
-    if (!m_mmu->CheckIngressAdmission(port_idx, 1, pkt_size))
+    if (!m_mmu->CheckIngressAdmission(port_idx, 0, pkt_size))
     {
-        NS_LOG_DEBUG(node_name << " | Port " << port_n
-                               << " cannot admit in ingress packet with size=" << pkt_size
-                               << ", dropping");
+        NS_LOG_INFO(node_name << " | Port " << port_n
+                              << " cannot admit in ingress packet with size=" << pkt_size
+                              << ", dropping");
 
         return;
     }
 
     // We admitted the packet, now update the ingress admission
-    NS_LOG_DEBUG(node_name << " | packet with size=" << pkt_size
-                           << " admitted, sending through the ingress pipeline");
-    m_mmu->UpdateIngressAdmission(port_idx, 1, pkt_size);
+    NS_LOG_INFO(node_name << " | packet with size=" << pkt_size
+                          << " admitted, sending through the ingress pipeline");
+    m_mmu->UpdateIngressAdmission(port_idx, 0, pkt_size);
     std::unique_ptr<bm::Packet> pkt = m_p4_pipeline->process_ingress(full_packet, port_n);
 
     // Remove from ingress admission
-    m_mmu->RemoveFromIngressAdmission(port_idx, 1, pkt_size);
+    m_mmu->RemoveFromIngressAdmission(port_idx, 0, pkt_size);
 
     // The TM decides what to do with the processed packet
-    std::list<std::pair<uint16_t, std::unique_ptr<bm::Packet>>>* pkts =
-        new std::list<std::pair<uint16_t, std::unique_ptr<bm::Packet>>>();
+    std::list<std::tuple<uint16_t, uint16_t, std::unique_ptr<bm::Packet>>>* pkts =
+        new std::list<std::tuple<uint16_t, uint16_t, std::unique_ptr<bm::Packet>>>();
 
     m_p4_pipeline->process_tm(pkts, std::move(pkt));
 
     // Enqueue each packet in a different egress queue, by also checking the egress admission
     for (auto& item : *pkts)
     {
-        uint16_t outport_n = item.first;
+        uint16_t outport_n = std::get<0>(item);
         uint16_t outport_idx = outport_n - 1; // outport_n starts from 1
-        std::unique_ptr<bm::Packet> out_pkt = std::move(item.second);
+        uint16_t qid = std::get<1>(item);
+        std::unique_ptr<bm::Packet> out_pkt = std::move(std::get<2>(item));
 
-        if (!m_mmu->CheckEgressAdmission(outport_idx, 1, pkt_size))
+        if (!m_mmu->CheckEgressAdmission(outport_idx, qid, pkt_size))
         {
-            NS_LOG_DEBUG(node_name << " | Ouput Port " << outport_n
-                                   << " cannot admit in egress packet with size=" << pkt_size
-                                   << ", dropping");
+            NS_LOG_INFO(node_name << " | Ouput Port " << outport_n << " Queue " << qid
+                                  << " cannot admit in egress packet with size=" << pkt_size
+                                  << ", dropping");
 
             out_pkt.release();
 
             continue;
         }
 
-        uint64_t eg_bytes_before = m_mmu->GetEgressBytes(outport_idx, 1);
+        uint64_t eg_bytes_before = m_mmu->GetEgressBytes(outport_idx, qid);
 
         // We admitted the packet, now update the egress admission
-        NS_LOG_DEBUG(node_name << " | packet with size=" << pkt_size << " admitted in port="
-                               << outport_n << " (idx=" << outport_idx << "), enqueuing...");
-        m_mmu->UpdateEgressAdmission(outport_idx, 1, pkt_size);
+        NS_LOG_INFO(node_name << " | packet with size=" << pkt_size
+                              << " admitted in port=" << outport_n << " (idx=" << outport_idx
+                              << ") with qid=" << qid << ", enqueuing...");
+        m_mmu->UpdateEgressAdmission(outport_idx, qid, pkt_size);
 
-        eg_queues[outport_idx][1].emplace_back(std::make_tuple(eg_bytes_before,
-                                                              Simulator::Now().GetNanoSeconds(),
-                                                              full_packet,
-                                                              std::move(out_pkt)));
+        eg_queues[outport_idx][qid].emplace_back(std::make_tuple(eg_bytes_before,
+                                                                 Simulator::Now().GetNanoSeconds(),
+                                                                 full_packet,
+                                                                 std::move(out_pkt)));
 
-        NS_LOG_DEBUG(node_name << " | port=" << outport_n << " (idx=" << outport_idx
-                               << ") queue=1 current_egress_bytes="
-                               << m_mmu->GetEgressBytes(outport_idx, 1));
+        NS_LOG_INFO(node_name << " | port=" << outport_n << " (idx=" << outport_idx
+                              << ") queue=" << qid
+                              << " current_egress_bytes=" << m_mmu->GetEgressBytes(outport_idx, 1));
     }
 }
 
@@ -236,22 +237,22 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
     bool found = false;
     uint32_t qIndex;
 
-    if (p_queues[0].size() > 0) // 0 is the highest priority
+    if (p_queues[DEFAULT_MAX_PRIO_Q].size() > 0) // 0 is the highest priority
     {
         found = true;
         qIndex = 0;
     }
     else
     {
-        for (qIndex = 1; qIndex <= qCnt; qIndex++)
+        for (qIndex = 0; qIndex < (qCnt - 1); qIndex++)
         {
-            if (p_queues[(qIndex + rrlast) % qCnt].size() > 0) // round robin
+            if (p_queues[(qIndex + rrlast) % (qCnt - 1)].size() > 0) // round robin
             {
                 found = true;
                 break;
             }
         }
-        qIndex = (qIndex + rrlast) % qCnt;
+        qIndex = (qIndex + rrlast) % (qCnt - 1);
     }
     if (found)
     {
@@ -262,13 +263,13 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
             qIndexLast[p] = qIndex;
         }
 
-        NS_LOG_DEBUG(node_name << " | Popped packet from port=" << p + 1 << " (idx=" << p
-                               << ") qIndex=" << qIndex);
+        NS_LOG_INFO(node_name << " | Popped packet from port=" << p + 1 << " (idx=" << p
+                              << ") qIndex=" << qIndex);
 
         uint32_t pkt_size = std::get<2>(item)->GetSize();
 
-        NS_LOG_DEBUG(node_name << " | sending packet with size=" << pkt_size
-                               << " through the egress pipeline");
+        NS_LOG_INFO(node_name << " | sending packet with size=" << pkt_size
+                              << " through the egress pipeline");
 
         m_mmu->RemoveFromEgressAdmission(p, qIndex, pkt_size);
 
@@ -285,9 +286,9 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
                                                    deq_qdepth,
                                                    enq_tstamp);
 
-        NS_LOG_DEBUG(node_name << " | port=" << p + 1 << " (idx=" << p
-                               << ") queue=1 removed packet, current_egress_bytes="
-                               << m_mmu->GetEgressBytes(p, 1));
+        NS_LOG_INFO(node_name << " | port=" << p + 1 << " (idx=" << p
+                              << ") queue=1 removed packet, current_egress_bytes="
+                              << m_mmu->GetEgressBytes(p, 1));
 
         if (status == 0)
         {
@@ -295,7 +296,7 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
         }
         else
         {
-            NS_LOG_DEBUG(node_name << " | packet dropped in egress pipeline");
+            NS_LOG_INFO(node_name << " | packet dropped in egress pipeline");
         }
 
         p_queues[qIndex].pop_front();
@@ -317,7 +318,7 @@ P4SwitchNetDevice::DeparseAndSend(uint32_t outport_n,
     Ptr<NetDevice> port = GetPort(outport_n);
     if (!port)
     {
-        NS_LOG_DEBUG(node_name << " | Port " << outport_n << " not found, dropping packet");
+        NS_LOG_INFO(node_name << " | Port " << outport_n << " not found, dropping packet");
         return;
     }
 
@@ -354,9 +355,9 @@ P4SwitchNetDevice::DeparseAndSend(uint32_t outport_n,
         deparsed_pkt->AddPacketTag(*tag);
     }
 
-    NS_LOG_DEBUG(node_name << " | Forwarding pkt " << deparsed_pkt << " to port " << outport_n
-                           << "                              " << eth_hdr_out.GetDestination()
-                           << " " << eth_hdr_out.GetSource() << " " << eth_hdr_out.GetLengthType());
+    NS_LOG_INFO(node_name << " | Forwarding pkt " << deparsed_pkt << " to port " << outport_n
+                          << "                              " << eth_hdr_out.GetDestination() << " "
+                          << eth_hdr_out.GetSource() << " " << eth_hdr_out.GetLengthType());
 
     port->SendFrom(deparsed_pkt,
                    eth_hdr_out.GetSource(),
@@ -380,7 +381,7 @@ P4SwitchNetDevice::InitPipeline()
 
     if (m_pipeline_json != "")
     {
-        NS_LOG_LOGIC(node_name << " Initializing up P4 pipeline...");
+        NS_LOG_DEBUG(node_name << " Initializing up P4 pipeline...");
         m_p4_pipeline = new P4Pipeline(m_pipeline_json, node_name);
         if (!m_pipeline_commands.empty())
         {

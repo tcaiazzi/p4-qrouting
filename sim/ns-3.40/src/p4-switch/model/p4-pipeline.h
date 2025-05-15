@@ -74,8 +74,9 @@ class P4Pipeline : public bm::Switch
     std::unique_ptr<bm::Packet> process_ingress(Ptr<const Packet> ns3_packet,
                                                 uint32_t ingress_port);
 
-    void process_tm(std::list<std::pair<uint16_t, std::unique_ptr<bm::Packet>>>* pkts_to_egress,
-                    std::unique_ptr<bm::Packet> packet);
+    void process_tm(
+        std::list<std::tuple<uint16_t, uint16_t, std::unique_ptr<bm::Packet>>>* pkts_to_egress,
+        std::unique_ptr<bm::Packet> packet);
 
     /**
      * \brief Invoke the P4 processing egress pipeline (match-action, deparser)
@@ -104,7 +105,7 @@ class P4Pipeline : public bm::Switch
      * \brief Process the multicasting of a packet
      */
     void process_multicast(
-        std::list<std::pair<uint16_t, std::unique_ptr<bm::Packet>>>* pkts_to_egress,
+        std::list<std::tuple<uint16_t, uint16_t, std::unique_ptr<bm::Packet>>>* pkts_to_egress,
         bm::Packet* packet,
         unsigned int mgid);
 

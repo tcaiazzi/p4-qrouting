@@ -20,12 +20,7 @@
  */
 #include "p4-pipeline.h"
 
-#include "ns3/ethernet-header.h"
-#include "ns3/ipv4-header.h"
-#include "ns3/ipv6-header.h"
 #include "ns3/log.h"
-#include "ns3/tcp-header.h"
-#include "ns3/udp-header.h"
 
 #include <bm/bm_runtime/bm_runtime.h>
 #include <bm/bm_sim/event_logger.h>
@@ -43,6 +38,7 @@ extern int import_primitives();
 
 namespace ns3
 {
+NS_LOG_COMPONENT_DEFINE("P4Pipeline");
 
 namespace
 {
@@ -115,7 +111,32 @@ P4Pipeline::P4Pipeline(std::string jsonFile, std::string name)
         std::string("ipc:///tmp/bmv2-") + node_id + std::string("-notifications.ipc");
     opt_parser.thrift_port = thrift_port++;
     opt_parser.console_logging = true;
-    opt_parser.log_level = bm::Logger::LogLevel::INFO;
+
+    LogComponent component = GetLogComponent("P4Pipeline");
+    if (component.IsEnabled(LOG_LEVEL_DEBUG))
+    {
+        std::cout << "DEBUG" << std::endl;
+        opt_parser.log_level = bm::Logger::LogLevel::DEBUG;
+    }
+    else if (component.IsEnabled(LOG_LEVEL_INFO))
+    {
+        std::cout << "INFO" << std::endl;
+        opt_parser.log_level = bm::Logger::LogLevel::INFO;
+    }
+    else if (component.IsEnabled(LOG_LEVEL_WARN))
+    {
+        std::cout << "WARN" << std::endl;
+        opt_parser.log_level = bm::Logger::LogLevel::WARN;
+    }
+    else if (component.IsEnabled(LOG_LEVEL_ERROR))
+    {
+        std::cout << "ERROR" << std::endl;
+        opt_parser.log_level = bm::Logger::LogLevel::ERROR;
+    }
+    else
+    {
+        opt_parser.console_logging = false;
+    }
 
     int status = init_from_options_parser(opt_parser);
     if (status != 0)
@@ -216,8 +237,9 @@ P4Pipeline::process_ingress(Ptr<const Packet> ns3_packet, uint32_t ingress_port)
 
 // Handle Traffic Management, for now only implements unicast and mcast
 void
-P4Pipeline::process_tm(std::list<std::pair<uint16_t, std::unique_ptr<bm::Packet>>>* pkts_to_egress,
-                       std::unique_ptr<bm::Packet> packet)
+P4Pipeline::process_tm(
+    std::list<std::tuple<uint16_t, uint16_t, std::unique_ptr<bm::Packet>>>* pkts_to_egress,
+    std::unique_ptr<bm::Packet> packet)
 {
     bm::PHV* phv = packet->get_phv();
     bm::Field& f_egress_spec_ig = phv->get_field("standard_metadata.egress_spec");
@@ -249,7 +271,14 @@ P4Pipeline::process_tm(std::list<std::pair<uint16_t, std::unique_ptr<bm::Packet>
             auto& f_instance_type = phv->get_field("standard_metadata.instance_type");
             f_instance_type.set(PKT_INSTANCE_TYPE_NORMAL);
 
-            pkts_to_egress->push_back(std::make_pair(egress_spec_ig, std::move(packet)));
+            unsigned int qid = 0u;
+            if (phv->has_field("intrinsic_metadata.priority"))
+            {
+                auto& qid_f = phv->get_field("intrinsic_metadata.priority");
+                qid = qid_f.get_uint();
+            }
+
+            pkts_to_egress->push_back(std::make_tuple(egress_spec_ig, qid, std::move(packet)));
         }
     }
 }
@@ -269,12 +298,6 @@ P4Pipeline::process_egress(std::unique_ptr<bm::Packet>& packet,
 
     bm::PHV* phv = packet->get_phv();
 
-    if (phv->has_field("intrinsic_metadata.ingress_global_timestamp"))
-    {
-        phv->get_field("intrinsic_metadata.ingress_global_timestamp")
-            .set(Simulator::Now().GetNanoSeconds());
-    }
-
     if (phv->has_field("intrinsic_metadata.egress_global_timestamp"))
     {
         phv->get_field("intrinsic_metadata.egress_global_timestamp")
@@ -288,9 +311,9 @@ P4Pipeline::process_egress(std::unique_ptr<bm::Packet>& packet,
         .set(Simulator::Now().GetNanoSeconds() - enq_tstamp);
 
     phv->get_field("queueing_metadata.deq_qdepth").set(deq_qdepth);
-    if (phv->has_field("queueing_metadata.qid"))
+    if (phv->has_field("intrinsic_metadata.priority"))
     {
-        auto& qid_f = phv->get_field("queueing_metadata.qid");
+        auto& qid_f = phv->get_field("intrinsic_metadata.priority");
         qid_f.set(qid);
     }
 
@@ -322,7 +345,7 @@ P4Pipeline::process_egress(std::unique_ptr<bm::Packet>& packet,
 
 void
 P4Pipeline::process_multicast(
-    std::list<std::pair<uint16_t, std::unique_ptr<bm::Packet>>>* pkts_to_egress,
+    std::list<std::tuple<uint16_t, uint16_t, std::unique_ptr<bm::Packet>>>* pkts_to_egress,
     bm::Packet* packet,
     unsigned int mgid)
 {
@@ -335,7 +358,7 @@ P4Pipeline::process_multicast(
         BMLOG_DEBUG_PKT(*packet, "Replicating packet on port {}", egress_port);
         f_rid.set(out.rid);
         std::unique_ptr<bm::Packet> packet_copy = packet->clone_with_phv_ptr();
-        pkts_to_egress->push_back(std::make_pair(egress_port, std::move(packet_copy)));
+        pkts_to_egress->push_back(std::make_tuple(egress_port, 1, std::move(packet_copy)));
     }
 }
 

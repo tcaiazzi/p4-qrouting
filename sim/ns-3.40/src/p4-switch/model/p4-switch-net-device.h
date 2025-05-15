@@ -18,6 +18,8 @@
 #ifndef P4_SWITCH_NET_DEVICE_H
 #define P4_SWITCH_NET_DEVICE_H
 
+#define DEFAULT_MAX_PRIO_Q 7
+
 #include "ns3/mac48-address.h"
 #include "ns3/net-device.h"
 #include "ns3/nstime.h"
