@@ -165,7 +165,7 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
     // Check if the ingress can admit the packet
     if (!m_mmu->CheckIngressAdmission(port_idx, 0, pkt_size))
     {
-        NS_LOG_INFO(node_name << " | Port " << port_n
+        NS_LOG_WARN(node_name << " | Port " << port_n
                               << " cannot admit in ingress packet with size=" << pkt_size
                               << ", dropping");
 
@@ -197,7 +197,7 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
 
         if (!m_mmu->CheckEgressAdmission(outport_idx, qid, pkt_size))
         {
-            NS_LOG_INFO(node_name << " | Ouput Port " << outport_n << " Queue " << qid
+            NS_LOG_WARN(node_name << " | Ouput Port " << outport_n << " qid=" << qid
                                   << " cannot admit in egress packet with size=" << pkt_size
                                   << ", dropping");
 
@@ -220,8 +220,8 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
                                                                  std::move(out_pkt)));
 
         NS_LOG_INFO(node_name << " | port=" << outport_n << " (idx=" << outport_idx
-                              << ") queue=" << qid
-                              << " current_egress_bytes=" << m_mmu->GetEgressBytes(outport_idx, 1));
+                              << ") queue=" << qid << " current_egress_bytes="
+                              << m_mmu->GetEgressBytes(outport_idx, qid));
     }
 }
 
@@ -258,7 +258,7 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
     {
         std::tuple<uint64_t, int64_t, Ptr<const Packet>, std::unique_ptr<bm::Packet>>& item =
             p_queues[qIndex].front();
-        if (qIndex != 0)
+        if (qIndex != DEFAULT_MAX_PRIO_Q)
         {
             qIndexLast[p] = qIndex;
         }
@@ -286,9 +286,9 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
                                                    deq_qdepth,
                                                    enq_tstamp);
 
-        NS_LOG_INFO(node_name << " | port=" << p + 1 << " (idx=" << p
-                              << ") queue=1 removed packet, current_egress_bytes="
-                              << m_mmu->GetEgressBytes(p, 1));
+        NS_LOG_INFO(node_name << " | port=" << p + 1 << " (idx=" << p << ") queue=" << qIndex
+                              << " removed packet, current_egress_bytes="
+                              << m_mmu->GetEgressBytes(p, qIndex));
 
         if (status == 0)
         {
@@ -303,7 +303,7 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
         tm_pkt.release();
     }
 
-    dequeueEvent[p] = Simulator::Schedule(NanoSeconds(500), &P4SwitchNetDevice::DequeueRR, this, p);
+    dequeueEvent[p] = Simulator::Schedule(NanoSeconds(120), &P4SwitchNetDevice::DequeueRR, this, p);
 }
 
 void
@@ -399,7 +399,7 @@ P4SwitchNetDevice::InitPipeline()
     for (size_t p = 0; p < GetNPorts(); ++p)
     {
         dequeueEvent[p] =
-            Simulator::Schedule(NanoSeconds(500), &P4SwitchNetDevice::DequeueRR, this, p);
+            Simulator::Schedule(NanoSeconds(120), &P4SwitchNetDevice::DequeueRR, this, p);
     }
 }
 

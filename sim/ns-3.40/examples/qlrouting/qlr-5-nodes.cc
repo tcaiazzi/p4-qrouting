@@ -94,6 +94,45 @@ createSinkTcpApplication(uint16_t port, Ptr<Node> node)
     return sink.Install(node);
 }
 
+ApplicationContainer
+createUdpApplication(Ipv4Address addressToReach,
+                     uint16_t port,
+                     Ptr<Node> node,
+                     std::string dataRate,
+                     uint32_t flowStartTime,
+                     uint32_t flowEndTime,
+                     uint32_t maxBytes,
+                     bool generateRandom)
+{
+    OnOffHelper source("ns3::UdpSocketFactory", Address(InetSocketAddress(addressToReach, port)));
+    source.SetConstantRate(DataRate(dataRate), 1400);
+    source.SetAttribute("MaxBytes", UintegerValue(maxBytes));
+
+    ApplicationContainer senderApp = source.Install(node);
+
+    double startTime = flowStartTime;
+    double endTime = flowEndTime;
+    if (generateRandom)
+    {
+        startTime = distribution(randomGen);
+        std::uniform_real_distribution endDistribution(startTime + 0.3, (double)flowEndTime);
+        endTime = endDistribution(randomGen);
+    }
+    NS_LOG_INFO("UDP Application: " + std::to_string(startTime) + " - " + std::to_string(endTime));
+    senderApp.Start(Seconds(startTime));
+    senderApp.Stop(Seconds(endTime));
+
+    return senderApp;
+}
+
+ApplicationContainer
+createSinkUdpApplication(uint16_t port, Ptr<Node> node)
+{
+    PacketSinkHelper sink("ns3::UdpSocketFactory",
+                          Address(Inet6SocketAddress(Ipv6Address::GetAny(), port)));
+    return sink.Install(node);
+}
+
 Ptr<Ipv4Interface>
 getIpv4Interface(Ptr<NetDevice> netDevice)
 {
@@ -183,11 +222,19 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
     P4Pipeline* pline = p4Device->m_p4_pipeline;
     if (pline != nullptr)
     {
-        /* TODO: Update qdepths here */
-        std::string res = pline->run_cli_commands("register_write ig_qdepths 0 77");
+        for (size_t p = 0; p < p4Device->GetNPorts(); ++p)
+        {
+            if (p4Device->m_mmu->GetEgressBytes(p, 0) > 0)
+                std::cout << "port=" << p << " egress=" << p4Device->m_mmu->GetEgressBytes(p, 0)
+                          << std::endl;
+        }
+        // p4Device->m_mmu->GetEgressBytes(p, 0);
+
+        // /* TODO: Update qdepths here */
+        // std::string res = pline->run_cli_commands("register_write ig_qdepths 0 77");
     }
 
-    Simulator::Schedule(Seconds(1), &updateQdepth, p4Device);
+    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, p4Device);
 }
 
 class QLRDeparser : public P4PacketDeparser
@@ -257,21 +304,27 @@ main(int argc, char* argv[])
 
 {
     uint32_t activeFlows = 1;
+    uint32_t backupFlows = 1;
+    bool generateRandom = false;
     std::string defaultBandwidth = "50Kbps";
     std::string resultsPath = "examples/qlrouting/results/5-nodes";
     float flowEndTime = 11.0f;
     float endTime = 20.0f;
     std::string activeRateTcp = "50Kbps";
-    uint32_t maxBytes = 15000000;
+    std::string backupRateUdp = "50Kbps";
+    uint32_t maxBytes = 150000000;
 
     // Packet::EnablePrinting();
 
     CommandLine cmd;
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
     cmd.AddValue("active-flows", "The number of concurrent flows on the active path", activeFlows);
+    cmd.AddValue("backup-flows", "The number of concurrent flows on the backup path", backupFlows);
+    cmd.AddValue("udp-random", "Select whether UDP flows are randomly distributed.", generateRandom);
     cmd.AddValue("default-bw",
                  "The bandwidth to set on all the sender/receiver links",
                  defaultBandwidth);
+    cmd.AddValue("backup-rate-udp", "The TCP rate to set to the backup flows", backupRateUdp);
     cmd.AddValue("flow-end", "Flows End Time", flowEndTime);
     cmd.AddValue("end", "Simulation End Time", endTime);
     cmd.AddValue("verbose", "Verbose output", verbose);
@@ -282,7 +335,7 @@ main(int argc, char* argv[])
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_INFO);
+        LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_WARN);
         // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
@@ -556,22 +609,33 @@ main(int argc, char* argv[])
     s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
 
     /* TODO: Add All */
-    Simulator::Schedule(Seconds(1), &updateQdepth, s1p4);
+    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s1p4);
 
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
+    
     uint16_t activePort = 20000;
-
     if (activeFlows > 0)
     {
-        // ApplicationContainer host5ReceiverApp =
-        //     createSinkTcpApplication(activePort, host5);
-        // host5ReceiverApp.Start(Seconds(0.0));
-        // host5ReceiverApp.Stop(Seconds(flowEndTime + 1));
+        for (uint32_t i = 0; i < activeFlows; ++i)
+        {
+            ApplicationContainer host5ReceiverApp = createSinkTcpApplication(activePort + i, host5);
+            host5ReceiverApp.Start(Seconds(0.0));
+            host5ReceiverApp.Stop(Seconds(flowEndTime + 1));
 
-        ApplicationContainer host1ReceiverApp = createSinkTcpApplication(activePort, host1);
-        host1ReceiverApp.Start(Seconds(0.0));
-        host1ReceiverApp.Stop(Seconds(flowEndTime + 1));
+            ApplicationContainer host15SenderApp =
+                createTcpApplication(host5Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
+                                     activePort + i,
+                                     host1,
+                                     activeRateTcp,
+                                     maxBytes,
+                                     "ns3::TcpCubic");
+            host15SenderApp.Start(Seconds(1.0));
+        }
+
+        // ApplicationContainer host1ReceiverApp = createSinkTcpApplication(activePort, host1);
+        // host1ReceiverApp.Start(Seconds(0.0));
+        // host1ReceiverApp.Stop(Seconds(flowEndTime + 1));
 
         // ApplicationContainer host15SenderApp =
         //     createTcpApplication(host5Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
@@ -582,14 +646,39 @@ main(int argc, char* argv[])
         //                          "ns3::TcpCubic");
         // host15SenderApp.Start(Seconds(1.0));
 
-        ApplicationContainer host51SenderApp =
-            createTcpApplication(host1Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
-                                 activePort,
-                                 host5,
-                                 activeRateTcp,
-                                 maxBytes,
-                                 "ns3::TcpCubic");
-        host51SenderApp.Start(Seconds(1.0));
+        // ApplicationContainer host51SenderApp =
+        //     createTcpApplication(host1Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
+        //                          activePort,
+        //                          host5,
+        //                          activeRateTcp,
+        //                          maxBytes,
+        //                          "ns3::TcpCubic");
+        // host51SenderApp.Start(Seconds(1.0));
+    }
+
+    uint16_t backupPort = 30000;
+    NS_LOG_INFO("Create Backup Flow Applications.");
+    if (backupFlows > 0)
+    {
+        for (uint32_t i = 1; i < backupFlows; i++)
+        {
+            bool isMoreThanHalf = ((i + 1) / (float)backupFlows) >= 0.5;
+
+            ApplicationContainer backupReceiverApp =
+                createSinkUdpApplication(backupPort + i, host5);
+            backupReceiverApp.Start(Seconds(0.0));
+            backupReceiverApp.Stop(Seconds(flowEndTime + 1));
+
+            ApplicationContainer backupSenderApp =
+                createUdpApplication(host5Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
+                                     backupPort + i,
+                                     host1,
+                                     backupRateUdp,
+                                     !isMoreThanHalf ? 4.0 : 8.0,
+                                     !isMoreThanHalf ? 5.99 : 9.99,
+                                     0,
+                                     generateRandom);
+        }
     }
 
     // if (dumpTraffic)
