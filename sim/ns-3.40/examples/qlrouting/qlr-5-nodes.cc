@@ -162,7 +162,6 @@ addArpEntriesFromInterfaceAddresses(Ptr<Ipv4Interface> nodeInterface,
     for (uint32_t i = 0; i < ipv4Interface->GetNAddresses(); i++)
     {
         Ipv4Address address = ipv4Interface->GetAddress(i).GetAddress();
-        std::cout << "Add ARP Entry for " << address << std::endl;
         addIpv4ArpEntry(nodeInterface,
                         address,
                         convertToMacAddress(ipv4Interface->GetDevice()->GetAddress()));
@@ -222,16 +221,16 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
     P4Pipeline* pline = p4Device->m_p4_pipeline;
     if (pline != nullptr)
     {
+        std::ostringstream updateCommands;
+
         for (size_t p = 0; p < p4Device->GetNPorts(); ++p)
         {
-            if (p4Device->m_mmu->GetEgressBytes(p, 0) > 0)
-                std::cout << "port=" << p << " egress=" << p4Device->m_mmu->GetEgressBytes(p, 0)
-                          << std::endl;
+            updateCommands << "register_write ig_qdepths " << p << " "
+                                 << p4Device->m_mmu->GetEgressBytes(p, 0) << std::endl;
         }
-        // p4Device->m_mmu->GetEgressBytes(p, 0);
-
-        // /* TODO: Update qdepths here */
-        // std::string res = pline->run_cli_commands("register_write ig_qdepths 0 77");
+        
+        std::string updateCommandsStr = updateCommands.str();
+        pline->run_cli_commands(updateCommandsStr);
     }
 
     Simulator::Schedule(MicroSeconds(1000), &updateQdepth, p4Device);
@@ -320,7 +319,9 @@ main(int argc, char* argv[])
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
     cmd.AddValue("active-flows", "The number of concurrent flows on the active path", activeFlows);
     cmd.AddValue("backup-flows", "The number of concurrent flows on the backup path", backupFlows);
-    cmd.AddValue("udp-random", "Select whether UDP flows are randomly distributed.", generateRandom);
+    cmd.AddValue("udp-random",
+                 "Select whether UDP flows are randomly distributed.",
+                 generateRandom);
     cmd.AddValue("default-bw",
                  "The bandwidth to set on all the sender/receiver links",
                  defaultBandwidth);
@@ -335,8 +336,8 @@ main(int argc, char* argv[])
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_WARN);
-        // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_WARN);
+        LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
 
@@ -608,12 +609,15 @@ main(int argc, char* argv[])
     s5p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
 
-    /* TODO: Add All */
     Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s1p4);
+    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s2p4);
+    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s3p4);
+    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s4p4);
+    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s5p4);
 
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
-    
+
     uint16_t activePort = 20000;
     if (activeFlows > 0)
     {
