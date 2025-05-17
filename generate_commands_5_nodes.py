@@ -1,6 +1,7 @@
 import ipaddress
-import struct
 import os
+import sys
+import struct
 
 import networkx as nx
 
@@ -14,7 +15,6 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
     for e in node_dag.edges:
         print(f"Processing edge: {e}")
         if start == e[0]:
-           
             iface_num = net[start][e[1]]
             row_slices[iface_num] = 1
 
@@ -31,6 +31,14 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
 
 
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print(
+            "Usage: generate_commands_5_nodes.py <dst_path>"
+        )
+        exit(1)
+
+    dst_path = os.path.abspath(sys.argv[1])
+
     network = {
         0: {1: 1, 2: 2},
         1: {0: 1, 2: 1, 3: 2},
@@ -45,10 +53,10 @@ if __name__ == "__main__":
     dags[0].add_edges_from([(1,0), (2,0), (3,1), (3,4), (4,2)])
 
     dags[1].add_nodes_from(network.keys())
-    dags[1].add_edges_from([(0,1), (2,1), (2,0), (3,1), (3,4), (4,2)])
+    dags[1].add_edges_from([(0,1), (2,0), (2,1), (3,1), (3,4), (4,2)])
 
     dags[2].add_nodes_from(network.keys())
-    dags[2].add_edges_from([(0,2), (0,1), (1,2), (1,3), (3,2), (4,2), (4,3)])
+    dags[2].add_edges_from([(0,1), (0,2), (1,2), (1,3), (3,2), (4,2), (4,3)])
 
     dags[3].add_nodes_from(network.keys())
     dags[3].add_edges_from([(0,1), (0,2), (1,3), (2,3), (2,4), (4,3)])
@@ -113,6 +121,6 @@ if __name__ == "__main__":
         for iface in network[node_name].values():
             commands.add(f"table_add read_ig_qdepth get_ig_qdepth_and_idx {iface + 1} => {iface}")
 
-        commands_path = os.path.join("sim", "ns-3.40", f"examples", "qlrouting", "resources", "5_nodes", f"s{node_name + 1}.txt")
+        commands_path = os.path.join(dst_path, f"s{node_name + 1}.txt")
         with open(commands_path, "w") as f: 
             f.write("\n".join(sorted(list(commands))))
