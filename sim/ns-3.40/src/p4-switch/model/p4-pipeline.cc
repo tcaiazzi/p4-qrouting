@@ -260,7 +260,7 @@ P4Pipeline::process_tm(
     else
     {
         BMLOG_DEBUG_PKT(*packet, "Egress port is {}", egress_spec_ig);
-        if (egress_spec_ig == drop_port)
+        if (egress_spec_ig == drop_port || egress_spec_ig == 0)
         {
             BMLOG_DEBUG_PKT(*packet, "Dropping packet at ingress");
             packet.release();
@@ -327,7 +327,7 @@ P4Pipeline::process_egress(std::unique_ptr<bm::Packet>& packet,
 
     bm::Field& f_egress_spec_eg = phv->get_field("standard_metadata.egress_spec");
     uint16_t egress_spec_eg = f_egress_spec_eg.get_uint();
-    if (egress_spec_eg == drop_port)
+    if (egress_spec_eg == drop_port || egress_spec_eg == 0)
     {
         BMLOG_DEBUG_PKT(*packet, "Dropping packet at the end of egress");
         packet.release();

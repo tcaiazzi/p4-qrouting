@@ -8,7 +8,7 @@ import networkx as nx
 
 def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int) -> list[str]:
     cmd = []
-    row_slices = [0, 0, 0, 0, 0, 0, 0, 0]
+    row_slices = [64] * 8
     print("Generating commands for node:", start, "to goal:", goal)
     print(f"Node {start} neighbors:", net[start])
 
@@ -16,10 +16,10 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
         print(f"Processing edge: {e}")
         if start == e[0]:
             iface_num = net[start][e[1]]
-            row_slices[iface_num] = 1
+            row_slices[iface_num] = 0
 
     for i, row_slice in enumerate(row_slices):
-        if row_slice > 0:
+        if row_slice < 64:
             cmd.append(f"table_add select_port_from_row_col set_nhop {goal + 1} {i} => {i + 1}")
 
     row_slices.reverse()

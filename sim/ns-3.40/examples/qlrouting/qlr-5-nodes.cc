@@ -215,9 +215,21 @@ loadCommands(std::string path)
     return commands.str();
 }
 
+std::map<uint32_t, uint64_t> queueBufferSlice;
+
+void
+computeQueueBufferSlice(Ptr<P4SwitchNetDevice> p4Device)
+{
+    queueBufferSlice[p4Device->GetNode()->GetId()] =
+        p4Device->m_mmu->DynamicThreshold(0, 0, "egress");
+}
+
 void
 updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
 {
+    uint64_t totalBufferSlice = queueBufferSlice[p4Device->GetNode()->GetId()];
+    uint64_t colorSlice = (uint64_t)(totalBufferSlice / 4.0f);
+
     P4Pipeline* pline = p4Device->m_p4_pipeline;
     if (pline != nullptr)
     {
@@ -225,10 +237,26 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
 
         for (size_t p = 0; p < p4Device->GetNPorts(); ++p)
         {
-            updateCommands << "register_write ig_qdepths " << p << " "
-                                 << p4Device->m_mmu->GetEgressBytes(p, 0) << std::endl;
+            uint64_t color = 0;
+            uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
+            if (egressBytes >= colorSlice && egressBytes <= ((colorSlice * 2) - 1))
+            {
+                color = 1;
+            }
+            else if (egressBytes >= (colorSlice * 2) && egressBytes <= ((colorSlice * 3) - 1))
+            {
+                color = 2;
+            }
+            else if (egressBytes >= (colorSlice * 3) && egressBytes <= ((colorSlice * 4) - 1))
+            {
+                color = 3;
+            }
+
+            updateCommands << "register_write ig_qdepths " << p << " " << color << std::endl;
         }
-        
+
+        std::cout << updateCommands.str() << std::endl;
+
         std::string updateCommandsStr = updateCommands.str();
         pline->run_cli_commands(updateCommandsStr);
     }
@@ -336,8 +364,9 @@ main(int argc, char* argv[])
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_WARN);
-        LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
 
@@ -560,6 +589,7 @@ main(int argc, char* argv[])
     s1p4->m_mmu->SetAlphaEgress(1.0 / 8);
     s1p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s1p4->m_mmu->node_id = s1p4->GetNode()->GetId();
+    computeQueueBufferSlice(s1p4);
 
     qlrHelper.SetDeviceAttribute(
         "PipelineCommands",
@@ -572,6 +602,7 @@ main(int argc, char* argv[])
     s2p4->m_mmu->SetAlphaEgress(1.0 / 8);
     s2p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s2p4->m_mmu->node_id = s2p4->GetNode()->GetId();
+    computeQueueBufferSlice(s2p4);
 
     qlrHelper.SetDeviceAttribute(
         "PipelineCommands",
@@ -584,6 +615,7 @@ main(int argc, char* argv[])
     s3p4->m_mmu->SetAlphaEgress(1.0 / 8);
     s3p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s3p4->m_mmu->node_id = s3p4->GetNode()->GetId();
+    computeQueueBufferSlice(s3p4);
 
     qlrHelper.SetDeviceAttribute(
         "PipelineCommands",
@@ -596,6 +628,7 @@ main(int argc, char* argv[])
     s4p4->m_mmu->SetAlphaEgress(1.0 / 8);
     s4p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s4p4->m_mmu->node_id = s4p4->GetNode()->GetId();
+    computeQueueBufferSlice(s4p4);
 
     qlrHelper.SetDeviceAttribute(
         "PipelineCommands",
@@ -608,6 +641,7 @@ main(int argc, char* argv[])
     s5p4->m_mmu->SetAlphaEgress(1.0 / 8);
     s5p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
+    computeQueueBufferSlice(s5p4);
 
     Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s1p4);
     Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s2p4);

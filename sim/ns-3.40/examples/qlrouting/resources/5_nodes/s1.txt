@@ -1,7 +1,7 @@
-register_write row2 0 256
-register_write row3 0 65792
-register_write row4 0 65792
-register_write row5 0 256
+register_write row2 0 4629771061636890688
+register_write row3 0 4629771061632696384
+register_write row4 0 4629771061632696384
+register_write row5 0 4629771061636890688
 table_add qlr_pkt_updates qlr_pkt_set_1 2 2 => 
 table_add qlr_pkt_updates qlr_pkt_set_1 3 2 => 
 table_add qlr_pkt_updates qlr_pkt_set_1 4 2 => 

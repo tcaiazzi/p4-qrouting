@@ -7,26 +7,26 @@
 #include "include/parser.p4"
 #include "include/checksums.p4"
 
-#define MAX_VALUE(i, j)                                                                 \
-    max_value = row##i##_value[7:0];                                                    \
-    max_index = 0;                                                                      \
-    max8(max_value, row##i##_value[15:8], 1);                                           \
-    max8(max_value, row##i##_value[23:16], 2);                                          \
-    max8(max_value, row##i##_value[31:24], 3);                                          \
-    max8(max_value, row##i##_value[39:32], 4);                                          \
-    max8(max_value, row##i##_value[47:40], 5);                                          \
-    max8(max_value, row##i##_value[55:48], 6);                                          \
-    max8(max_value, row##i##_value[63:56], 7);                                          \
-    log_msg("row {} max: {} - max_index: {}", {(bit<8>) ##i##, max_value, max_index});  \
+#define MIN_VALUE(i, j)                                                                 \
+    min_value = row##i##_value[7:0];                                                    \
+    min_index = 0;                                                                      \
+    min8(min_value, row##i##_value[15:8], 1);                                           \
+    min8(min_value, row##i##_value[23:16], 2);                                          \
+    min8(min_value, row##i##_value[31:24], 3);                                          \
+    min8(min_value, row##i##_value[39:32], 4);                                          \
+    min8(min_value, row##i##_value[47:40], 5);                                          \
+    min8(min_value, row##i##_value[55:48], 6);                                          \
+    min8(min_value, row##i##_value[63:56], 7);                                          \
+    log_msg("row {} max: {} - min_index: {}", {(bit<8>) ##i##, min_value, min_index});  \
     if (row_num != i) {                                                                 \
         hdr.qlr_updates[j].setValid();                                                  \
         hdr.qlr_updates[j].dst_id = i;                                                  \
-        hdr.qlr_updates[j].value = max_value;                                           \
+        hdr.qlr_updates[j].value = min_value;                                           \
     } else {                                                                            \
         hdr.qlr_updates[j].setValid();                                                  \
         hdr.qlr_updates[j].dst_id = i;                                                  \
         hdr.qlr_updates[j].value = 0;                                                   \
-        col_num = max_index;                                                            \
+        col_num = min_index;                                                            \
     }
 
 control IngressPipe(inout headers hdr,
@@ -72,6 +72,7 @@ control IngressPipe(inout headers hdr,
             drop;
         }
         size = NODES_NUM;
+        default_action = drop;
     }
 
     /* Selects the outgoing port of this packet */
@@ -124,17 +125,17 @@ control IngressPipe(inout headers hdr,
     #include "lut/qlr_pkt_updates.p4"
 
     /* Helper to compute the max value */
-    bit<8> max_value = 0;
-    bit<8> max_index = 0;
-    action max8(bit<8> a, bit<8> b, bit<8> index) {
-        if (a >= b) {
-            max_value = a;
+    bit<8> min_value = 0;
+    bit<8> min_index = 0;
+    action min8(bit<8> a, bit<8> b, bit<8> index) {
+        if (a <= b) {
+            min_value = a;
         } else {
-            max_value = b;
-            max_index = index;
+            min_value = b;
+            min_index = index;
         }
 
-        log_msg("max8: a={} b={} curr_index={} max_value={} max_index={}", {a, b, index, max_value, max_index});
+        log_msg("min8: a={} b={} curr_index={} min_value={} min_index={}", {a, b, index, min_value, min_index});
     }
 
     apply {
@@ -145,11 +146,11 @@ control IngressPipe(inout headers hdr,
             /* Update rows using the pkt information */
             qmatrix_update.apply();
 
-            MAX_VALUE(1, 0)
-            MAX_VALUE(2, 1)
-            MAX_VALUE(3, 2)
-            MAX_VALUE(4, 3)
-            MAX_VALUE(5, 4)
+            MIN_VALUE(1, 0)
+            MIN_VALUE(2, 1)
+            MIN_VALUE(3, 2)
+            MIN_VALUE(4, 3)
+            MIN_VALUE(5, 4)
 
             log_msg("selected destination: {} - selected col: {}", {row_num, col_num});
             select_port_from_row_col.apply();
