@@ -24,8 +24,8 @@
 #include "ns3/log.h"
 #include "ns3/names.h"
 #include "ns3/node.h"
-#include "ns3/queue.h"
 #include "ns3/packet.h"
+#include "ns3/queue.h"
 #include "ns3/simulator.h"
 #include "ns3/string.h"
 #include "ns3/uinteger.h"
@@ -96,6 +96,16 @@ P4SwitchNetDevice::P4SwitchNetDevice()
 
     m_p4_pipeline = nullptr;
     m_mmu = CreateObject<SwitchMmu>();
+
+    for (size_t p = 0; p < pCnt; ++p)
+    {
+        portBusy[p] = false;
+
+        for (size_t q = 0; q < qCnt; ++q)
+        {
+            eg_queues[p][q].SetMaxSize(QueueSize("64MB"));
+        }
+    }
 }
 
 P4SwitchNetDevice::~P4SwitchNetDevice()
@@ -116,16 +126,6 @@ P4SwitchNetDevice::DoDispose()
     m_channel = nullptr;
     m_node = nullptr;
     NetDevice::DoDispose();
-
-    for (size_t p = 0; p < pCnt; ++p)
-    {
-        Simulator::Cancel(dequeueEvent[p]);
-
-        for (size_t q = 0; q < qCnt; ++q)
-        {
-            eg_queues[p][q].clear();
-        }
-    }
 }
 
 void
@@ -207,33 +207,19 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
             continue;
         }
 
-        uint64_t eg_bytes_before = m_mmu->GetEgressBytes(outport_idx, qid);
-
-        // We admitted the packet, now update the egress admission
-        NS_LOG_INFO(node_name << " | packet with size=" << pkt_size
-                              << " admitted in port=" << outport_n << " (idx=" << outport_idx
-                              << ") with qid=" << qid << ", enqueuing...");
+        uint64_t qdepth = m_mmu->GetEgressBytes(outport_idx, qid);
+        int64_t enq_tstamp = Simulator::Now().GetNanoSeconds();
 
         NS_LOG_INFO(node_name << " | sending packet with size=" << pkt_size
                               << " through the egress pipeline");
 
-        uint64_t deq_qdepth = m_mmu->GetEgressBytes(outport_idx, qid);
-        int64_t enq_tstamp = Simulator::Now().GetNanoSeconds();
-        
-        
-        int status = m_p4_pipeline->process_egress(out_pkt,
-                                                   pkt_size,
-                                                   outport_n,
-                                                   qid,
-                                                   eg_bytes_before,
-                                                   deq_qdepth,
-                                                   enq_tstamp);
-        
-        m_mmu->UpdateEgressAdmission(outport_idx, qid, out_pkt->get_data_size() + 4);
-        
+        int status =
+            m_p4_pipeline
+                ->process_egress(out_pkt, pkt_size, outport_n, qid, qdepth, qdepth, enq_tstamp);
+
         if (status == 0)
         {
-            DeparseAndSend(outport_n, std::move(out_pkt), full_packet);
+            DeparseAndEnqueue(outport_n, qid, std::move(out_pkt), full_packet);
         }
         else
         {
@@ -241,113 +227,21 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
         }
 
         out_pkt.release();
-
     }
 }
 
 void
-P4SwitchNetDevice::DequeueRR(uint32_t p)
+P4SwitchNetDevice::DeparseAndEnqueue(uint32_t outport_n,
+                                     uint16_t qid,
+                                     std::unique_ptr<bm::Packet> out_pkt,
+                                     Ptr<const Packet> input_pkt)
 {
     std::string node_name = Names::FindName(m_node);
-
-    // Dequeue from the MMU in a Round-Robin fashion
-    auto p_queues = eg_queues[p];
-    uint32_t rrlast = qIndexLast[p];
-
-    bool found = false;
-    uint32_t qIndex;
-
-    if (p_queues[DEFAULT_MAX_PRIO_Q].size() > 0) // 0 is the highest priority
-    {
-        found = true;
-        qIndex = 0;
-    }
-    else
-    {
-        for (qIndex = 0; qIndex < (qCnt - 1); qIndex++)
-        {
-            if (p_queues[(qIndex + rrlast) % (qCnt - 1)].size() > 0) // round robin
-            {
-                found = true;
-                break;
-            }
-        }
-        qIndex = (qIndex + rrlast) % (qCnt - 1);
-        // std::cout << node_name << " | DequeueRR: qIndex=" << qIndex << " p=" << p << std::endl;
-    }
-    if (found)
-    {
-        std::tuple<uint64_t, int64_t, Ptr<const Packet>, std::unique_ptr<bm::Packet>>& item =
-            p_queues[qIndex].front();
-        if (qIndex != DEFAULT_MAX_PRIO_Q)
-        {
-            qIndexLast[p] = qIndex;
-        }
-
-        NS_LOG_INFO(node_name << " | Popped packet from port=" << p + 1 << " (idx=" << p
-                              << ") qIndex=" << qIndex);
-
-        uint32_t pkt_size = std::get<2>(item)->GetSize();
-
-        NS_LOG_INFO(node_name << " | sending packet with size=" << pkt_size
-                              << " through the egress pipeline");
-
-        m_mmu->RemoveFromEgressAdmission(p, qIndex, pkt_size);
-
-        uint64_t enq_qdepth = std::get<0>(item);
-        uint64_t deq_qdepth = m_mmu->GetEgressBytes(p, qIndex);
-        int64_t enq_tstamp = std::get<1>(item);
-        std::unique_ptr<bm::Packet> tm_pkt = std::move(std::get<3>(item));
-
-        int status = m_p4_pipeline->process_egress(tm_pkt,
-                                                   pkt_size,
-                                                   p + 1,
-                                                   qIndex,
-                                                   enq_qdepth,
-                                                   deq_qdepth,
-                                                   enq_tstamp);
-
-        NS_LOG_INFO(node_name << " | port=" << p + 1 << " (idx=" << p << ") queue=" << qIndex
-                              << " removed packet, current_egress_bytes="
-                              << m_mmu->GetEgressBytes(p, qIndex));
-
-        if (status == 0)
-        {
-            DeparseAndSend(p + 1, std::move(tm_pkt), std::get<2>(item));
-        }
-        else
-        {
-            NS_LOG_INFO(node_name << " | packet dropped in egress pipeline");
-        }
-
-        p_queues[qIndex].pop_front();
-        tm_pkt.release();
-    }
-
-    dequeueEvent[p] = Simulator::Schedule(NanoSeconds(5), &P4SwitchNetDevice::DequeueRR, this, p);
-}
-
-void
-P4SwitchNetDevice::DeparseAndSend(uint32_t outport_n,
-                                  std::unique_ptr<bm::Packet> out_pkt,
-                                  Ptr<const Packet> input_pkt)
-{
-    std::string node_name = Names::FindName(m_node);
-
-    Ptr<Packet> deparsed_pkt = m_pkt_deparser->get_ns3_packet(std::move(out_pkt));
-
-    Ptr<NetDevice> port = GetPort(outport_n);
-    if (!port)
-    {
-        NS_LOG_INFO(node_name << " | Port " << outport_n << " not found, dropping packet");
-        return;
-    }
 
     // WARNING: out_pkt is a reconstructed Packet in p4-pipeline.
-    // We try to infer known headers, but if something is missing you have to add the parsing logic
-    // Remove the Ethernet header for the SendFrom
-    EthernetHeader eth_hdr_out;
-    deparsed_pkt->RemoveHeader(eth_hdr_out);
+    // The deparser should try to get all possible headers
+    // If something is missing you have to add the parsing logic
+    Ptr<Packet> deparsed_pkt = m_pkt_deparser->get_ns3_packet(std::move(out_pkt));
 
     // Add again the tags from the original pkt
     ByteTagIterator it = input_pkt->GetByteTagIterator();
@@ -376,14 +270,100 @@ P4SwitchNetDevice::DeparseAndSend(uint32_t outport_n,
         deparsed_pkt->AddPacketTag(*tag);
     }
 
-    NS_LOG_INFO(node_name << " | Forwarding pkt " << deparsed_pkt << " to port " << outport_n
-                          << "                              " << eth_hdr_out.GetDestination() << " "
-                          << eth_hdr_out.GetSource() << " " << eth_hdr_out.GetLengthType());
+    // Update the egress admission
+    m_mmu->UpdateEgressAdmission(outport_n - 1, qid, deparsed_pkt->GetSize());
 
-    port->SendFrom(deparsed_pkt,
-                   eth_hdr_out.GetSource(),
-                   eth_hdr_out.GetDestination(),
-                   eth_hdr_out.GetLengthType());
+    NS_LOG_INFO(node_name << " | packet with size=" << deparsed_pkt->GetSize()
+                          << " admitted in port=" << outport_n << " (idx=" << outport_n - 1
+                          << ") with qid=" << qid
+                          << " enqueued, qdepth=" << m_mmu->GetEgressBytes(outport_n - 1, qid));
+
+    eg_queues[outport_n - 1][qid].Enqueue(deparsed_pkt);
+
+    if (!portBusy[outport_n - 1])
+    {
+        DequeueRR(outport_n - 1);
+    }
+}
+
+void
+P4SwitchNetDevice::DequeueRR(uint32_t p)
+{
+    std::string node_name = Names::FindName(m_node);
+
+    // Dequeue from the MMU in a Round-Robin fashion
+    auto p_queues = eg_queues[p];
+    uint32_t rrlast = qIndexLast[p];
+
+    bool found = false;
+    uint32_t qIndex;
+
+    if (p_queues[DEFAULT_MAX_PRIO_Q].GetNPackets() > 0)
+    {
+        found = true;
+        qIndex = DEFAULT_MAX_PRIO_Q;
+    }
+    else
+    {
+        for (qIndex = 0; qIndex < (qCnt - 1); qIndex++)
+        {
+            if (p_queues[(qIndex + rrlast) % (qCnt - 1)].GetNPackets() > 0) // round robin
+            {
+                found = true;
+                break;
+            }
+        }
+        qIndex = (qIndex + rrlast) % (qCnt - 1);
+    }
+    if (found)
+    {
+        Ptr<Packet> pkt = p_queues[qIndex].Dequeue();
+
+        m_mmu->RemoveFromEgressAdmission(p, qIndex, pkt->GetSize());
+
+        NS_LOG_INFO(node_name << " | Popped packet from port=" << p + 1 << " (idx=" << p
+                              << ") qIndex=" << qIndex
+                              << ", qdepth=" << m_mmu->GetEgressBytes(p, qIndex));
+
+        // Remove the Ethernet header for the SendFrom
+        EthernetHeader eth_hdr_out;
+        pkt->RemoveHeader(eth_hdr_out);
+
+        Ptr<NetDevice> port = GetPort(p + 1);
+        if (!port)
+        {
+            NS_LOG_ERROR(node_name << " | Port " << p + 1 << " not found, dropping packet");
+            return;
+        }
+        port->SendFrom(pkt,
+                       eth_hdr_out.GetSource(),
+                       eth_hdr_out.GetDestination(),
+                       eth_hdr_out.GetLengthType());
+    }
+}
+
+void
+P4SwitchNetDevice::DequeueCallback(uint32_t port_idx, Ptr<const Packet> packet)
+{
+    NS_LOG_DEBUG(Names::FindName(m_node)
+                 << " | Packet dequeued at " << Simulator::Now().GetSeconds()
+                 << ", size=" << packet->GetSize() << " port_idx=" << port_idx);
+
+    // When the packet is dequeued, the port gets busy
+    portBusy[port_idx] = true;
+}
+
+void
+P4SwitchNetDevice::TxEndCallback(uint32_t port_idx, Ptr<const Packet> packet)
+{
+    NS_LOG_DEBUG(Names::FindName(m_node)
+                 << " | Packet ended transmission at " << Simulator::Now().GetSeconds()
+                 << ", size=" << packet->GetSize() << " port_idx=" << port_idx);
+
+    // Port is not busy anymore
+    portBusy[port_idx] = false;
+    // We can run the RR again, if any packet is enqueued
+    DequeueRR(port_idx);
 }
 
 void
@@ -415,34 +395,12 @@ P4SwitchNetDevice::InitPipeline()
         NS_LOG_ERROR(node_name << " Cannot initialize P4 pipeline, abort!");
         std::exit(1);
     }
-
-    // // Start the timers for the MMU
-    // for (size_t p = 0; p < GetNPorts(); ++p)
-    // {
-    //     dequeueEvent[p] =
-    //         Simulator::Schedule(NanoSeconds(5), &P4SwitchNetDevice::DequeueRR, this, p);
-    // }
 }
 
 std::string
 P4SwitchNetDevice::RunPipelineCommands(std::string commands)
 {
     return m_p4_pipeline->run_cli_commands(commands);
-}
-
-
-void
-P4SwitchNetDevice::DequeueCallback(uint32_t port_idx, Ptr<const Packet> packet)
-{
-    std::cout << "Packet dequeued at: " << Simulator::Now().GetSeconds()
-              << "s, size: " << packet->GetSize() << " bytes" << " port_idx " << port_idx << std::endl;
-    
-    std::cout << "Egress bytes: " << m_mmu->GetEgressBytes(port_idx, 0) << std::endl;
-
-    m_mmu->RemoveFromEgressAdmission(port_idx, 0, packet->GetSize());
-
-    std::cout << "Egress bytes: " << m_mmu->GetEgressBytes(port_idx, 0) << std::endl;
-
 }
 
 void
@@ -453,7 +411,6 @@ P4SwitchNetDevice::AddPort(Ptr<NetDevice> port)
 
     // We only support CSMA devices
     Ptr<CsmaNetDevice> port_csma = port->GetObject<CsmaNetDevice>();
-    
     if (!port_csma)
     {
         NS_FATAL_ERROR("Device is not CSMA: cannot be added to P4 switch.");
@@ -476,10 +433,17 @@ P4SwitchNetDevice::AddPort(Ptr<NetDevice> port)
     m_channel->AddChannel(port->GetChannel());
 
     Ptr<Queue<Packet>> queue = port_csma->GetQueue();
-    uint32_t port_n = GetPortN(port);
-    uint32_t port_idx = port_n - 1; // port_n starts from 1
-    
-    queue->TraceConnectWithoutContext("Dequeue", MakeCallback(&P4SwitchNetDevice::DequeueCallback, this, port_idx));
+    uint32_t port_idx = GetPortN(port) - 1;
+    queue->TraceConnectWithoutContext(
+        "Dequeue",
+        MakeCallback(&P4SwitchNetDevice::DequeueCallback, this, port_idx));
+
+    port_csma->TraceConnectWithoutContext(
+        "PhyTxEnd",
+        MakeCallback(&P4SwitchNetDevice::TxEndCallback, this, port_idx));
+    port_csma->TraceConnectWithoutContext(
+        "PhyTxDrop",
+        MakeCallback(&P4SwitchNetDevice::TxEndCallback, this, port_idx));
 }
 
 uint32_t

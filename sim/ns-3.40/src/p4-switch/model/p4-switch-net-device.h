@@ -20,6 +20,7 @@
 
 #define DEFAULT_MAX_PRIO_Q 7
 
+#include "ns3/drop-tail-queue.h"
 #include "ns3/mac48-address.h"
 #include "ns3/net-device.h"
 #include "ns3/nstime.h"
@@ -128,12 +129,13 @@ class P4SwitchNetDevice : public NetDevice
                            const Address& source,
                            const Address& destination,
                            PacketType packetType);
-
+    void DeparseAndEnqueue(uint32_t outport_n,
+                           uint16_t qid,
+                           std::unique_ptr<bm::Packet> out_pkt,
+                           Ptr<const Packet> input_pkt);
     void DequeueRR(uint32_t p);
     void DequeueCallback(uint32_t port_idx, Ptr<const Packet> packet);
-    void DeparseAndSend(uint32_t outport_n,
-                        std::unique_ptr<bm::Packet> out_pkt,
-                        Ptr<const Packet> input_pkt);
+    void TxEndCallback(uint32_t port_idx, Ptr<const Packet> packet);
 
     void InitPipeline();
 
@@ -158,10 +160,9 @@ class P4SwitchNetDevice : public NetDevice
     uint32_t m_ifIndex;                  //!< Interface index
     uint16_t m_mtu;                      //!< MTU of the NetDevice
 
-    std::deque<std::tuple<uint64_t, int64_t, Ptr<const Packet>, std::unique_ptr<bm::Packet>>>
-        eg_queues[pCnt][qCnt];
+    DropTailQueue<Packet> eg_queues[pCnt][qCnt];
     uint32_t qIndexLast[pCnt];
-    EventId dequeueEvent[pCnt];
+    bool portBusy[pCnt];
 };
 } // namespace ns3
 
