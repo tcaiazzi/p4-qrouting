@@ -239,29 +239,36 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
         {
             uint64_t color = 0;
             uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
+            
             if (egressBytes >= colorSlice && egressBytes <= ((colorSlice * 2) - 1))
             {
                 color = 1;
+                std::cout << "Port: " << p << " Egress Bytes: " << egressBytes << " Color: " << color << std::endl;
             }
             else if (egressBytes >= (colorSlice * 2) && egressBytes <= ((colorSlice * 3) - 1))
             {
                 color = 2;
+                std::cout << "Port: " << p << " Egress Bytes: " << egressBytes << " Color: " << color << std::endl;
             }
             else if (egressBytes >= (colorSlice * 3) && egressBytes <= ((colorSlice * 4) - 1))
             {
                 color = 3;
+                std::cout << "Port: " << p << " Egress Bytes: " << egressBytes << " Color: " << color << std::endl;
             }
 
-            updateCommands << "register_write ig_qdepths " << p << " " << color << std::endl;
         }
-
-        std::cout << updateCommands.str() << std::endl;
 
         std::string updateCommandsStr = updateCommands.str();
         pline->run_cli_commands(updateCommandsStr);
     }
 
     Simulator::Schedule(MicroSeconds(1000), &updateQdepth, p4Device);
+}
+
+void printSimulationTime()
+{
+    NS_LOG_INFO("Simulation Time: " << Simulator::Now().GetSeconds());
+    Simulator::Schedule(Seconds(1), printSimulationTime);
 }
 
 class QLRDeparser : public P4PacketDeparser
@@ -335,7 +342,7 @@ main(int argc, char* argv[])
     bool generateRandom = false;
     std::string defaultBandwidth = "50Kbps";
     std::string resultsPath = "examples/qlrouting/results/5-nodes";
-    float flowEndTime = 11.0f;
+    float flowEndTime = 3.0f;
     float endTime = 20.0f;
     std::string activeRateTcp = "50Kbps";
     std::string backupRateUdp = "50Kbps";
@@ -363,11 +370,11 @@ main(int argc, char* argv[])
     LogComponentEnable("QLRoutingExample", LOG_LEVEL_INFO);
     // if (verbose)
     {
-        // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
+        //LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
+        //LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
+        //LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
+        //LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
+        //LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
 
     NS_LOG_INFO("#### RUN PARAMETERS ####");
@@ -383,7 +390,7 @@ main(int argc, char* argv[])
     Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
     Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
-    Config::SetDefault("ns3::FifoQueueDisc::MaxSize", QueueSizeValue(QueueSize("100p")));
+    //Config::SetDefault("ns3::FifoQueueDisc::MaxSize", QueueSizeValue(QueueSize("100p")));
 
     std::filesystem::create_directories(resultsPath);
 
@@ -643,11 +650,11 @@ main(int argc, char* argv[])
     s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
     computeQueueBufferSlice(s5p4);
 
-    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s1p4);
-    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s2p4);
-    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s3p4);
-    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s4p4);
-    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s5p4);
+    // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s1p4);
+    // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s2p4);
+    // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s3p4);
+    // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s4p4);
+    // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s5p4);
 
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
@@ -726,6 +733,8 @@ main(int argc, char* argv[])
 
         csma.EnablePcapAll(getPath(tracesPath, "p4-switch"), true);
     }
+    
+    printSimulationTime();
 
     NS_LOG_INFO("Run Simulation.");
     Simulator::Stop(Seconds(endTime));

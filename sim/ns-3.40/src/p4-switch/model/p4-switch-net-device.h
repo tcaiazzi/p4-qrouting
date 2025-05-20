@@ -130,6 +130,7 @@ class P4SwitchNetDevice : public NetDevice
                            PacketType packetType);
 
     void DequeueRR(uint32_t p);
+    void DequeueCallback(uint32_t port_idx, Ptr<const Packet> packet);
     void DeparseAndSend(uint32_t outport_n,
                         std::unique_ptr<bm::Packet> out_pkt,
                         Ptr<const Packet> input_pkt);

@@ -24,6 +24,7 @@
 #include "ns3/log.h"
 #include "ns3/names.h"
 #include "ns3/node.h"
+#include "ns3/queue.h"
 #include "ns3/packet.h"
 #include "ns3/simulator.h"
 #include "ns3/string.h"
@@ -212,16 +213,35 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
         NS_LOG_INFO(node_name << " | packet with size=" << pkt_size
                               << " admitted in port=" << outport_n << " (idx=" << outport_idx
                               << ") with qid=" << qid << ", enqueuing...");
-        m_mmu->UpdateEgressAdmission(outport_idx, qid, pkt_size);
 
-        eg_queues[outport_idx][qid].emplace_back(std::make_tuple(eg_bytes_before,
-                                                                 Simulator::Now().GetNanoSeconds(),
-                                                                 full_packet,
-                                                                 std::move(out_pkt)));
+        NS_LOG_INFO(node_name << " | sending packet with size=" << pkt_size
+                              << " through the egress pipeline");
 
-        NS_LOG_INFO(node_name << " | port=" << outport_n << " (idx=" << outport_idx
-                              << ") queue=" << qid << " current_egress_bytes="
-                              << m_mmu->GetEgressBytes(outport_idx, qid));
+        uint64_t deq_qdepth = m_mmu->GetEgressBytes(outport_idx, qid);
+        int64_t enq_tstamp = Simulator::Now().GetNanoSeconds();
+        
+        
+        int status = m_p4_pipeline->process_egress(out_pkt,
+                                                   pkt_size,
+                                                   outport_n,
+                                                   qid,
+                                                   eg_bytes_before,
+                                                   deq_qdepth,
+                                                   enq_tstamp);
+        
+        m_mmu->UpdateEgressAdmission(outport_idx, qid, out_pkt->get_data_size() + 4);
+        
+        if (status == 0)
+        {
+            DeparseAndSend(outport_n, std::move(out_pkt), full_packet);
+        }
+        else
+        {
+            NS_LOG_INFO(node_name << " | packet dropped in egress pipeline");
+        }
+
+        out_pkt.release();
+
     }
 }
 
@@ -253,6 +273,7 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
             }
         }
         qIndex = (qIndex + rrlast) % (qCnt - 1);
+        // std::cout << node_name << " | DequeueRR: qIndex=" << qIndex << " p=" << p << std::endl;
     }
     if (found)
     {
@@ -303,7 +324,7 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
         tm_pkt.release();
     }
 
-    dequeueEvent[p] = Simulator::Schedule(NanoSeconds(120), &P4SwitchNetDevice::DequeueRR, this, p);
+    dequeueEvent[p] = Simulator::Schedule(NanoSeconds(5), &P4SwitchNetDevice::DequeueRR, this, p);
 }
 
 void
@@ -395,18 +416,33 @@ P4SwitchNetDevice::InitPipeline()
         std::exit(1);
     }
 
-    // Start the timers for the MMU
-    for (size_t p = 0; p < GetNPorts(); ++p)
-    {
-        dequeueEvent[p] =
-            Simulator::Schedule(NanoSeconds(120), &P4SwitchNetDevice::DequeueRR, this, p);
-    }
+    // // Start the timers for the MMU
+    // for (size_t p = 0; p < GetNPorts(); ++p)
+    // {
+    //     dequeueEvent[p] =
+    //         Simulator::Schedule(NanoSeconds(5), &P4SwitchNetDevice::DequeueRR, this, p);
+    // }
 }
 
 std::string
 P4SwitchNetDevice::RunPipelineCommands(std::string commands)
 {
     return m_p4_pipeline->run_cli_commands(commands);
+}
+
+
+void
+P4SwitchNetDevice::DequeueCallback(uint32_t port_idx, Ptr<const Packet> packet)
+{
+    std::cout << "Packet dequeued at: " << Simulator::Now().GetSeconds()
+              << "s, size: " << packet->GetSize() << " bytes" << " port_idx " << port_idx << std::endl;
+    
+    std::cout << "Egress bytes: " << m_mmu->GetEgressBytes(port_idx, 0) << std::endl;
+
+    m_mmu->RemoveFromEgressAdmission(port_idx, 0, packet->GetSize());
+
+    std::cout << "Egress bytes: " << m_mmu->GetEgressBytes(port_idx, 0) << std::endl;
+
 }
 
 void
@@ -417,6 +453,7 @@ P4SwitchNetDevice::AddPort(Ptr<NetDevice> port)
 
     // We only support CSMA devices
     Ptr<CsmaNetDevice> port_csma = port->GetObject<CsmaNetDevice>();
+    
     if (!port_csma)
     {
         NS_FATAL_ERROR("Device is not CSMA: cannot be added to P4 switch.");
@@ -437,6 +474,12 @@ P4SwitchNetDevice::AddPort(Ptr<NetDevice> port)
                                     true);
     m_ports.push_back(port);
     m_channel->AddChannel(port->GetChannel());
+
+    Ptr<Queue<Packet>> queue = port_csma->GetQueue();
+    uint32_t port_n = GetPortN(port);
+    uint32_t port_idx = port_n - 1; // port_n starts from 1
+    
+    queue->TraceConnectWithoutContext("Dequeue", MakeCallback(&P4SwitchNetDevice::DequeueCallback, this, port_idx));
 }
 
 uint32_t
