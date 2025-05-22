@@ -116,7 +116,7 @@ class P4SwitchNetDevice : public NetDevice
     void SetPromiscReceiveCallback(NetDevice::PromiscReceiveCallback cb) override;
     bool SupportsSendFrom() const override;
     Address GetMulticast(Ipv6Address addr) const override;
-
+    std::string GetName();
     P4Pipeline* m_p4_pipeline; //!< The P4 pipeline
     Ptr<SwitchMmu> m_mmu;
 

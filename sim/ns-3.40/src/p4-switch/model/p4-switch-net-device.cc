@@ -108,6 +108,12 @@ P4SwitchNetDevice::P4SwitchNetDevice()
     }
 }
 
+std::string 
+P4SwitchNetDevice::GetName()
+{
+    return Names::FindName(m_node);
+}
+
 P4SwitchNetDevice::~P4SwitchNetDevice()
 {
     NS_LOG_FUNCTION_NOARGS();
