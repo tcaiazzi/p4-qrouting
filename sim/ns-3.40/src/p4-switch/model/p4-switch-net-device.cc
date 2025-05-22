@@ -103,7 +103,7 @@ P4SwitchNetDevice::P4SwitchNetDevice()
 
         for (size_t q = 0; q < qCnt; ++q)
         {
-            eg_queues[p][q].SetMaxSize(QueueSize("64MB"));
+            eg_queues[p][q].SetMaxSize(QueueSize("1024MB"));
         }
     }
 }

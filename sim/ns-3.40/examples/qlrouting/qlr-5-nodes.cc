@@ -129,7 +129,7 @@ ApplicationContainer
 createSinkUdpApplication(uint16_t port, Ptr<Node> node)
 {
     PacketSinkHelper sink("ns3::UdpSocketFactory",
-                          Address(Inet6SocketAddress(Ipv6Address::GetAny(), port)));
+                          Address(InetSocketAddress(Ipv4Address::GetAny(), port)));
     return sink.Install(node);
 }
 
@@ -239,7 +239,7 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
         {
             uint64_t color = 0;
             uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
-            
+            std::cout << "Port: " << p << " Egress Bytes: " << egressBytes << std::endl;
             if (egressBytes >= colorSlice && egressBytes <= ((colorSlice * 2) - 1))
             {
                 color = 1;
@@ -262,7 +262,7 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
         pline->run_cli_commands(updateCommandsStr);
     }
 
-    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, p4Device);
+    Simulator::Schedule(Seconds(1), &updateQdepth, p4Device);
 }
 
 void printSimulationTime()
@@ -342,11 +342,12 @@ main(int argc, char* argv[])
     bool generateRandom = false;
     std::string defaultBandwidth = "50Kbps";
     std::string resultsPath = "examples/qlrouting/results/5-nodes";
-    float flowEndTime = 3.0f;
+    float flowEndTime = 11.0f;
     float endTime = 20.0f;
     std::string activeRateTcp = "50Kbps";
     std::string backupRateUdp = "50Kbps";
-    uint32_t maxBytes = 150000000;
+    uint32_t tcpDataSize = 150000000;
+    uint32_t udpDataSize = 150000000;
 
     // Packet::EnablePrinting();
 
@@ -360,18 +361,23 @@ main(int argc, char* argv[])
     cmd.AddValue("default-bw",
                  "The bandwidth to set on all the sender/receiver links",
                  defaultBandwidth);
-    cmd.AddValue("backup-rate-udp", "The TCP rate to set to the backup flows", backupRateUdp);
+    cmd.AddValue("active-rate-tcp", "The TCP rate to set to the active flows", activeRateTcp);
+    cmd.AddValue("backup-rate-udp", "The UDP rate to set to the backup flows", backupRateUdp);
     cmd.AddValue("flow-end", "Flows End Time", flowEndTime);
+    cmd.AddValue("tcp-data-size", "Size of the data sent by TCP applications", tcpDataSize);
+    cmd.AddValue("udp-data-size", "Size of the data sent by TCP applications", udpDataSize);
+    
     cmd.AddValue("end", "Simulation End Time", endTime);
     cmd.AddValue("verbose", "Verbose output", verbose);
 
+    
     cmd.Parse(argc, argv);
 
     LogComponentEnable("QLRoutingExample", LOG_LEVEL_INFO);
     // if (verbose)
     {
         //LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        //LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
+        LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_WARN);
         //LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
         //LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         //LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
@@ -381,6 +387,8 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Results Path: " + resultsPath);
     NS_LOG_INFO("Flow End Time: " + std::to_string(flowEndTime));
     NS_LOG_INFO("End Time: " + std::to_string(endTime));
+    NS_LOG_INFO("Backup Rate UDP: " + backupRateUdp);
+    NS_LOG_INFO("Data Size UDP: " + std::to_string(udpDataSize));
 
     NS_LOG_INFO("Configuring Congestion Control.");
     // Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" +
@@ -433,10 +441,14 @@ main(int argc, char* argv[])
     Ptr<Node> host5 = hosts.Get(4);
     Names::Add("host5", host5);
 
-    CsmaHelper csma;
-    csma.SetChannelAttribute("DataRate", StringValue(defaultBandwidth));
-    csma.SetDeviceAttribute("Mtu", UintegerValue(1500));
-    // csma.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(defaultBuffer));
+    CsmaHelper csma_sw;
+    csma_sw.SetChannelAttribute("DataRate", StringValue(defaultBandwidth));
+    csma_sw.SetDeviceAttribute("Mtu", UintegerValue(1500));
+    // csma_sw.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(defaultBuffer));
+
+    CsmaHelper csma_host;
+    csma_host.SetChannelAttribute("DataRate", StringValue("100Gbps"));
+    csma_host.SetDeviceAttribute("Mtu", UintegerValue(1500));
 
     NetDeviceContainer host1Interfaces;
     NetDeviceContainer host2Interfaces;
@@ -450,51 +462,51 @@ main(int argc, char* argv[])
     NetDeviceContainer s5Interfaces;
 
     NetDeviceContainer link;
-    link = csma.Install(NodeContainer(host1, s1));
+    link = csma_host.Install(NodeContainer(host1, s1));
     host1Interfaces.Add(link.Get(0));
     s1Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(host2, s2));
+    link = csma_host.Install(NodeContainer(host2, s2));
     host2Interfaces.Add(link.Get(0));
     s2Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(host3, s3));
+    link = csma_host.Install(NodeContainer(host3, s3));
     host3Interfaces.Add(link.Get(0));
     s3Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(host4, s4));
+    link = csma_host.Install(NodeContainer(host4, s4));
     host4Interfaces.Add(link.Get(0));
     s4Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(host5, s5));
+    link = csma_host.Install(NodeContainer(host5, s5));
     host5Interfaces.Add(link.Get(0));
     s5Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(s1, s2));
+    link = csma_sw.Install(NodeContainer(s1, s2));
     s1Interfaces.Add(link.Get(0));
     s2Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(s1, s3));
+    link = csma_sw.Install(NodeContainer(s1, s3));
     s1Interfaces.Add(link.Get(0));
     s3Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(s2, s3));
+    link = csma_sw.Install(NodeContainer(s2, s3));
     s2Interfaces.Add(link.Get(0));
     s3Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(s2, s4));
+    link = csma_sw.Install(NodeContainer(s2, s4));
     s2Interfaces.Add(link.Get(0));
     s4Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(s3, s4));
+    link = csma_sw.Install(NodeContainer(s3, s4));
     s3Interfaces.Add(link.Get(0));
     s4Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(s3, s5));
+    link = csma_sw.Install(NodeContainer(s3, s5));
     s3Interfaces.Add(link.Get(0));
     s5Interfaces.Add(link.Get(1));
 
-    link = csma.Install(NodeContainer(s4, s5));
+    link = csma_sw.Install(NodeContainer(s4, s5));
     s4Interfaces.Add(link.Get(0));
     s5Interfaces.Add(link.Get(1));
 
@@ -650,7 +662,7 @@ main(int argc, char* argv[])
     s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
     computeQueueBufferSlice(s5p4);
 
-    // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s1p4);
+    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s1p4);
     // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s2p4);
     // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s3p4);
     // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s4p4);
@@ -666,14 +678,14 @@ main(int argc, char* argv[])
         {
             ApplicationContainer host5ReceiverApp = createSinkTcpApplication(activePort + i, host5);
             host5ReceiverApp.Start(Seconds(0.0));
-            host5ReceiverApp.Stop(Seconds(flowEndTime + 1));
+            // host5ReceiverApp.Stop(Seconds(flowEndTime + 1));
 
             ApplicationContainer host15SenderApp =
                 createTcpApplication(host5Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
                                      activePort + i,
                                      host1,
                                      activeRateTcp,
-                                     maxBytes,
+                                     tcpDataSize,
                                      "ns3::TcpCubic");
             host15SenderApp.Start(Seconds(1.0));
         }
@@ -687,7 +699,7 @@ main(int argc, char* argv[])
         //                          activePort,
         //                          host1,
         //                          activeRateTcp,
-        //                          maxBytes,
+        //                          tcpDataSize,
         //                          "ns3::TcpCubic");
         // host15SenderApp.Start(Seconds(1.0));
 
@@ -696,7 +708,7 @@ main(int argc, char* argv[])
         //                          activePort,
         //                          host5,
         //                          activeRateTcp,
-        //                          maxBytes,
+        //                          tcpDataSize,
         //                          "ns3::TcpCubic");
         // host51SenderApp.Start(Seconds(1.0));
     }
@@ -705,10 +717,8 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Create Backup Flow Applications.");
     if (backupFlows > 0)
     {
-        for (uint32_t i = 1; i < backupFlows; i++)
+        for (uint32_t i = 1; i <= backupFlows; i++)
         {
-            bool isMoreThanHalf = ((i + 1) / (float)backupFlows) >= 0.5;
-
             ApplicationContainer backupReceiverApp =
                 createSinkUdpApplication(backupPort + i, host5);
             backupReceiverApp.Start(Seconds(0.0));
@@ -719,9 +729,9 @@ main(int argc, char* argv[])
                                      backupPort + i,
                                      host1,
                                      backupRateUdp,
-                                     !isMoreThanHalf ? 4.0 : 8.0,
-                                     !isMoreThanHalf ? 5.99 : 9.99,
-                                     0,
+                                     1.0,
+                                     flowEndTime,
+                                     udpDataSize,
                                      generateRandom);
         }
     }
@@ -731,8 +741,11 @@ main(int argc, char* argv[])
         std::string tracesPath = getPath(resultsPath, "traces");
         std::filesystem::create_directories(tracesPath);
 
-        csma.EnablePcapAll(getPath(tracesPath, "p4-switch"), true);
+        csma_sw.EnablePcapAll(getPath(tracesPath, "p4-switch"), true);
     }
+
+    FlowMonitorHelper flowHelper;
+    Ptr<FlowMonitor> flowMon = flowHelper.Install(NodeContainer(switches, hosts));
     
     printSimulationTime();
 
@@ -740,6 +753,22 @@ main(int argc, char* argv[])
     Simulator::Stop(Seconds(endTime));
     Simulator::Run();
 
+    flowMon->CheckForLostPackets();
+    Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowHelper.GetClassifier());
+    auto stats = flowMon->GetFlowStats();
+    for (const auto& flow : stats)
+    {
+        Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(flow.first);
+        double duration = flow.second.timeLastRxPacket.GetSeconds() - flow.second.timeFirstRxPacket.GetSeconds();
+        double throughput = (duration > 0) ? (flow.second.rxBytes * 8.0 / duration / 1e6) : 0;
+        std::cout << "Flow " << flow.first << " (" << t.sourceAddress << " -> " << t.destinationAddress
+                << ") Throughput: " << throughput << " Mbit/s" << std::endl;
+    }
+
+    std::string flowMonitorPath = getPath(resultsPath, "flow-monitor");
+    std::filesystem::create_directories(flowMonitorPath);
+    flowMon->SerializeToXmlFile(getPath(flowMonitorPath, "flow_monitor.xml"), true, true);
+    
     Simulator::Destroy();
     NS_LOG_INFO("Done.");
 }
