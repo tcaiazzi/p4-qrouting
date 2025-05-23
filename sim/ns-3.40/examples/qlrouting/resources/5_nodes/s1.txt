@@ -1,13 +1,14 @@
 register_write row2 0 4629771061636890688
 register_write row3 0 4629771061632696384
 register_write row4 0 4629771061632696384
-register_write row5 0 4629771061636890688
+register_write row5 0 4629771061632696384
 table_add qlr_pkt_updates qlr_pkt_set_1 2 2 => 
 table_add qlr_pkt_updates qlr_pkt_set_1 3 2 => 
 table_add qlr_pkt_updates qlr_pkt_set_1 4 2 => 
 table_add qlr_pkt_updates qlr_pkt_set_1 5 2 => 
 table_add qlr_pkt_updates qlr_pkt_set_1_2 3 3 => 
 table_add qlr_pkt_updates qlr_pkt_set_1_2 4 3 => 
+table_add qlr_pkt_updates qlr_pkt_set_1_2 5 3 => 
 table_add read_ig_qdepth get_ig_qdepth_and_idx 2 => 1
 table_add read_ig_qdepth get_ig_qdepth_and_idx 3 => 2
 table_add select_port_from_row_col set_nhop 2 1 => 2
@@ -16,6 +17,7 @@ table_add select_port_from_row_col set_nhop 3 2 => 3
 table_add select_port_from_row_col set_nhop 4 1 => 2
 table_add select_port_from_row_col set_nhop 4 2 => 3
 table_add select_port_from_row_col set_nhop 5 1 => 2
+table_add select_port_from_row_col set_nhop 5 2 => 3
 table_add select_row get_row_num 10.0.2.0/24 => 2
 table_add select_row get_row_num 10.0.3.0/24 => 3
 table_add select_row get_row_num 10.0.4.0/24 => 4

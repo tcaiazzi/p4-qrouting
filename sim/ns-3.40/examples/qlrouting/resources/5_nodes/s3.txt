@@ -5,8 +5,8 @@ register_write row5 0 4629770786759000128
 table_add qlr_pkt_updates qlr_pkt_set_1_2_3 4 5 => 
 table_add qlr_pkt_updates qlr_pkt_set_1_2_3 5 5 => 
 table_add qlr_pkt_updates qlr_pkt_set_3 2 3 => 
-table_add qlr_pkt_updates qlr_pkt_set_3_4 1 2 => 
-table_add qlr_pkt_updates qlr_pkt_set_3_4 2 2 => 
+table_add qlr_pkt_updates qlr_pkt_set_3_4_5 1 2 => 
+table_add qlr_pkt_updates qlr_pkt_set_3_4_5 2 2 => 
 table_add qlr_pkt_updates qlr_pkt_set_3_5 4 4 => 
 table_add read_ig_qdepth get_ig_qdepth_and_idx 2 => 1
 table_add read_ig_qdepth get_ig_qdepth_and_idx 3 => 2

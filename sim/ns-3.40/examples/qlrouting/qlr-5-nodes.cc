@@ -94,6 +94,27 @@ createSinkTcpApplication(uint16_t port, Ptr<Node> node)
     return sink.Install(node);
 }
 
+void
+startTcpFlow(Ptr<Node> receiverHost,
+             std::vector<Ptr<Ipv4Interface>> receiverInterfaces,
+             Ptr<Node> senderHost,
+             uint16_t port,
+             std::string activeRateTcp,
+             uint32_t tcpDataSize)
+{
+    ApplicationContainer hostReceiverApp = createSinkTcpApplication(port, receiverHost);
+    hostReceiverApp.Start(Seconds(0.0));
+
+    ApplicationContainer hostSenderApp =
+        createTcpApplication(receiverInterfaces[0]->GetAddress(0).GetAddress(),
+                             port,
+                             senderHost,
+                             activeRateTcp,
+                             tcpDataSize,
+                             "ns3::TcpCubic");
+    hostSenderApp.Start(Seconds(1.0));
+}
+
 ApplicationContainer
 createUdpApplication(Ipv4Address addressToReach,
                      uint16_t port,
@@ -131,6 +152,32 @@ createSinkUdpApplication(uint16_t port, Ptr<Node> node)
     PacketSinkHelper sink("ns3::UdpSocketFactory",
                           Address(InetSocketAddress(Ipv4Address::GetAny(), port)));
     return sink.Install(node);
+}
+
+void
+startUdpFlow(Ptr<Node> receiverHost,
+             std::vector<Ptr<Ipv4Interface>> receiverInterfaces,
+             Ptr<Node> senderHost,
+             uint16_t port,
+             std::string backupRateUdp,
+             uint32_t start_time,
+             uint32_t end_time,
+             uint32_t udpDataSize,
+             bool generateRandom)
+{
+    ApplicationContainer hostReceiverApp = createSinkUdpApplication(port, receiverHost);
+    hostReceiverApp.Start(Seconds(0.0));
+
+    ApplicationContainer hostSenderApp =
+        createUdpApplication(receiverInterfaces[0]->GetAddress(0).GetAddress(),
+                             port,
+                             senderHost,
+                             backupRateUdp,
+                             start_time,
+                             end_time,
+                             udpDataSize,
+                             generateRandom);
+    hostSenderApp.Start(Seconds(1.0));
 }
 
 Ptr<Ipv4Interface>
@@ -684,46 +731,31 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Create Active Flow Applications.");
 
     uint16_t activePort = 20000;
-    if (activeFlows > 0)
-    {
-        for (uint32_t i = 0; i < activeFlows; ++i)
-        {
-            ApplicationContainer host5ReceiverApp = createSinkTcpApplication(activePort + i, host5);
-            host5ReceiverApp.Start(Seconds(0.0));
-            // host5ReceiverApp.Stop(Seconds(flowEndTime + 1));
 
-            ApplicationContainer host15SenderApp =
-                createTcpApplication(host5Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
-                                     activePort + i,
-                                     host1,
-                                     activeRateTcp,
-                                     tcpDataSize,
-                                     "ns3::TcpCubic");
-            host15SenderApp.Start(Seconds(1.0));
-        }
+    startTcpFlow(host1, host1Ipv4Interfaces, host2, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host1, host1Ipv4Interfaces, host3, activePort + 2, activeRateTcp, tcpDataSize);
+    startTcpFlow(host1, host1Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
+    startTcpFlow(host1, host1Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-        // ApplicationContainer host1ReceiverApp = createSinkTcpApplication(activePort, host1);
-        // host1ReceiverApp.Start(Seconds(0.0));
-        // host1ReceiverApp.Stop(Seconds(flowEndTime + 1));
+    startTcpFlow(host2, host2Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host2, host2Ipv4Interfaces, host3, activePort + 2, activeRateTcp, tcpDataSize);
+    startTcpFlow(host2, host2Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
+    startTcpFlow(host2, host2Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-        // ApplicationContainer host15SenderApp =
-        //     createTcpApplication(host5Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
-        //                          activePort,
-        //                          host1,
-        //                          activeRateTcp,
-        //                          tcpDataSize,
-        //                          "ns3::TcpCubic");
-        // host15SenderApp.Start(Seconds(1.0));
+    startTcpFlow(host3, host3Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host3, host3Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
+    startTcpFlow(host3, host3Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
+    startTcpFlow(host3, host3Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-        // ApplicationContainer host51SenderApp =
-        //     createTcpApplication(host1Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
-        //                          activePort,
-        //                          host5,
-        //                          activeRateTcp,
-        //                          tcpDataSize,
-        //                          "ns3::TcpCubic");
-        // host51SenderApp.Start(Seconds(1.0));
-    }
+    startTcpFlow(host4, host4Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host4, host4Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
+    startTcpFlow(host4, host4Ipv4Interfaces, host3, activePort + 3, activeRateTcp, tcpDataSize);
+    startTcpFlow(host4, host4Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
+
+    startTcpFlow(host5, host5Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host5, host5Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
+    startTcpFlow(host5, host5Ipv4Interfaces, host3, activePort + 3, activeRateTcp, tcpDataSize);
+    startTcpFlow(host5, host5Ipv4Interfaces, host4, activePort + 4, activeRateTcp, tcpDataSize);
 
     uint16_t backupPort = 30000;
     NS_LOG_INFO("Create Backup Flow Applications.");
@@ -731,20 +763,15 @@ main(int argc, char* argv[])
     {
         for (uint32_t i = 1; i <= backupFlows; i++)
         {
-            ApplicationContainer backupReceiverApp =
-                createSinkUdpApplication(backupPort + i, host5);
-            backupReceiverApp.Start(Seconds(0.0));
-            //backupReceiverApp.Stop(Seconds(flowEndTime + 1));
-
-            ApplicationContainer backupSenderApp =
-                createUdpApplication(host5Ipv4Interfaces[0]->GetAddress(0).GetAddress(),
-                                     backupPort + i,
-                                     host1,
-                                     backupRateUdp,
-                                     1.0,
-                                     flowEndTime,
-                                     udpDataSize,
-                                     generateRandom);
+            startUdpFlow(host5,
+                         host5Ipv4Interfaces,
+                         host1,
+                         backupPort + i,
+                         backupRateUdp,
+                         1.0,
+                         flowEndTime,
+                         udpDataSize,
+                         generateRandom);
         }
     }
 

@@ -62,7 +62,7 @@ if __name__ == "__main__":
     dags[3].add_edges_from([(0,1), (0,2), (1,3), (2,3), (2,4), (4,3)])
 
     dags[4].add_nodes_from(network.keys())
-    dags[4].add_edges_from([(0,1), (1,3), (2,4), (3,2), (3,4)])
+    dags[4].add_edges_from([(0,1), (0,2), (1,3), (2,4), (3,2), (3,4)])
     
     subnets = ipaddress.ip_network("10.0.0.0/16").subnets(prefixlen_diff=8)
     next(subnets)
