@@ -17,7 +17,8 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
         if start == e[0]:
             iface_num = net[start][e[1]]
             row_slices[iface_num] = 0
-
+    
+    print("Row slices:", row_slices)
     for i, row_slice in enumerate(row_slices):
         if row_slice < 64:
             cmd.append(f"table_add select_port_from_row_col set_nhop {goal + 1} {i} => {i + 1}")
@@ -41,7 +42,7 @@ if __name__ == "__main__":
 
     network = {
         0: {1: 1, 2: 2},
-        1: {0: 1, 2: 1, 3: 2},
+        1: {0: 1, 2: 2, 3: 3},
         2: {0: 1, 1: 2, 3: 3, 4: 4},
         3: {1: 1, 2: 2, 4: 3},
         4: {2: 1, 3: 2},
