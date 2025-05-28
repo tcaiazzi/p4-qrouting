@@ -100,7 +100,9 @@ control IngressPipe(inout headers hdr,
     bit<6> ig_idx = 0;
     action get_ig_qdepth_and_idx(bit<6> idx) {
         ig_qdepths.read(ig_qdepth, (bit<32>) idx);
-        ig_idx = idx + 1;
+        ig_idx = idx;
+        log_msg("Reading ig_qdepth idx: ig_idx={}", {ig_idx});
+        log_msg("Reading ig_qdepth: ig_qdepth={}", {ig_qdepth});
     }
 
     table read_ig_qdepth {
@@ -142,7 +144,7 @@ control IngressPipe(inout headers hdr,
         if (select_row.apply().hit) {
             /* Read ingress port qdepth and get the ingress port index */
             read_ig_qdepth.apply();
-
+            
             /* Update rows using the pkt information */
             qmatrix_update.apply();
 

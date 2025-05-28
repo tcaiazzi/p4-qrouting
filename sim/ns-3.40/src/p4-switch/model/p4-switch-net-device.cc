@@ -82,7 +82,12 @@ P4SwitchNetDevice::GetTypeId()
                           "Switch MMU instance",
                           PointerValue(nullptr),
                           MakePointerAccessor(&P4SwitchNetDevice::m_mmu),
-                          MakePointerChecker<SwitchMmu>());
+                          MakePointerChecker<SwitchMmu>())
+            .AddAttribute("Verbose", 
+                          "Enable verbose logging",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&P4SwitchNetDevice::m_verbose),
+                          MakeBooleanChecker());
 
     return tid;
 }
@@ -116,6 +121,7 @@ P4SwitchNetDevice::GetName()
 
 P4SwitchNetDevice::~P4SwitchNetDevice()
 {
+
     NS_LOG_FUNCTION_NOARGS();
 }
 
@@ -389,7 +395,7 @@ P4SwitchNetDevice::InitPipeline()
     if (m_pipeline_json != "")
     {
         NS_LOG_DEBUG(node_name << " Initializing up P4 pipeline...");
-        m_p4_pipeline = new P4Pipeline(m_pipeline_json, node_name);
+        m_p4_pipeline = new P4Pipeline(m_pipeline_json, node_name, m_verbose);
         if (!m_pipeline_commands.empty())
         {
             std::this_thread::sleep_for(std::chrono::seconds(5));

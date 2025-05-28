@@ -119,6 +119,7 @@ class P4SwitchNetDevice : public NetDevice
     std::string GetName();
     P4Pipeline* m_p4_pipeline; //!< The P4 pipeline
     Ptr<SwitchMmu> m_mmu;
+    bool m_verbose;
 
   protected:
     void DoDispose() override;

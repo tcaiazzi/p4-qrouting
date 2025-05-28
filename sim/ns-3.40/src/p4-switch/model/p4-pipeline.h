@@ -51,7 +51,7 @@ class P4Pipeline : public bm::Switch
     /**
      * \brief P4Pipeline constructor
      */
-    P4Pipeline(std::string jsonFile, std::string name);
+    P4Pipeline(std::string jsonFile, std::string name, bool verbose = false);
 
     /**
      * \brief Run the provided CLI commands to populate table entries

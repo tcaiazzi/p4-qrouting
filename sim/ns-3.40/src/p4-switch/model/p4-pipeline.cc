@@ -82,7 +82,7 @@ int P4Pipeline::thrift_port = 9090;
 bm::packet_id_t P4Pipeline::packet_id = 0;
 uint8_t P4Pipeline::ns2bm_buf[MAX_PKT_SIZE] = {};
 
-P4Pipeline::P4Pipeline(std::string jsonFile, std::string name)
+P4Pipeline::P4Pipeline(std::string jsonFile, std::string name, bool verbose)
     : pre(new bm::McSimplePreLAG())
 {
     add_component<bm::McSimplePreLAG>(pre);
@@ -110,32 +110,38 @@ P4Pipeline::P4Pipeline(std::string jsonFile, std::string name)
     opt_parser.notifications_addr =
         std::string("ipc:///tmp/bmv2-") + node_id + std::string("-notifications.ipc");
     opt_parser.thrift_port = thrift_port++;
-    opt_parser.console_logging = true;
+    std::cout << "Setting verbose to " << verbose << std::endl;
+    opt_parser.console_logging = verbose;
 
-    LogComponent component = GetLogComponent("P4Pipeline");
-    if (component.IsEnabled(LOG_LEVEL_DEBUG))
+    if (verbose)
     {
-        std::cout << "DEBUG" << std::endl;
-        opt_parser.log_level = bm::Logger::LogLevel::DEBUG;
-    }
-    else if (component.IsEnabled(LOG_LEVEL_INFO))
-    {
-        std::cout << "INFO" << std::endl;
-        opt_parser.log_level = bm::Logger::LogLevel::INFO;
-    }
-    else if (component.IsEnabled(LOG_LEVEL_WARN))
-    {
-        std::cout << "WARN" << std::endl;
-        opt_parser.log_level = bm::Logger::LogLevel::WARN;
-    }
-    else if (component.IsEnabled(LOG_LEVEL_ERROR))
-    {
-        std::cout << "ERROR" << std::endl;
-        opt_parser.log_level = bm::Logger::LogLevel::ERROR;
-    }
-    else
-    {
-        opt_parser.console_logging = false;
+        LogComponent component = GetLogComponent("P4Pipeline");
+        if (component.IsEnabled(LOG_LEVEL_DEBUG))
+        {
+            std::cout << "DEBUG" << std::endl;
+            opt_parser.log_level = bm::Logger::LogLevel::DEBUG;
+        }
+        else if (component.IsEnabled(LOG_LEVEL_INFO))
+        {
+            std::cout << "INFO" << std::endl;
+            opt_parser.log_level = bm::Logger::LogLevel::INFO;
+        }
+        else if (component.IsEnabled(LOG_LEVEL_WARN))
+        {
+            std::cout << "WARN" << std::endl;
+            opt_parser.log_level = bm::Logger::LogLevel::WARN;
+        }
+        else if (component.IsEnabled(LOG_LEVEL_ERROR))
+        {
+            std::cout << "ERROR" << std::endl;
+            opt_parser.log_level = bm::Logger::LogLevel::ERROR;
+        }
+        else
+        {
+            opt_parser.console_logging = false;
+        }
+    } else {
+        opt_parser.log_level = bm::Logger::LogLevel::OFF;
     }
 
     int status = init_from_options_parser(opt_parser);

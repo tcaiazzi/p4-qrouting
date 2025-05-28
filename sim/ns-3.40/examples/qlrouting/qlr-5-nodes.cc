@@ -280,10 +280,12 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
     P4Pipeline* pline = p4Device->m_p4_pipeline;
     if (pline != nullptr)
     {
-        std::ostringstream updateCommands;
         std::string nodeName = p4Device->GetName();
         for (size_t p = 1; p < p4Device->GetNPorts(); ++p)
         {
+            std::ostringstream updateCommands;
+            std::ostringstream readCommands;
+
             uint64_t color = 0;
             uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
             // std::cout << "Port: " << p << " Egress Bytes: " << egressBytes << std::endl;
@@ -312,13 +314,21 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
                           << " Egress Bytes: " << egressBytes << " Color: " << color << std::endl;
             }
             updateCommands << "register_write ig_qdepths " << p << " " << color << std::endl;
+            std::string updateCommandsStr = updateCommands.str();
+            std::string commandResult = pline->run_cli_commands(updateCommandsStr);
+            
+            std::cout << "Command: " << updateCommandsStr << std::endl;
+            std::cout << "Command Result: " << commandResult << std::endl;
+            
+            readCommands << "register_read ig_qdepths " << p << std::endl;
+            std::string readCommandsStr = readCommands.str();
+            std::string readCommandResult = pline->run_cli_commands(readCommandsStr);
+
+            std::cout << "Command: " << readCommandsStr << std::endl;
+            std::cout << "Command Result: " << readCommandResult << std::endl;
+
         }
-
-        std::string updateCommandsStr = updateCommands.str();
-        std::string commandResult = pline->run_cli_commands(updateCommandsStr);
-
-        // std::cout << "Command: " << updateCommandsStr << std::endl;
-        // std::cout << "Command Result: " << commandResult << std::endl;
+        
     }
 
     Simulator::Schedule(MilliSeconds(100), &updateQdepth, p4Device);
@@ -426,7 +436,6 @@ main(int argc, char* argv[])
     cmd.AddValue("flow-end", "Flows End Time", flowEndTime);
     cmd.AddValue("tcp-data-size", "Size of the data sent by TCP applications", tcpDataSize);
     cmd.AddValue("udp-data-size", "Size of the data sent by TCP applications", udpDataSize);
-
     cmd.AddValue("end", "Simulation End Time", endTime);
     cmd.AddValue("verbose", "Verbose output", verbose);
 
@@ -438,7 +447,7 @@ main(int argc, char* argv[])
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
         LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_WARN);
         // LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
+        LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
 
@@ -667,6 +676,7 @@ main(int argc, char* argv[])
     s1p4->m_mmu->SetAlphaEgress(1.0 / 8);
     s1p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
     s1p4->m_mmu->node_id = s1p4->GetNode()->GetId();
+    s1p4->SetAttribute("Verbose", BooleanValue(true));
     computeQueueBufferSlice(s1p4);
 
     qlrHelper.SetDeviceAttribute(
@@ -721,7 +731,7 @@ main(int argc, char* argv[])
     s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
     computeQueueBufferSlice(s5p4);
 
-    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s1p4);
+    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s1p4);
     // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s2p4);
     // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s3p4);
     // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s4p4);
@@ -732,22 +742,22 @@ main(int argc, char* argv[])
 
     uint16_t activePort = 20000;
 
-    startTcpFlow(host1, host1Ipv4Interfaces, host2, activePort + 1, activeRateTcp, tcpDataSize);
+    //startTcpFlow(host1, host1Ipv4Interfaces, host2, activePort + 1, activeRateTcp, tcpDataSize);
     startTcpFlow(host1, host1Ipv4Interfaces, host3, activePort + 2, activeRateTcp, tcpDataSize);
     startTcpFlow(host1, host1Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host1, host1Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    startTcpFlow(host2, host2Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    //startTcpFlow(host2, host2Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
     startTcpFlow(host2, host2Ipv4Interfaces, host3, activePort + 2, activeRateTcp, tcpDataSize);
     startTcpFlow(host2, host2Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host2, host2Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    startTcpFlow(host3, host3Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    //startTcpFlow(host3, host3Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
     startTcpFlow(host3, host3Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
     startTcpFlow(host3, host3Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host3, host3Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    startTcpFlow(host4, host4Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    //startTcpFlow(host4, host4Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
     startTcpFlow(host4, host4Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
     startTcpFlow(host4, host4Ipv4Interfaces, host3, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host4, host4Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
@@ -763,8 +773,8 @@ main(int argc, char* argv[])
     {
         for (uint32_t i = 1; i <= backupFlows; i++)
         {
-            startUdpFlow(host5,
-                         host5Ipv4Interfaces,
+            startUdpFlow(host2,
+                         host2Ipv4Interfaces,
                          host1,
                          backupPort + i,
                          backupRateUdp,
