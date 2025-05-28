@@ -115,27 +115,24 @@ P4Pipeline::P4Pipeline(std::string jsonFile, std::string name)
     LogComponent component = GetLogComponent("P4Pipeline");
     if (component.IsEnabled(LOG_LEVEL_DEBUG))
     {
-        std::cout << "DEBUG" << std::endl;
         opt_parser.log_level = bm::Logger::LogLevel::DEBUG;
     }
     else if (component.IsEnabled(LOG_LEVEL_INFO))
     {
-        std::cout << "INFO" << std::endl;
         opt_parser.log_level = bm::Logger::LogLevel::INFO;
     }
     else if (component.IsEnabled(LOG_LEVEL_WARN))
     {
-        std::cout << "WARN" << std::endl;
         opt_parser.log_level = bm::Logger::LogLevel::WARN;
     }
     else if (component.IsEnabled(LOG_LEVEL_ERROR))
     {
-        std::cout << "ERROR" << std::endl;
         opt_parser.log_level = bm::Logger::LogLevel::ERROR;
     }
     else
     {
         opt_parser.console_logging = false;
+        opt_parser.log_level = bm::Logger::LogLevel::OFF;
     }
 
     int status = init_from_options_parser(opt_parser);

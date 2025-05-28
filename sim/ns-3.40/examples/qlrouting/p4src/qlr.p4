@@ -101,6 +101,8 @@ control IngressPipe(inout headers hdr,
     action get_ig_qdepth_and_idx(bit<6> idx) {
         ig_qdepths.read(ig_qdepth, (bit<32>) idx);
         ig_idx = idx + 1;
+        log_msg("Reading ig_qdepth idx: idx={} ig_idx={}", {idx, ig_idx});
+        log_msg("Reading ig_qdepth: ig_qdepth={}", {ig_qdepth});
     }
 
     table read_ig_qdepth {

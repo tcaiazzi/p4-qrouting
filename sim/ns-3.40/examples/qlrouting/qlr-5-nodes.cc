@@ -286,12 +286,9 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
         {
             uint64_t color = 0;
             uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
-            // std::cout << "Port: " << p << " Egress Bytes: " << egressBytes << std::endl;
             if (egressBytes <= colorSlice - 1)
             {
                 color = 0;
-                // std::cout << "Node: " << nodeName << " Port: " << p << " Egress Bytes: " <<
-                // egressBytes << " Color: " << color << std::endl;
             }
             else if (egressBytes >= colorSlice && egressBytes <= ((colorSlice * 2) - 1))
             {
@@ -311,14 +308,18 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
                 std::cout << "Node: " << nodeName << " Port: " << p
                           << " Egress Bytes: " << egressBytes << " Color: " << color << std::endl;
             }
-            updateCommands << "register_write ig_qdepths " << p << " " << color << std::endl;
+            updateCommands << "register_write ig_qdepths " << p << " " << color;
+            if (p < p4Device->GetNPorts() - 1)
+            {
+                updateCommands << std::endl;
+            }
         }
 
         std::string updateCommandsStr = updateCommands.str();
         std::string commandResult = pline->run_cli_commands(updateCommandsStr);
 
-        // std::cout << "Command: " << updateCommandsStr << std::endl;
-        // std::cout << "Command Result: " << commandResult << std::endl;
+        std::cout << "Command: " << updateCommandsStr << std::endl;
+        std::cout << "Command Result: " << commandResult << std::endl;
     }
 
     Simulator::Schedule(MilliSeconds(100), &updateQdepth, p4Device);
@@ -438,7 +439,7 @@ main(int argc, char* argv[])
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
         LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_WARN);
         // LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
+        LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
 
@@ -457,7 +458,6 @@ main(int argc, char* argv[])
     Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
     Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
-    // Config::SetDefault("ns3::FifoQueueDisc::MaxSize", QueueSizeValue(QueueSize("100p")));
 
     std::filesystem::create_directories(resultsPath);
 
@@ -721,11 +721,11 @@ main(int argc, char* argv[])
     s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
     computeQueueBufferSlice(s5p4);
 
-    Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s1p4);
-    // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s2p4);
-    // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s3p4);
-    // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s4p4);
-    // Simulator::Schedule(MicroSeconds(1000), &updateQdepth, s5p4);
+    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s1p4);
+    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s2p4);
+    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s3p4);
+    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s4p4);
+    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s5p4);
 
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
@@ -763,9 +763,9 @@ main(int argc, char* argv[])
     {
         for (uint32_t i = 1; i <= backupFlows; i++)
         {
-            startUdpFlow(host5,
-                         host5Ipv4Interfaces,
-                         host1,
+            startUdpFlow(host1,
+                         host1Ipv4Interfaces,
+                         host5,
                          backupPort + i,
                          backupRateUdp,
                          1.0,

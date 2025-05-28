@@ -108,7 +108,7 @@ P4SwitchNetDevice::P4SwitchNetDevice()
     }
 }
 
-std::string 
+std::string
 P4SwitchNetDevice::GetName()
 {
     return Names::FindName(m_node);
@@ -438,8 +438,8 @@ P4SwitchNetDevice::AddPort(Ptr<NetDevice> port)
     m_ports.push_back(port);
     m_channel->AddChannel(port->GetChannel());
 
-    Ptr<Queue<Packet>> queue = port_csma->GetQueue();
     uint32_t port_idx = GetPortN(port) - 1;
+    Ptr<Queue<Packet>> queue = port_csma->GetQueue();
     queue->TraceConnectWithoutContext(
         "Dequeue",
         MakeCallback(&P4SwitchNetDevice::DequeueCallback, this, port_idx));
