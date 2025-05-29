@@ -293,19 +293,19 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
             else if (egressBytes >= colorSlice && egressBytes <= ((colorSlice * 2) - 1))
             {
                 color = 1;
-                std::cout << "Node: " << nodeName << " Port: " << p
+                std::cout << "Node: " << nodeName << " Port: " << p + 1
                           << " Egress Bytes: " << egressBytes << " Color: " << color << std::endl;
             }
             else if (egressBytes >= (colorSlice * 2) && egressBytes <= ((colorSlice * 3) - 1))
             {
                 color = 2;
-                std::cout << "Node: " << nodeName << " Port: " << p
+                std::cout << "Node: " << nodeName << " Port: " << p + 1
                           << " Egress Bytes: " << egressBytes << " Color: " << color << std::endl;
             }
             else if (egressBytes >= (colorSlice * 3) && egressBytes <= ((colorSlice * 4) - 1))
             {
                 color = 3;
-                std::cout << "Node: " << nodeName << " Port: " << p
+                std::cout << "Node: " << nodeName << " Port: " << p + 1
                           << " Egress Bytes: " << egressBytes << " Color: " << color << std::endl;
             }
             updateCommands << "register_write ig_qdepths " << p << " " << color;
@@ -318,8 +318,8 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
         std::string updateCommandsStr = updateCommands.str();
         std::string commandResult = pline->run_cli_commands(updateCommandsStr);
 
-        std::cout << "Command: " << updateCommandsStr << std::endl;
-        std::cout << "Command Result: " << commandResult << std::endl;
+        // std::cout << "Command: " << updateCommandsStr << std::endl;
+        // std::cout << "Command Result: " << commandResult << std::endl;
     }
 
     Simulator::Schedule(MilliSeconds(100), &updateQdepth, p4Device);
@@ -506,7 +506,7 @@ main(int argc, char* argv[])
     // csma_sw.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue(defaultBuffer));
 
     CsmaHelper csma_host;
-    csma_host.SetChannelAttribute("DataRate", StringValue("100Gbps"));
+    csma_host.SetChannelAttribute("DataRate", StringValue("1000Gbps"));
     csma_host.SetDeviceAttribute("Mtu", UintegerValue(1500));
 
     NetDeviceContainer host1Interfaces;
@@ -721,11 +721,11 @@ main(int argc, char* argv[])
     s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
     computeQueueBufferSlice(s5p4);
 
-    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s1p4);
-    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s2p4);
-    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s3p4);
-    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s4p4);
-    Simulator::Schedule(MicroSeconds(10), &updateQdepth, s5p4);
+    Simulator::Schedule(MilliSeconds(100), &updateQdepth, s1p4);
+    // Simulator::Schedule(MicroSeconds(10), &updateQdepth, s2p4);
+    // Simulator::Schedule(MicroSeconds(10), &updateQdepth, s3p4);
+    // Simulator::Schedule(MicroSeconds(10), &updateQdepth, s4p4);
+    // Simulator::Schedule(MicroSeconds(10), &updateQdepth, s5p4);
 
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
@@ -737,17 +737,17 @@ main(int argc, char* argv[])
     startTcpFlow(host1, host1Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host1, host1Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    startTcpFlow(host2, host2Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    // startTcpFlow(host2, host2Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
     startTcpFlow(host2, host2Ipv4Interfaces, host3, activePort + 2, activeRateTcp, tcpDataSize);
     startTcpFlow(host2, host2Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host2, host2Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    startTcpFlow(host3, host3Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    // startTcpFlow(host3, host3Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
     startTcpFlow(host3, host3Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
     startTcpFlow(host3, host3Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host3, host3Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    startTcpFlow(host4, host4Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    // startTcpFlow(host4, host4Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
     startTcpFlow(host4, host4Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
     startTcpFlow(host4, host4Ipv4Interfaces, host3, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host4, host4Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
@@ -763,9 +763,9 @@ main(int argc, char* argv[])
     {
         for (uint32_t i = 1; i <= backupFlows; i++)
         {
-            startUdpFlow(host1,
-                         host1Ipv4Interfaces,
-                         host5,
+            startUdpFlow(host5,
+                         host5Ipv4Interfaces,
+                         host1,
                          backupPort + i,
                          backupRateUdp,
                          1.0,
