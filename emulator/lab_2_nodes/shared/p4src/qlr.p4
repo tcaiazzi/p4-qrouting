@@ -49,7 +49,7 @@ control IngressPipe(inout headers hdr,
         row_num = num;
     }
 
-    action set_nhop_and_clear_qlr(bit<9> port) {
+    action set_nhop(bit<9> port) {
         standard_metadata.egress_spec = port;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
 
@@ -68,7 +68,7 @@ control IngressPipe(inout headers hdr,
         }
         actions = {
             get_row_num;
-            set_nhop_and_clear_qlr;
+            set_nhop;
             drop;
         }
         size = NODES_NUM;

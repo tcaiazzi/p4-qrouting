@@ -117,7 +117,7 @@ if __name__ == "__main__":
                 continue
             commands.add(f"table_add select_row get_row_num {subnet} => {node + 1}")
         max_iface = max(network[node_name].values()) + 1
-        commands.add(f"table_set_default select_row set_nhop_and_clear_qlr 1")
+        commands.add(f"table_set_default select_row set_nhop 1")
 
         for iface in network[node_name].values():
             commands.add(f"table_add read_ig_qdepth get_ig_qdepth_and_idx {iface + 1} => {iface}")

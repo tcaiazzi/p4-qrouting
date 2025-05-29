@@ -49,17 +49,10 @@ control IngressPipe(inout headers hdr,
         row_num = num;
     }
 
-    action set_nhop_and_clear_qlr(bit<9> port) {
+    /* Selects the outgoing port of this packet */
+    action set_nhop(bit<9> port) {
         standard_metadata.egress_spec = port;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
-
-        hdr.ethernet.dst_addr[47:40] = hdr.qlr.last_byte;
-        hdr.qlr.setInvalid();
-        hdr.qlr_updates[0].setInvalid();
-        hdr.qlr_updates[1].setInvalid();
-        hdr.qlr_updates[2].setInvalid();
-        hdr.qlr_updates[3].setInvalid();
-        hdr.qlr_updates[4].setInvalid();
     }
     
     table select_row {
@@ -68,17 +61,11 @@ control IngressPipe(inout headers hdr,
         }
         actions = {
             get_row_num;
-            set_nhop_and_clear_qlr;
+            set_nhop;
             drop;
         }
         size = NODES_NUM;
         default_action = drop;
-    }
-
-    /* Selects the outgoing port of this packet */
-    action set_nhop(bit<9> port) {
-        standard_metadata.egress_spec = port;
-        hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
 
     bit<8> col_num = 0;
@@ -97,9 +84,9 @@ control IngressPipe(inout headers hdr,
 
     /* Get the ingress port qdepth and the port index */
     bit<8> ig_qdepth = 0;
-    bit<6> ig_idx = 0;
-    action get_ig_qdepth_and_idx(bit<6> idx) {
-        ig_qdepths.read(ig_qdepth, (bit<32>) idx);
+    bit<32> ig_idx = 0;
+    action get_ig_qdepth_and_idx(bit<32> idx) {
+        ig_qdepths.read(ig_qdepth, idx);
         ig_idx = idx + 1;
         log_msg("Reading ig_qdepth idx: idx={} ig_idx={}", {idx, ig_idx});
         log_msg("Reading ig_qdepth: ig_qdepth={}", {ig_qdepth});
@@ -141,13 +128,26 @@ control IngressPipe(inout headers hdr,
     }
 
     apply {
-        if (select_row.apply().hit) {
+        bit<8> do_qlr = 2;
+
+        switch (select_row.apply().action_run) {
+            get_row_num: {
+                do_qlr = 1;
+            }
+            set_nhop: {
+                do_qlr = 0;
+            }
+        }
+
+        if (do_qlr != 2) {
             /* Read ingress port qdepth and get the ingress port index */
             read_ig_qdepth.apply();
 
             /* Update rows using the pkt information */
             qmatrix_update.apply();
+        }
 
+        if (do_qlr == 1) {
             MIN_VALUE(1, 0)
             MIN_VALUE(2, 1)
             MIN_VALUE(3, 2)
@@ -160,6 +160,15 @@ control IngressPipe(inout headers hdr,
 
             /* Activate update headers (table is populated from the DAGs) */
             qlr_pkt_updates.apply();
+        } else if (do_qlr == 0) {
+            hdr.ethernet.dst_addr[47:40] = hdr.qlr.last_byte;
+            
+            hdr.qlr.setInvalid();
+            hdr.qlr_updates[0].setInvalid();
+            hdr.qlr_updates[1].setInvalid();
+            hdr.qlr_updates[2].setInvalid();
+            hdr.qlr_updates[3].setInvalid();
+            hdr.qlr_updates[4].setInvalid();
         }
     }
 }
