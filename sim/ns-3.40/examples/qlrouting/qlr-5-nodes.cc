@@ -429,7 +429,7 @@ main(int argc, char* argv[])
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
         LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_WARN);
         // LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
-        LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
     }
 
@@ -722,30 +722,30 @@ main(int argc, char* argv[])
 
     uint16_t activePort = 20000;
 
-    // startTcpFlow(host1, host1Ipv4Interfaces, host2, activePort + 1, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host1, host1Ipv4Interfaces, host3, activePort + 2, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host1, host1Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host1, host1Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
+    startTcpFlow(host1, host1Ipv4Interfaces, host2, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host1, host1Ipv4Interfaces, host3, activePort + 2, activeRateTcp, tcpDataSize);
+    startTcpFlow(host1, host1Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
+    startTcpFlow(host1, host1Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    // startTcpFlow(host2, host2Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host2, host2Ipv4Interfaces, host3, activePort + 2, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host2, host2Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host2, host2Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
+    startTcpFlow(host2, host2Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host2, host2Ipv4Interfaces, host3, activePort + 2, activeRateTcp, tcpDataSize);
+    startTcpFlow(host2, host2Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
+    startTcpFlow(host2, host2Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    // startTcpFlow(host3, host3Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host3, host3Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host3, host3Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host3, host3Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
+    startTcpFlow(host3, host3Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host3, host3Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
+    startTcpFlow(host3, host3Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
+    startTcpFlow(host3, host3Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    // startTcpFlow(host4, host4Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host4, host4Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host4, host4Ipv4Interfaces, host3, activePort + 3, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host4, host4Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
+    startTcpFlow(host4, host4Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host4, host4Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
+    startTcpFlow(host4, host4Ipv4Interfaces, host3, activePort + 3, activeRateTcp, tcpDataSize);
+    startTcpFlow(host4, host4Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
     startTcpFlow(host5, host5Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host5, host5Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host5, host5Ipv4Interfaces, host3, activePort + 3, activeRateTcp, tcpDataSize);
-    // startTcpFlow(host5, host5Ipv4Interfaces, host4, activePort + 4, activeRateTcp, tcpDataSize);
+    startTcpFlow(host5, host5Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
+    startTcpFlow(host5, host5Ipv4Interfaces, host3, activePort + 3, activeRateTcp, tcpDataSize);
+    startTcpFlow(host5, host5Ipv4Interfaces, host4, activePort + 4, activeRateTcp, tcpDataSize);
 
     uint16_t backupPort = 30000;
     NS_LOG_INFO("Create Backup Flow Applications.");
