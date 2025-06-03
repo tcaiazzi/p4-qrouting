@@ -117,7 +117,7 @@ control IngressPipe(inout headers hdr,
     bit<8> min_value = 0;
     bit<8> min_index = 0;
     action min8(bit<8> a, bit<8> b, bit<8> index) {
-        if (a <= b) {
+        if (a < b) {
             min_value = a;
         } else {
             min_value = b;

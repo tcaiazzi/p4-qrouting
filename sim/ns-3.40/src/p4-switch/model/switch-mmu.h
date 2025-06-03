@@ -62,7 +62,8 @@ class SwitchMmu : public Object
     // buffer configuration.
     double alphaEgress[pCnt][qCnt];
     double alphaIngress[pCnt][qCnt];
-
+    double colorEgress[pCnt][qCnt];
+    
     // per queue run time
     uint64_t ingress_bytes[pCnt][qCnt];
     uint64_t egress_bytes[pCnt][qCnt];
