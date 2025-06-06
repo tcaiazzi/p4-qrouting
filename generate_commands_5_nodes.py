@@ -32,13 +32,16 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
         print(
-            "Usage: generate_commands_5_nodes.py <dst_path>"
+            "Usage: generate_commands_5_nodes.py <dst_path> <qlr_active>\n"
         )
         exit(1)
 
     dst_path = os.path.abspath(sys.argv[1])
+    qlr_active = bool(int(sys.argv[2]))
+
+    print(f"Destination path: {dst_path}, QLR active: {qlr_active}")
 
     network = {
         0: {1: 1, 2: 2},
@@ -112,10 +115,15 @@ if __name__ == "__main__":
 
                     commands.add(f"table_add qlr_pkt_updates qlr_pkt_set_" + "_".join(headers_to_activate) + f" {dst + 1} {iface + 1} => ")
 
-        for node, subnet in node_to_network.items():
-            if node == node_name:
-                continue
-            commands.add(f"table_add select_row get_row_num {subnet} => {node + 1}")
+        ports = list(network[node_name].values())
+        for i, (node, subnet) in enumerate(filter(lambda x: x[0]!=node_name, node_to_network.items())):
+            if qlr_active:
+                commands.add(f"table_add select_row get_row_num {subnet} 6 => {node + 1}")
+            else:
+                commands.add(f"table_add select_row set_nhop {subnet} 6 => {ports[i%len(ports)]+1}")
+            
+            commands.add(f"table_add select_row set_nhop {subnet} 17 => {ports[i%len(ports)]+1}")
+
         max_iface = max(network[node_name].values()) + 1
         commands.add(f"table_set_default select_row set_nhop 1")
 

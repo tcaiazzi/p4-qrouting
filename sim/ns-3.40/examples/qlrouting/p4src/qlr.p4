@@ -58,13 +58,14 @@ control IngressPipe(inout headers hdr,
     table select_row {
         key = {
             hdr.ipv4.dst_addr: lpm;
+            hdr.ipv4.protocol: exact;
         }
         actions = {
             get_row_num;
             set_nhop;
             drop;
         }
-        size = NODES_NUM;
+        size = 1024;
         default_action = drop;
     }
 

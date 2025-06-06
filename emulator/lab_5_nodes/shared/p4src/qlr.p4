@@ -65,7 +65,7 @@ control IngressPipe(inout headers hdr,
             set_nhop;
             drop;
         }
-        size = 1024;
+        size = NODES_NUM;
         default_action = drop;
     }
 
@@ -130,6 +130,8 @@ control IngressPipe(inout headers hdr,
 
     apply {
         bit<8> do_qlr = 2;
+
+        log_msg("protocol={}", {hdr.ipv4.protocol});
 
         switch (select_row.apply().action_run) {
             get_row_num: {

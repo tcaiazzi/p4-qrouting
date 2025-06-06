@@ -178,6 +178,7 @@ startUdpFlow(Ptr<Node> receiverHost,
                              udpDataSize,
                              generateRandom);
     hostSenderApp.Start(Seconds(1.0));
+    hostSenderApp.Stop(Seconds(end_time + 1.0));
 }
 
 Ptr<Ipv4Interface>
@@ -302,12 +303,12 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
                 color = 3;
             }
 
-            if (color != p4Device->m_mmu->qidEgress[p][0] && verbose)
+            if (color != p4Device->m_mmu->colorEgress[p][0])
             {
                 NS_LOG_INFO("Node: " << nodeName << " Port: " << p + 1
                                      << " Egress Bytes: " << egressBytes << " Color: " << color);
+                p4Device->m_mmu->colorEgress[p][0] = color;
             }
-            p4Device->m_mmu->colorEgress[p][0] = color;
             pline->register_write(0, "IngressPipe.ig_qdepths", p, bm::Data(color));
         }
     }
@@ -727,17 +728,17 @@ main(int argc, char* argv[])
     startTcpFlow(host1, host1Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host1, host1Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    // startTcpFlow(host2, host2Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host2, host2Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
     startTcpFlow(host2, host2Ipv4Interfaces, host3, activePort + 2, activeRateTcp, tcpDataSize);
     startTcpFlow(host2, host2Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host2, host2Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    // startTcpFlow(host3, host3Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host3, host3Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
     startTcpFlow(host3, host3Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
     startTcpFlow(host3, host3Ipv4Interfaces, host4, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host3, host3Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
 
-    // startTcpFlow(host4, host4Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
+    startTcpFlow(host4, host4Ipv4Interfaces, host1, activePort + 1, activeRateTcp, tcpDataSize);
     startTcpFlow(host4, host4Ipv4Interfaces, host2, activePort + 2, activeRateTcp, tcpDataSize);
     startTcpFlow(host4, host4Ipv4Interfaces, host3, activePort + 3, activeRateTcp, tcpDataSize);
     startTcpFlow(host4, host4Ipv4Interfaces, host5, activePort + 4, activeRateTcp, tcpDataSize);
@@ -787,16 +788,53 @@ main(int argc, char* argv[])
     Ptr<Ipv4FlowClassifier> classifier =
         DynamicCast<Ipv4FlowClassifier>(flowHelper.GetClassifier());
     auto stats = flowMon->GetFlowStats();
+
+    double tcpThroughputSum = 0.0;
+    double udpThroughputSum = 0.0;
+    uint32_t tcpCount = 0;
+    uint32_t udpCount = 0;
+
     for (const auto& flow : stats)
     {
         Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(flow.first);
         double duration =
             flow.second.timeLastRxPacket.GetSeconds() - flow.second.timeFirstRxPacket.GetSeconds();
         double throughput = (duration > 0) ? (flow.second.rxBytes * 8.0 / duration / 1e6) : 0;
+
+        std::string proto;
+        if (t.protocol == 6)
+        {
+            proto = "TCP";
+            tcpThroughputSum += throughput;
+            tcpCount++;
+        }
+        else if (t.protocol == 17)
+        {
+            proto = "UDP";
+            udpThroughputSum += throughput;
+            udpCount++;
+        }
+        else
+        {
+            proto = "OTHER";
+        }
+
         std::cout << "Flow " << flow.first << " (" << t.sourceAddress << " -> "
-                  << t.destinationAddress << ") Throughput: " << throughput << " Mbit/s"
-                  << std::endl;
+                  << t.destinationAddress << ") [" << proto << "] Throughput: " << throughput
+                  << " Mbit/s" << std::endl;
     }
+
+    if (tcpCount > 0)
+        std::cout << "Average TCP Throughput: " << (tcpThroughputSum / tcpCount) << " Mbit/s"
+                  << std::endl;
+    else
+        std::cout << "No TCP flows detected." << std::endl;
+
+    if (udpCount > 0)
+        std::cout << "Average UDP Throughput: " << (udpThroughputSum / udpCount) << " Mbit/s"
+                  << std::endl;
+    else
+        std::cout << "No UDP flows detected." << std::endl;
 
     std::string flowMonitorPath = getPath(resultsPath, "flow-monitor");
     std::filesystem::create_directories(flowMonitorPath);
