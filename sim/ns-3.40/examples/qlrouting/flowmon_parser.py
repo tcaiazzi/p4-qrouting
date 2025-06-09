@@ -139,6 +139,12 @@ class Flow(object):
         else:
             self.delayHistogram = None
 
+        flow_jitter_hist = flow_el.find("jitterHistogram")
+        if flow_jitter_hist:
+            self.jitterHistogram = flow_jitter_hist
+        else:
+            self.jitterHistogram = None
+
 ## ProbeFlowStats
 class ProbeFlowStats(object):
     ## class variables
@@ -161,7 +167,7 @@ class Simulation(object):
         @param simulation_el The element.
         '''
         self.flows = []
-        FlowClassifier_el, = simulation_el.findall("Ipv6FlowClassifier")
+        FlowClassifier_el, = simulation_el.findall("Ipv4FlowClassifier")
         flow_map = {}
         for flow_el in simulation_el.findall("FlowStats/Flow"):
             flow = Flow(flow_el)
@@ -184,7 +190,11 @@ class Simulation(object):
                 else:
                     s.delayFromFirstProbe = 0
                 flow_map[flowId].probe_stats_unsorted.append(s)
-
+        
+        # for flow in simulation_el.findall("Ipv4FlowClassifier/Flow"):
+        #     flowId = int(flow.get('flowId'))
+        #     flow_map[flowId].fiveTuple = FiveTuple(flow)
+            
 
 def parse_xml(path):
     with open(path, encoding="utf-8") as file_obj:
