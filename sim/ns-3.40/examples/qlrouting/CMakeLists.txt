@@ -3,7 +3,7 @@ find_external_library(DEPENDENCY_NAME GMP
 
 build_example(
   NAME qlr-5-nodes
-  SOURCE_FILES qlr-5-nodes.cc
+  SOURCE_FILES qlr-5-nodes.cc tracer.cc socket-utils.cc utils.cc qlr-utils.cc
   LIBRARIES_TO_LINK
     ${libcsma}
     ${libinternet}
