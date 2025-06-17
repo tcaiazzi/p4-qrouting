@@ -46,6 +46,22 @@ def parse_data_file(file_path):
 
     return parsed_result
 
+def parse_qdepth_file(file_path):
+    parsed_result = {}
+    with open(file_path, "r") as cwnd_file:
+        lines = cwnd_file.readlines()
+
+    for line in lines:
+        line = line.strip().split(" ")
+        # if float(line[0]) > 12:
+        #     continue
+        if line[1] not in parsed_result:
+            parsed_result[line[1]] = {"x": [], "y": []}
+        
+        parsed_result[line[1]]["x"].append(float(line[0]))
+        parsed_result[line[1]]["y"].append(float(line[2]))
+
+    return parsed_result
 
 def plot_delay_histogram_figure(results, addresses):
 
@@ -308,6 +324,43 @@ def plot_tcp_retransmission_figure(results):
         os.path.join(figures_path, f"retransmissions_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
     )
 
+
+def plot_qdepth_figure(results):
+    
+    def plot_qdepth_line(experiment_type, colors, marker, label, linestyle):
+        results_path = os.path.join(results, experiment_type)
+        for experiment_id in os.listdir(results_path):
+            experiment_results_path = os.path.join(results_path, experiment_id, "qdepth")
+            print(f"experiment_results_path: {experiment_results_path}")
+            for file_name in os.listdir(experiment_results_path):
+                if "s1" not in file_name:
+                    continue
+                file_path = os.path.join(experiment_results_path, file_name)
+                to_plot = parse_qdepth_file(file_path)
+                print(f"to_plot: {to_plot}")
+                
+                for i, (port, port_results) in enumerate(to_plot.items()): 
+                    plt.plot(port_results['x'], port_results['y'], label=label + "-" + port,
+                        linestyle=linestyle, fillstyle='none', color=colors[i], marker=marker)
+
+    plt.clf()
+    plt.grid(linestyle='--', linewidth=0.5)
+    plot_qdepth_line("qlr", ["red", "orange"], None, "S1", "solid")
+    # plot_qdepth_line("tcp", 'orange', None, "TCP Flows", "solid")
+
+    plt.xlabel('Time [s]')
+    # plt.xticks(range(0, 13))
+    # plt.xlim([0, 13])
+
+    plt.ylabel('QDepth [Bytes]')
+    # plt.yticks(range(0, 200, 20))
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
+    experiment_name = "-".join(results.split("/")[-7:])
+    plt.savefig(
+        os.path.join(figures_path, f"qdepth_figure.pdf"), format="pdf", bbox_inches='tight'
+    )
+
+
 def plot_cumulative_tcp_retransmission_figure(results):
     def plot_retransmissions_bar(experiment_type, color, marker, label, linestyle, offset):
         results_path = os.path.join(results, experiment_type)
@@ -357,9 +410,10 @@ if __name__ == "__main__":
 
     # plot_seqn_figure(results_path)
     # plot_cwnd_figure(results_path)
-    plot_cumulative_tcp_retransmission_figure(results_path)
-    plot_tcp_retransmission_figure(results_path)
+    # plot_cumulative_tcp_retransmission_figure(results_path)
+    # plot_tcp_retransmission_figure(results_path)
     plot_throughput_figure(results_path)
+    plot_qdepth_figure(results_path)
 
     # plot_fct_histogram_figure(
     #     results_path,

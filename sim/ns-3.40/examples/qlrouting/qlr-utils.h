@@ -13,6 +13,10 @@ void computeQueueBufferSlice(Ptr<P4SwitchNetDevice> p4Device);
 
 void updateQdepth(Ptr<P4SwitchNetDevice> p4Device);
 
+void traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdepthFile);
+
+void traceQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string fileName);
+
 class QLRDeparser : public P4PacketDeparser
 {
   public:

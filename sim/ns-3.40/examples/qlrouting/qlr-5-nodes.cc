@@ -70,10 +70,6 @@ startTcpFlow(Ptr<Node> receiverHost,
                              congestionControl);
     hostSenderApp.Start(Seconds(startTime));
 
-    Ptr<BulkSendApplication> bulkApp = DynamicCast<BulkSendApplication>(hostSenderApp.Get(0));
-
-    Ptr<Socket> socket = bulkApp->GetSocket();
-
     Ptr<TcpL4Protocol> tcp = senderHost->GetObject<TcpL4Protocol>();
     if (nodeToNextTcpSocketIndex.find(senderHost) == nodeToNextTcpSocketIndex.end())
     {
@@ -101,14 +97,6 @@ startTcpFlow(Ptr<Node> receiverHost,
                             cwndPath,
                             senderHost->GetId(),
                             socketIndex);
-
-    std::string throughputFileName = Names::FindName(senderHost) + ".tp";
-    std::string throughputPath = getPath(getPath(resultsPath, "throughput"), throughputFileName);
-    Simulator::Schedule(Seconds(startTime + 0.1),
-                        &startThroughputTrace,
-                        throughputPath,
-                        senderHost->GetId(),
-                        0);
 }
 
 void
@@ -218,6 +206,7 @@ main(int argc, char* argv[])
     std::filesystem::create_directories(getPath(resultsPath, "cwnd"));
     std::filesystem::create_directories(getPath(resultsPath, "throughput"));
     std::filesystem::create_directories(getPath(resultsPath, "retransmissions"));
+    std::filesystem::create_directories(getPath(resultsPath, "qdepth"));
 
     randomGen = std::mt19937(seed);
 
@@ -325,6 +314,9 @@ main(int argc, char* argv[])
     link = csma_sw.Install(NodeContainer(s4, s5));
     s4Interfaces.Add(link.Get(0));
     s5Interfaces.Add(link.Get(1));
+
+    
+    
 
     Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
     em->SetAttribute("ErrorRate", DoubleValue(0.01)); // 1% packet loss
@@ -485,10 +477,15 @@ main(int argc, char* argv[])
     computeQueueBufferSlice(s5p4);
 
     Simulator::Schedule(MicroSeconds(0), &updateQdepth, s1p4);
-    Simulator::Schedule(MicroSeconds(0), &updateQdepth, s2p4);
-    Simulator::Schedule(MicroSeconds(0), &updateQdepth, s3p4);
-    Simulator::Schedule(MicroSeconds(0), &updateQdepth, s4p4);
-    Simulator::Schedule(MicroSeconds(0), &updateQdepth, s5p4);
+    // Simulator::Schedule(MicroSeconds(0), &updateQdepth, s2p4);
+    // Simulator::Schedule(MicroSeconds(0), &updateQdepth, s3p4);
+    // Simulator::Schedule(MicroSeconds(0), &updateQdepth, s4p4);
+    // Simulator::Schedule(MicroSeconds(0), &updateQdepth, s5p4);
+
+    startThroughputTrace(s1, s1Interfaces, 1.0, 
+                         getPath(resultsPath, "throughput"));
+    
+    traceQdepth(s1p4, getPath(resultsPath, "qdepth/s1.txt"));
 
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");

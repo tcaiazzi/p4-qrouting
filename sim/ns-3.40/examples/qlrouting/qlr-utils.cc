@@ -65,6 +65,36 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
     Simulator::Schedule(NanoSeconds(200), &updateQdepth, p4Device);
 }
 
+void 
+traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdepthFile){
+    uint64_t totalBufferSlice = queueBufferSlice[p4Device->GetNode()->GetId()];
+    uint64_t colorSlice = (uint64_t)(totalBufferSlice / 4.0f);
+
+    P4Pipeline* pline = p4Device->m_p4_pipeline;
+    if (pline != nullptr)
+    {
+        std::string nodeName = p4Device->GetName();
+        for (size_t p = 1; p < p4Device->GetNPorts(); ++p)
+        {
+            
+            uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
+            *qdepthFile ->GetStream() << Simulator::Now().GetSeconds() << " " << p + 1 << " " << egressBytes << std::endl;
+            *qdepthFile->GetStream() << std::flush;
+        }
+    }
+
+    Simulator::Schedule(Seconds(0.1), &traceQdepthUpdate, p4Device, qdepthFile);
+}
+
+void
+traceQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string fileName)
+{
+    AsciiTraceHelper ascii;
+    Ptr<OutputStreamWrapper> qdepthFile = ascii.CreateFileStream(fileName);
+
+    Simulator::Schedule(NanoSeconds(200), &traceQdepthUpdate, p4Device, qdepthFile);
+}
+
 Ptr<Packet>
 QLRDeparser::get_ns3_packet(std::unique_ptr<bm::Packet> bm_packet)
 {

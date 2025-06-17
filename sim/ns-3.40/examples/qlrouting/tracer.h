@@ -27,6 +27,7 @@ uint32_t GetSocketIdFromContext(std::string context);
 void CwndTracer(std::string context, uint32_t oldval, uint32_t newval);
 void TraceCwnd(std::string fileName, uint32_t nodeId, uint32_t socketId);
 void tracePktTxNetDevice(std::string context, Ptr<const Packet> p);
-void startThroughputTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId);
+void startThroughputPortTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId);
+void startThroughputTrace(Ptr<Node> node, NetDeviceContainer nodeInterfaces, uint32_t startTime, std::string resultsPath);
 void tcpRx(std::string context, const Ptr<const Packet> p, const TcpHeader& hdr, const Ptr<const TcpSocketBase> skt);
 void startTcpRtx(Ptr<Node> node, std::string fileName, uint32_t socketId);

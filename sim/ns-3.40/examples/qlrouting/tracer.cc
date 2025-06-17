@@ -30,6 +30,8 @@
 #include <random>
 #include <string>
 
+#include "utils.h"
+
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("Tracer");
@@ -128,10 +130,10 @@ tracePktTxNetDevice(std::string context, Ptr<const Packet> p)
 }
 
 void
-startThroughputTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
+startThroughputPortTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
 {
     std::string nsString = "/NodeList/" + std::to_string(nodeId) + "/DeviceList/" +
-                           std::to_string(ifaceId) + "/$ns3::CsmaNetDevice/MacRx";
+                           std::to_string(ifaceId) + "/$ns3::CsmaNetDevice/MacTx";
 
     auto it = tpStream.find(nsString);
     if (it == tpStream.end())
@@ -139,6 +141,22 @@ startThroughputTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
 
     Config::Connect(nsString, MakeCallback(&tracePktTxNetDevice));
 }
+
+void
+startThroughputTrace(Ptr<Node> node, NetDeviceContainer nodeInterfaces, uint32_t startTime, std::string resultsPath)
+{
+    for (uint32_t i = 0; i < nodeInterfaces.GetN(); ++i)
+    {
+        std::string throughputFileName = Names::FindName(node) + "-" + std::to_string(i) + ".tp";
+        std::string throughputPath = getPath(resultsPath, throughputFileName);
+        Simulator::Schedule(Seconds(startTime + 0.1),
+                            &startThroughputPortTrace,
+                            throughputPath,
+                            node->GetId(),
+                            i);
+    }
+}
+
 
 /* Functions to track TCP Retransmissions */
 std::map<std::string, std::pair<SequenceNumber32, uint32_t>> ctx2rtxInfo;
