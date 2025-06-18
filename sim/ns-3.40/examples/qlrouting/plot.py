@@ -241,12 +241,15 @@ def plot_fct_histogram_figure(results, addresses):
 
 
 def plot_throughput_figure(results):
-    def plot_throughput_line(experiment_type, color, marker, label, linestyle):
+    def plot_throughput_line(experiment_type, colors, marker, label, linestyle):
         results_path = os.path.join(results, experiment_type)
         for experiment_id in os.listdir(results_path):
             experiment_results_path = os.path.join(results_path, experiment_id, "throughput")
-            for file_name in os.listdir(experiment_results_path):
-                if "host1" not in file_name:
+            for i, file_name in enumerate(os.listdir(experiment_results_path)):
+                if "s1" not in file_name:
+                    continue
+                port = file_name.split("-")[1].split(".")[0]
+                if port == "0":
                     continue
                 file_path = os.path.join(experiment_results_path, file_name)
                 to_plot = parse_data_file(file_path)
@@ -259,7 +262,7 @@ def plot_throughput_figure(results):
                     label=f"{file_name.split('.')[0]}-{experiment_type}",
                     linestyle=linestyle,
                     fillstyle="none",
-                    color=color,
+                    color=colors[i],
                     marker=marker,
                 )
 
@@ -267,13 +270,13 @@ def plot_throughput_figure(results):
 
     plt.clf()
     plt.grid(linestyle="--", linewidth=0.5)
-
-    plot_throughput_line("qlr", "red", None, "QLR Flows", "solid")
-    plot_throughput_line("tcp", "orange", None, "TCP Flows", "solid")
+    print(f"Plotting throughput")
+    plot_throughput_line("qlr", ["red", "orange"], None, "QLR Flows", "solid")
+    #plot_throughput_line("tcp", ["blue", "purple"], None, "TCP Flows", "solid")
 
     # plt.xticks(range(0, 13))
     # plt.xlim([0, 13])
-    plt.ylim([0, 80])
+    # plt.ylim([0, 15])
 
     plt.xlabel("Time [s]")
     plt.ylabel("Average Throughput [Mbps]")
@@ -413,7 +416,7 @@ if __name__ == "__main__":
     # plot_cumulative_tcp_retransmission_figure(results_path)
     # plot_tcp_retransmission_figure(results_path)
     plot_throughput_figure(results_path)
-    plot_qdepth_figure(results_path)
+    # plot_qdepth_figure(results_path)
 
     # plot_fct_histogram_figure(
     #     results_path,

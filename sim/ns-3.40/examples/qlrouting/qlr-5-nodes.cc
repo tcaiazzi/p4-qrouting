@@ -132,7 +132,6 @@ main(int argc, char* argv[])
     bool generateRandom = false;
     std::string defaultBandwidth = "50Kbps";
     std::string resultName = "flow_monitor.xml";
-    float flowEndTime = 11.0f;
     float endTime = 20.0f;
     float udpStartTime = 1.0f;
     float udpEndTime = 10.0f;
@@ -164,7 +163,6 @@ main(int argc, char* argv[])
                  defaultBandwidth);
     cmd.AddValue("active-rate-tcp", "The TCP rate to set to the active flows", activeRateTcp);
     cmd.AddValue("backup-rate-udp", "The UDP rate to set to the backup flows", backupRateUdp);
-    cmd.AddValue("flow-end", "Flows End Time", flowEndTime);
     cmd.AddValue("tcp-data-size", "Size of the data sent by TCP applications", tcpDataSize);
     cmd.AddValue("udp-data-size", "Size of the data sent by TCP applications", udpDataSize);
     cmd.AddValue("dump-traffic", "Dump traffic traces", dumpTraffic);
@@ -189,7 +187,6 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Results Path: " + resultsPath);
     NS_LOG_INFO("FLow Monitor Name: " + resultName);
     NS_LOG_INFO("Congestion Control: " + congestionControl);
-    NS_LOG_INFO("Flow End Time: " + std::to_string(flowEndTime));
     NS_LOG_INFO("End Time: " + std::to_string(endTime));
     NS_LOG_INFO("Backup Rate UDP: " + backupRateUdp);
     NS_LOG_INFO("Data Size UDP: " + std::to_string(udpDataSize));
@@ -507,121 +504,121 @@ main(int argc, char* argv[])
     ApplicationContainer host5ReceiverApp = createSinkTcpApplication(activePort + 5, host5);
     host5ReceiverApp.Start(Seconds(0.0));
 
-    startTcpFlow(host1,
-                 host1Ipv4Interfaces,
-                 host2,
-                 activePort + 1,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host1,
-                 host1Ipv4Interfaces,
-                 host3,
-                 activePort + 1,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host1,
-                 host1Ipv4Interfaces,
-                 host4,
-                 activePort + 1,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host1,
-                 host1Ipv4Interfaces,
-                 host5,
-                 activePort + 1,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
+    // startTcpFlow(host1,
+    //              host1Ipv4Interfaces,
+    //              host2,
+    //              activePort + 1,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host1,
+    //              host1Ipv4Interfaces,
+    //              host3,
+    //              activePort + 1,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host1,
+    //              host1Ipv4Interfaces,
+    //              host4,
+    //              activePort + 1,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host1,
+    //              host1Ipv4Interfaces,
+    //              host5,
+    //              activePort + 1,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
 
-    startTcpFlow(host2,
-                 host2Ipv4Interfaces,
-                 host1,
-                 activePort + 2,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host2,
-                 host2Ipv4Interfaces,
-                 host3,
-                 activePort + 2,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host2,
-                 host2Ipv4Interfaces,
-                 host4,
-                 activePort + 2,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host2,
-                 host2Ipv4Interfaces,
-                 host5,
-                 activePort + 2,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
+    // startTcpFlow(host2,
+    //              host2Ipv4Interfaces,
+    //              host1,
+    //              activePort + 2,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host2,
+    //              host2Ipv4Interfaces,
+    //              host3,
+    //              activePort + 2,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host2,
+    //              host2Ipv4Interfaces,
+    //              host4,
+    //              activePort + 2,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host2,
+    //              host2Ipv4Interfaces,
+    //              host5,
+    //              activePort + 2,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
 
-    startTcpFlow(host3,
-                 host3Ipv4Interfaces,
-                 host1,
-                 activePort + 3,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host3,
-                 host3Ipv4Interfaces,
-                 host2,
-                 activePort + 3,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host3,
-                 host3Ipv4Interfaces,
-                 host4,
-                 activePort + 3,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host3,
-                 host3Ipv4Interfaces,
-                 host5,
-                 activePort + 3,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
+    // startTcpFlow(host3,
+    //              host3Ipv4Interfaces,
+    //              host1,
+    //              activePort + 3,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host3,
+    //              host3Ipv4Interfaces,
+    //              host2,
+    //              activePort + 3,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host3,
+    //              host3Ipv4Interfaces,
+    //              host4,
+    //              activePort + 3,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host3,
+    //              host3Ipv4Interfaces,
+    //              host5,
+    //              activePort + 3,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
 
-    startTcpFlow(host4,
-                 host4Ipv4Interfaces,
-                 host1,
-                 activePort + 4,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host4,
-                 host4Ipv4Interfaces,
-                 host2,
-                 activePort + 4,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host4,
-                 host4Ipv4Interfaces,
-                 host3,
-                 activePort + 4,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host4,
-                 host4Ipv4Interfaces,
-                 host5,
-                 activePort + 4,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
+    // startTcpFlow(host4,
+    //              host4Ipv4Interfaces,
+    //              host1,
+    //              activePort + 4,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host4,
+    //              host4Ipv4Interfaces,
+    //              host2,
+    //              activePort + 4,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host4,
+    //              host4Ipv4Interfaces,
+    //              host3,
+    //              activePort + 4,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host4,
+    //              host4Ipv4Interfaces,
+    //              host5,
+    //              activePort + 4,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
 
     startTcpFlow(host5,
                  host5Ipv4Interfaces,
@@ -630,27 +627,27 @@ main(int argc, char* argv[])
                  activeRateTcp,
                  tcpDataSize,
                  congestionControl);
-    startTcpFlow(host5,
-                 host5Ipv4Interfaces,
-                 host2,
-                 activePort + 5,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host5,
-                 host5Ipv4Interfaces,
-                 host3,
-                 activePort + 5,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    startTcpFlow(host5,
-                 host5Ipv4Interfaces,
-                 host4,
-                 activePort + 5,
-                 activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
+    // startTcpFlow(host5,
+    //              host5Ipv4Interfaces,
+    //              host2,
+    //              activePort + 5,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host5,
+    //              host5Ipv4Interfaces,
+    //              host3,
+    //              activePort + 5,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
+    // startTcpFlow(host5,
+    //              host5Ipv4Interfaces,
+    //              host4,
+    //              activePort + 5,
+    //              activeRateTcp,
+    //              tcpDataSize,
+    //              congestionControl);
 
     uint16_t backupPort = 30000;
     NS_LOG_INFO("Create Backup Flow Applications.");
