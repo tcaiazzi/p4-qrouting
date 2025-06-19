@@ -37,10 +37,6 @@ def parse_data_file(file_path):
 
     for line in lines:
         line = line.strip().split(" ")
-        # if float(line[0]) > 12:
-        #     continue
-        if parsed_result["x"] and float(line[0]) - parsed_result["x"][-1] < 0.1:
-            continue
         parsed_result["x"].append(float(line[0]))
         parsed_result["y"].append(float(line[1]))
 
@@ -241,7 +237,7 @@ def plot_fct_histogram_figure(results, addresses):
 
 
 def plot_throughput_figure(results):
-    def plot_throughput_line(experiment_type, colors, marker, label, linestyle):
+    def plot_throughput_line(axes, experiment_type, colors, marker, label, linestyle):
         results_path = os.path.join(results, experiment_type)
         for experiment_id in os.listdir(results_path):
             experiment_results_path = os.path.join(results_path, experiment_id, "throughput")
@@ -256,10 +252,10 @@ def plot_throughput_figure(results):
                 to_plot_x = [x for x in to_plot["x"] if x <= 12]
                 to_plot_y = to_plot["y"][: len(to_plot_x)]
 
-                plt.plot(
+                axes.plot(
                     to_plot_x,
                     [y / 1000000 for y in to_plot_y],
-                    label=f"{file_name.split('.')[0]}-{experiment_type}",
+                    label=f"{file_name.split('.')[0]}",
                     linestyle=linestyle,
                     fillstyle="none",
                     color=colors[i],
@@ -271,32 +267,45 @@ def plot_throughput_figure(results):
     plt.clf()
     plt.grid(linestyle="--", linewidth=0.5)
     print(f"Plotting throughput")
-    plot_throughput_line("qlr", ["red", "orange"], None, "QLR Flows", "solid")
-    #plot_throughput_line("tcp", ["blue", "purple"], None, "TCP Flows", "solid")
+
+    fig, axs = plt.subplots(
+        2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
+    )        
+    
+    plot_throughput_line(axs[0], "qlr", ["red", "orange"], None, "QLR Flows", "solid") 
+    plot_throughput_line(axs[1], "tcp", ["blue", "purple"], None, "TCP Flows", "solid")
 
     # plt.xticks(range(0, 13))
     # plt.xlim([0, 13])
     # plt.ylim([0, 15])
 
     plt.xlabel("Time [s]")
-    plt.ylabel("Average Throughput [Mbps]")
-    plt.legend(
+    plt.ylabel("Average Throughput [Mbps]", loc="bottom")
+    axs[0].legend(
         loc="upper center",
         bbox_to_anchor=(0.5, 1.2),
         labelspacing=0.2,
         ncols=3,
         prop={"size": 6},
     )
-    experiment_name = "-".join(results.split("/")[-7:])
+    axs[1].legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.2),
+        labelspacing=0.2,
+        ncols=3,
+        prop={"size": 6},
+    )
+    axs[0].set_title("QLR", loc='left')
+    axs[1].set_title("NO QLR", loc='left')
     plt.savefig(
-        os.path.join(figures_path, f"tp_figure_{experiment_name}.pdf"),
+        os.path.join(figures_path, f"throughput.pdf"),
         format="pdf",
         bbox_inches="tight",
     )
 
 
 def plot_tcp_retransmission_figure(results):
-    def plot_retransmissions_line(experiment_type, color, marker, label, linestyle):
+    def plot_retransmissions_line(axes, experiment_type, color, marker, label, linestyle):
         results_path = os.path.join(results, experiment_type)
         for experiment_id in os.listdir(results_path):
             experiment_results_path = os.path.join(results_path, experiment_id, "retransmissions")
@@ -306,31 +315,41 @@ def plot_tcp_retransmission_figure(results):
                 to_plot = parse_data_file(os.path.join(experiment_results_path, file_name))
                 print(f"to_plot: {to_plot}")
                 label = "-".join(file_name.split("-")[:2])
-                plt.plot(to_plot['x'], to_plot['y'], label=label,
+                axes.plot(to_plot['x'], to_plot['y'], label=label,
                             linestyle=linestyle, fillstyle='none', color=color, marker=marker)
+            break
         return to_plot['x']
 
     plt.clf()
     plt.grid(linestyle='--', linewidth=0.5)
-    plot_retransmissions_line("qlr", "red", None, "QLR Flows", "solid")
-    plot_retransmissions_line("tcp", 'orange', None, "TCP Flows", "solid")
+    fig, axs = plt.subplots(
+        2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
+    )   
+
+    plot_retransmissions_line(axs[0], "qlr", "red", None, "QLR Flows", "solid")
+    plot_retransmissions_line(axs[1], "tcp", 'orange', None, "TCP Flows", "solid")
 
     plt.xlabel('Time [s]')
-    # plt.xticks(range(0, 13))
-    # plt.xlim([0, 13])
+    axs[0].set_xticks(range(3, 7))
+    axs[1].set_xticks(range(3, 7))
+    axs[0].set_xlim([3, 7])
+    axs[1].set_xlim([3, 7])
 
-    plt.ylabel('N. TCP Retransmissions')
+    plt.ylabel('N. TCP Retransmissions', loc='bottom')
     # plt.yticks(range(0, 200, 20))
-    #plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
-    experiment_name = "-".join(results.split("/")[-7:])
+    axs[0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
+    axs[1].legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
+    axs[0].set_title("QLR", loc='left')
+    axs[1].set_title("NO QLR", loc='left')
+
     plt.savefig(
-        os.path.join(figures_path, f"retransmissions_figure_{experiment_name}.pdf"), format="pdf", bbox_inches='tight'
+        os.path.join(figures_path, f"retransmissions.pdf"), format="pdf", bbox_inches='tight'
     )
 
 
 def plot_qdepth_figure(results):
     
-    def plot_qdepth_line(experiment_type, colors, marker, label, linestyle):
+    def plot_qdepth_line(axes, experiment_type, colors, marker, label, linestyle):
         results_path = os.path.join(results, experiment_type)
         for experiment_id in os.listdir(results_path):
             experiment_results_path = os.path.join(results_path, experiment_id, "qdepth")
@@ -343,13 +362,18 @@ def plot_qdepth_figure(results):
                 print(f"to_plot: {to_plot}")
                 
                 for i, (port, port_results) in enumerate(to_plot.items()): 
-                    plt.plot(port_results['x'], port_results['y'], label=label + "-" + port,
+                    axes.plot(port_results['x'], port_results['y'], label=label + "-" + port,
                         linestyle=linestyle, fillstyle='none', color=colors[i], marker=marker)
+            break
 
     plt.clf()
     plt.grid(linestyle='--', linewidth=0.5)
-    plot_qdepth_line("qlr", ["red", "orange"], None, "S1", "solid")
-    # plot_qdepth_line("tcp", 'orange', None, "TCP Flows", "solid")
+
+    fig, axs = plt.subplots(
+        2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
+    )   
+    plot_qdepth_line(axs[0], "qlr", ["red", "orange"], None, "S1", "solid")
+    plot_qdepth_line(axs[1], "tcp", ["blue", "purple"], None, "TCP Flows", "solid")
 
     plt.xlabel('Time [s]')
     # plt.xticks(range(0, 13))
@@ -357,10 +381,12 @@ def plot_qdepth_figure(results):
 
     plt.ylabel('QDepth [Bytes]')
     # plt.yticks(range(0, 200, 20))
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
-    experiment_name = "-".join(results.split("/")[-7:])
+    axs[0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
+    axs[1].legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
+    axs[0].set_title("QLR", loc='left')
+    axs[1].set_title("NO QLR", loc='left')
     plt.savefig(
-        os.path.join(figures_path, f"qdepth_figure.pdf"), format="pdf", bbox_inches='tight'
+        os.path.join(figures_path, f"qdepth.pdf"), format="pdf", bbox_inches='tight'
     )
 
 
@@ -384,10 +410,10 @@ def plot_cumulative_tcp_retransmission_figure(results):
 
     plt.clf()
     plt.grid(linestyle='--', linewidth=0.5)
-    plot_retransmissions_bar("qlr", "red", None, "QLR Flows", "solid", offset=1)
-    plot_retransmissions_bar("tcp", 'orange', None, "TCP Flows", "solid", offset=2)
+    plot_retransmissions_bar("qlr", "red", None, "QLR", "solid", offset=1)
+    plot_retransmissions_bar("tcp", 'green', None, "NO-QLR", "solid", offset=2)
 
-    plt.xticks([1, 2], ['QLR Flows', 'TCP Flows'])
+    plt.xticks([1, 2], ['QLR', 'NO-QLR'])
 
     plt.ylabel('N. TCP Retransmissions')
     # plt.yticks(range(0, 200, 20))
@@ -395,6 +421,46 @@ def plot_cumulative_tcp_retransmission_figure(results):
     plt.savefig(
         os.path.join(figures_path, f"cumulative_retransmissions_figure.pdf"), format="pdf", bbox_inches='tight'
     )
+
+
+def plot_cwnd_figure(results):
+    def plot_cwnd_line(axes, experiment_type, color, marker, label, linestyle):
+        results_path = os.path.join(results, experiment_type)
+        for experiment_id in os.listdir(results_path):
+            experiment_results_path = os.path.join(results_path, experiment_id, "cwnd")
+            for file_name in os.listdir(experiment_results_path):
+                if "host1-host5" not in file_name:
+                    continue
+                to_plot = parse_data_file(os.path.join(experiment_results_path, file_name))
+                to_plot["y"] = [val/1000 for val in to_plot["y"]] 
+                print(f"to_plot: {to_plot}")
+                label = "-".join(file_name.split("-")[:2])
+                axes.plot(to_plot['x'], to_plot['y'], label=label,
+                            linestyle=linestyle, fillstyle='none', color=color, marker=marker)
+            break
+        return to_plot['x']
+
+    plt.clf()
+    plt.grid(linestyle='--', linewidth=0.5)
+    fig, axs = plt.subplots(
+        2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
+    )   
+
+    plot_cwnd_line(axs[0], "qlr", "red", None, "QLR Flows", "solid")
+    plot_cwnd_line(axs[1], "tcp", 'orange', None, "TCP Flows", "solid")
+
+    plt.xlabel('Time [s]')
+    plt.ylabel('Cwnd Size [KB]')
+
+    axs[0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
+    axs[1].legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
+    axs[0].set_title("QLR", loc='left')
+    axs[1].set_title("NO QLR", loc='left')
+
+    plt.savefig(
+        os.path.join(figures_path, f"cwnd.pdf"), format="pdf", bbox_inches='tight'
+    )
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
@@ -411,69 +477,69 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(3.5, 2))
 
-    # plot_seqn_figure(results_path)
-    # plot_cwnd_figure(results_path)
-    # plot_cumulative_tcp_retransmission_figure(results_path)
-    # plot_tcp_retransmission_figure(results_path)
+    plot_cwnd_figure(results_path)
+    plot_cumulative_tcp_retransmission_figure(results_path)
+    plot_tcp_retransmission_figure(results_path)
     plot_throughput_figure(results_path)
-    # plot_qdepth_figure(results_path)
+    plot_qdepth_figure(results_path)
+    plot_cwnd_figure(results_path)
 
-    # plot_fct_histogram_figure(
-    #     results_path,
-    #     [
-    #         (
-    #             "10.0.1.1",
-    #             "TCP Flow",
-    #             "red",
-    #             "////",
-    #             os.path.join(results_path, "tcp-1.xml"),
-    #         ),
-    #         (
-    #             "10.0.1.1",
-    #             "QLR Flow",
-    #             "green",
-    #             "////",
-    #             os.path.join(results_path, "qlr-1.xml"),
-    #         ),
-    #     ],
-    # )
+    plot_fct_histogram_figure(
+        results_path,
+        [
+            (
+                "10.0.1.1",
+                "TCP Flow",
+                "red",
+                "////",
+                os.path.join(results_path, "tcp/1/flow_monitor.xml"),
+            ),
+            (
+                "10.0.1.1",
+                "QLR Flow",
+                "green",
+                "////",
+                os.path.join(results_path, "qlr/1/flow_monitor.xml"),
+            ),
+        ],
+    )
 
-    # plot_delay_histogram_figure(
-    #     results_path,
-    #     [
-    #         (
-    #             "10.0.1.1",
-    #             "TCP Flow",
-    #             "red",
-    #             "////",
-    #             os.path.join(results_path, "tcp-1.xml"),
-    #         ),
-    #         (
-    #             "10.0.1.1",
-    #             "QLR Flow",
-    #             "green",
-    #             "////",
-    #             os.path.join(results_path, "qlr-1.xml"),
-    #         ),
-    #     ],
-    # )
+    plot_delay_histogram_figure(
+        results_path,
+        [
+            (
+                "10.0.1.1",
+                "TCP Flow",
+                "red",
+                "////",
+                os.path.join(results_path, "tcp/1/flow_monitor.xml"),
+            ),
+            (
+                "10.0.1.1",
+                "QLR Flow",
+                "green",
+                "////",
+                os.path.join(results_path, "qlr/1/flow_monitor.xml"),
+            ),
+        ],
+    )
 
-    # plot_jitter_histogram_figure(
-    #     results_path,
-    #     [
-    #         (
-    #             "10.0.1.1",
-    #             "TCP Flow",
-    #             "red",
-    #             "////",
-    #             os.path.join(results_path, "tcp-1.xml"),
-    #         ),
-    #         (
-    #             "10.0.1.1",
-    #             "QLR Flow",
-    #             "green",
-    #             "////",
-    #             os.path.join(results_path, "qlr-1.xml"),
-    #         ),
-    #     ],
-    # )
+    plot_jitter_histogram_figure(
+        results_path,
+        [
+            (
+                "10.0.1.1",
+                "TCP Flow",
+                "red",
+                "////",
+                os.path.join(results_path, "tcp/1/flow_monitor.xml"),
+            ),
+            (
+                "10.0.1.1",
+                "QLR Flow",
+                "green",
+                "////",
+                os.path.join(results_path, "qlr/1/flow_monitor.xml"),
+            ),
+        ],
+    )

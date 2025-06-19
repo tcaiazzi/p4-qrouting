@@ -2,7 +2,7 @@
 
 pip install --break-system-packages -r requirements.txt
 
-for i in 2
+for i in 1
 do
     mkdir -p results/5_nodes/qlr/$i
     python3 generate_commands_5_nodes.py resources/5_nodes 1
