@@ -26,8 +26,12 @@ getPath(std::string directory, std::string file)
     return SystemPath::Append(directory, file);
 }
 
-
-void addIpv4Address2(Ptr<Node> host5, NetDeviceContainer host5Interfaces, Ipv4Address address, Ipv4Mask netmask){
+void
+addIpv4Address2(Ptr<Node> host5,
+                NetDeviceContainer host5Interfaces,
+                Ipv4Address address,
+                Ipv4Mask netmask)
+{
     Ptr<Ipv4> ipv4Host = host5->GetObject<Ipv4>();
     uint32_t ifaceIndex = ipv4Host->GetInterfaceForDevice(host5Interfaces.Get(0));
     Ipv4InterfaceAddress ifaceAddress = Ipv4InterfaceAddress(address, netmask);

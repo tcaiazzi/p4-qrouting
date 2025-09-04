@@ -168,7 +168,7 @@ main(int argc, char* argv[])
     cmd.Parse(argc, argv);
 
     LogComponentEnable("QLRoutingExample", LOG_LEVEL_INFO);
-    LogComponentEnable("utils", LOG_LEVEL_DEBUG);
+
 
     // if (verbose)
     {
@@ -177,6 +177,8 @@ main(int argc, char* argv[])
         // LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
         // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("utils", LOG_LEVEL_DEBUG);
+
     }
 
     NS_LOG_INFO("#### RUN PARAMETERS ####");
@@ -323,12 +325,6 @@ main(int argc, char* argv[])
     host1Ipv4Helper.SetBase(Ipv4Address("10.0.1.0"), Ipv4Mask("/24"));
     host1Ipv4Helper.Assign(host1Interfaces);
 
-    Ptr<Ipv4> ipv4_host1 = host1->GetObject<Ipv4>();
-    uint32_t h1IfaceIndex = ipv4_host1->GetInterfaceForDevice(host1Interfaces.Get(0));
-    Ipv4InterfaceAddress h1_a2(Ipv4Address("10.1.1.1"), Ipv4Mask("/24"));
-    ipv4_host1->AddAddress(h1IfaceIndex, h1_a2);
-    ipv4_host1->SetUp(h1IfaceIndex);
-
     Ipv4AddressHelper host2Ipv4Helper;
     host2Ipv4Helper.SetBase(Ipv4Address("10.0.2.0"), Ipv4Mask("/24"));
     host2Ipv4Helper.Assign(host2Interfaces);
@@ -336,7 +332,7 @@ main(int argc, char* argv[])
     Ipv4AddressHelper host3Ipv4Helper;
     host3Ipv4Helper.SetBase(Ipv4Address("10.0.3.0"), Ipv4Mask("/24"));
     host3Ipv4Helper.Assign(host3Interfaces);
-
+    
     Ipv4AddressHelper host4Ipv4Helper;
     host4Ipv4Helper.SetBase(Ipv4Address("10.0.4.0"), Ipv4Mask("/24"));
     host4Ipv4Helper.Assign(host4Interfaces);
@@ -344,14 +340,7 @@ main(int argc, char* argv[])
     Ipv4AddressHelper host5Ipv4Helper;
     host5Ipv4Helper.SetBase(Ipv4Address("10.0.5.0"), Ipv4Mask("/24"));
     host5Ipv4Helper.Assign(host5Interfaces);
-    addIpv4Address2(host5, host5Interfaces, Ipv4Address("10.1.5.1"), Ipv4Mask("/24"));
-
-    // Ptr<Ipv4> ipv4_host5 = host5->GetObject<Ipv4>();
-    // uint32_t h5IfaceIndex = ipv4_host5->GetInterfaceForDevice(host5Interfaces.Get(0));
-    // Ipv4InterfaceAddress h5_a2(Ipv4Address("10.1.5.1"), Ipv4Mask("/24"));
-    // ipv4_host5->AddAddress(h5IfaceIndex, h5_a2);
-    // ipv4_host5->SetUp(h5IfaceIndex);
-
+    
     std::vector<Ptr<Ipv4Interface>> host1Ipv4Interfaces;
     std::vector<Ptr<Ipv4Interface>> host2Ipv4Interfaces;
     std::vector<Ptr<Ipv4Interface>> host3Ipv4Interfaces;
@@ -359,23 +348,18 @@ main(int argc, char* argv[])
     std::vector<Ptr<Ipv4Interface>> host5Ipv4Interfaces;
 
     Ptr<Ipv4Interface> host1Ipv4Interface = getIpv4Interface(host1Interfaces.Get(0));
-    addIpv4Address(host1Ipv4Interface, &host1Ipv4Helper);
     host1Ipv4Interfaces.push_back(host1Ipv4Interface);
 
     Ptr<Ipv4Interface> host2Ipv4Interface = getIpv4Interface(host2Interfaces.Get(0));
-    addIpv4Address(host2Ipv4Interface, &host2Ipv4Helper);
     host2Ipv4Interfaces.push_back(host2Ipv4Interface);
 
     Ptr<Ipv4Interface> host3Ipv4Interface = getIpv4Interface(host3Interfaces.Get(0));
-    addIpv4Address(host3Ipv4Interface, &host3Ipv4Helper);
     host3Ipv4Interfaces.push_back(host3Ipv4Interface);
 
     Ptr<Ipv4Interface> host4Ipv4Interface = getIpv4Interface(host4Interfaces.Get(0));
-    addIpv4Address(host4Ipv4Interface, &host4Ipv4Helper);
     host4Ipv4Interfaces.push_back(host4Ipv4Interface);
 
     Ptr<Ipv4Interface> host5Ipv4Interface = getIpv4Interface(host5Interfaces.Get(0));
-    addIpv4Address(host5Ipv4Interface, &host5Ipv4Helper);
     host5Ipv4Interfaces.push_back(host5Ipv4Interface);
 
     // Add arp entries for the hosts
@@ -492,52 +476,50 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
 
-    uint16_t activePort = 20000;
+    uint16_t qlrPort = 22222;
+    uint16_t defaultPort = 20000;
 
-    ApplicationContainer host1ReceiverApp = createSinkUdpApplication(activePort + 1, host1);
+    ApplicationContainer host1ReceiverApp = createSinkUdpApplication(qlrPort, host1);
     host1ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host2ReceiverApp = createSinkUdpApplication(activePort + 2, host2);
+    ApplicationContainer host2ReceiverApp = createSinkUdpApplication(qlrPort, host2);
     host2ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host3ReceiverApp = createSinkUdpApplication(activePort + 3, host3);
+    ApplicationContainer host3ReceiverApp = createSinkUdpApplication(qlrPort, host3);
     host3ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host4ReceiverApp = createSinkUdpApplication(activePort + 4, host4);
+    ApplicationContainer host4ReceiverApp = createSinkUdpApplication(qlrPort, host4);
     host4ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host5ReceiverApp = createSinkUdpApplication(activePort + 5, host5);
+    ApplicationContainer host5ReceiverApp = createSinkUdpApplication(qlrPort, host5);
     host5ReceiverApp.Start(Seconds(0.0));
 
     startUdpFlow(host5Ipv4Interfaces,
                  0,
                  host1,
-                 activePort + 5,
+                 qlrPort,
                  activeRateTcp,
                  tcpStartTime,
                  0,
                  tcpDataSize);
 
-    uint16_t backupPort = 30000;
-    NS_LOG_INFO("Create Backup Flow Applications.");
-    if (backupFlows > 0)
-    {
-        for (uint32_t i = 1; i <= backupFlows; i++)
-        {
-            uint16_t port = backupPort + i;
-            ApplicationContainer hostReceiverApp = createSinkUdpApplication(port, host5);
-            hostReceiverApp.Start(Seconds(0.0));
+    // if (backupFlows > 0)
+    // {
+    //     for (uint32_t i = 1; i <= backupFlows; i++)
+    //     {
+    //         ApplicationContainer hostReceiverApp = createSinkUdpApplication(defaultPort, host5);
+    //         hostReceiverApp.Start(Seconds(0.0));
 
-            startUdpFlow(host5Ipv4Interfaces,
-                         1,
-                         host1,
-                         port,
-                         backupRateUdp,
-                         udpStartTime,
-                         udpEndTime,
-                         udpDataSize);
-        }
-    }
+    //         startUdpFlow(host5Ipv4Interfaces,
+    //                      1,
+    //                      host1,
+    //                      defaultPort,
+    //                      backupRateUdp,
+    //                      udpStartTime,
+    //                      udpEndTime,
+    //                      udpDataSize);
+    //     }
+    // }
 
     if (dumpTraffic)
     {

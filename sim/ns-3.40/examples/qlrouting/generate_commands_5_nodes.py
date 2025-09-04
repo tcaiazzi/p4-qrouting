@@ -6,6 +6,9 @@ import struct
 import networkx as nx
 
 
+qlr_port = 22222
+default_port = 20000
+
 def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int) -> list[str]:
     cmd = []
     row_slices = [64] * 8
@@ -69,12 +72,9 @@ if __name__ == "__main__":
     dags[4].add_nodes_from(network.keys())
     dags[4].add_edges_from([(0,1), (0,2), (1,3), (2,4), (3,2), (3,4)])
     
-    qlr_subnets = ipaddress.ip_network("10.0.0.0/16").subnets(prefixlen_diff=8)
-    default_subnets = ipaddress.ip_network("10.1.0.0/16").subnets(prefixlen_diff=8)
-    next(qlr_subnets)
-    next(default_subnets)
-    node_to_network = {k: (next(qlr_subnets), next(default_subnets)) for k in network}
-    
+    subnets = ipaddress.ip_network("10.0.0.0/16").subnets(prefixlen_diff=8)
+    next(subnets)  
+    node_to_network = {k: next(subnets) for k in network}
     for node_name in network:
         commands = set()
         for tgt in network:
@@ -119,14 +119,11 @@ if __name__ == "__main__":
                     commands.add(f"table_add qlr_pkt_updates qlr_pkt_set_" + "_".join(headers_to_activate) + f" {dst + 1} {iface + 1} => ")
 
         ports = list(network[node_name].values())
-        for i, (node, (qlr_subnet, default_subnet)) in enumerate(filter(lambda x: x[0]!=node_name, node_to_network.items())):
+        for i, (node, subnet) in enumerate(filter(lambda x: x[0]!=node_name, node_to_network.items())):
             if qlr_active:
-                commands.add(f"table_add select_row get_row_num {qlr_subnet} 17 => {node + 1}")
-            else:
-                commands.add(f"table_add select_row set_nhop {qlr_subnet} 17 => {ports[i%len(ports)]+1}")
-
+                commands.add(f"table_add select_row get_row_num {subnet} 17 {qlr_port} => {node + 1}")
             
-            commands.add(f"table_add select_row set_nhop {default_subnet} 17 => {ports[i%len(ports)]+1}")
+            commands.add(f"table_add select_row set_nhop {subnet} 17 {default_port} => {ports[i%len(ports)]+1}")
 
         max_iface = max(network[node_name].values()) + 1
         commands.add(f"table_set_default select_row set_nhop 1")
