@@ -12,5 +12,6 @@ Ptr<Ipv4Interface> getIpv4Interface(Ptr<NetDevice> netDevice);
 void printRoutes(Ptr<Ipv4StaticRouting> routing);
 void addArpEntriesFromInterfaceAddresses(Ptr<Ipv4Interface> nodeInterface, Ptr<Ipv4Interface> ipv4Interface);
 void addIpv4Address(Ptr<Ipv4Interface> ipv4Interface, Ipv4AddressHelper* ipv4AddressHelper);
+void addIpv4Address2(Ptr<Node> host5, NetDeviceContainer host5Interfaces, Ipv4Address address, Ipv4Mask netmask);
 std::string loadCommands(std::string path);
 void printSimulationTime();

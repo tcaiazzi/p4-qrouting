@@ -84,7 +84,7 @@ def plot_delay_histogram_figure(results, addresses):
                     rwidth=0.8,
                     bins=range(0, 125, 5),
                 )
-                axes.set_xlim([0, 125])
+                
                 axes.set_ylim([0.1, 100000])
                 axes.set_ylabel("N. Packets")
                 axes.set_yscale("log")
@@ -313,7 +313,6 @@ def plot_tcp_retransmission_figure(results):
                 if "host1-host5" not in file_name:
                     continue
                 to_plot = parse_data_file(os.path.join(experiment_results_path, file_name))
-                print(f"to_plot: {to_plot}")
                 label = "-".join(file_name.split("-")[:2])
                 axes.plot(to_plot['x'], to_plot['y'], label=label,
                             linestyle=linestyle, fillstyle='none', color=color, marker=marker)
@@ -359,7 +358,6 @@ def plot_qdepth_figure(results):
                     continue
                 file_path = os.path.join(experiment_results_path, file_name)
                 to_plot = parse_qdepth_file(file_path)
-                print(f"to_plot: {to_plot}")
                 
                 for i, (port, port_results) in enumerate(to_plot.items()): 
                     axes.plot(port_results['x'], port_results['y'], label=label + "-" + port,
@@ -433,7 +431,6 @@ def plot_cwnd_figure(results):
                     continue
                 to_plot = parse_data_file(os.path.join(experiment_results_path, file_name))
                 to_plot["y"] = [val/1000 for val in to_plot["y"]] 
-                print(f"to_plot: {to_plot}")
                 label = "-".join(file_name.split("-")[:2])
                 axes.plot(to_plot['x'], to_plot['y'], label=label,
                             linestyle=linestyle, fillstyle='none', color=color, marker=marker)
@@ -464,7 +461,7 @@ def plot_cwnd_figure(results):
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: plot.py <results_path>")
+        print("Usage: plot.py <results_path> <figures_path>")
         exit(1)
 
     results_path = os.path.abspath(sys.argv[1])

@@ -18,7 +18,7 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
             iface_num = net[start][e[1]]
             row_slices[iface_num] = 0
     
-    print("Row slices:", row_slices)
+    #print("Row slices:", row_slices)
     for i, row_slice in enumerate(row_slices):
         if row_slice < 64:
             cmd.append(f"table_add select_port_from_row_col set_nhop {goal + 1} {i} => {i + 1}")
@@ -40,6 +40,7 @@ if __name__ == "__main__":
 
     dst_path = os.path.abspath(sys.argv[1])
     qlr_active = bool(int(sys.argv[2]))
+    
 
     print(f"Destination path: {dst_path}, QLR active: {qlr_active}")
 
@@ -68,9 +69,11 @@ if __name__ == "__main__":
     dags[4].add_nodes_from(network.keys())
     dags[4].add_edges_from([(0,1), (0,2), (1,3), (2,4), (3,2), (3,4)])
     
-    subnets = ipaddress.ip_network("10.0.0.0/16").subnets(prefixlen_diff=8)
-    next(subnets)
-    node_to_network = {k: next(subnets) for k in network}
+    qlr_subnets = ipaddress.ip_network("10.0.0.0/16").subnets(prefixlen_diff=8)
+    default_subnets = ipaddress.ip_network("10.1.0.0/16").subnets(prefixlen_diff=8)
+    next(qlr_subnets)
+    next(default_subnets)
+    node_to_network = {k: (next(qlr_subnets), next(default_subnets)) for k in network}
     
     for node_name in network:
         commands = set()
@@ -104,7 +107,7 @@ if __name__ == "__main__":
                             if iface not in dst_iface_to_headers[dst]:
                                 dst_iface_to_headers[dst][iface] = set()
 
-                            print(f"node_name={node_name}", f"dst={dst}", f"update={update_node}", f"edge={edge}", f"iface={iface}")
+                            #print(f"node_name={node_name}", f"dst={dst}", f"update={update_node}", f"edge={edge}", f"iface={iface}")
 
                             dst_iface_to_headers[dst][iface].add(str(update_node + 1))
 
@@ -116,13 +119,14 @@ if __name__ == "__main__":
                     commands.add(f"table_add qlr_pkt_updates qlr_pkt_set_" + "_".join(headers_to_activate) + f" {dst + 1} {iface + 1} => ")
 
         ports = list(network[node_name].values())
-        for i, (node, subnet) in enumerate(filter(lambda x: x[0]!=node_name, node_to_network.items())):
+        for i, (node, (qlr_subnet, default_subnet)) in enumerate(filter(lambda x: x[0]!=node_name, node_to_network.items())):
             if qlr_active:
-                commands.add(f"table_add select_row get_row_num {subnet} 6 => {node + 1}")
+                commands.add(f"table_add select_row get_row_num {qlr_subnet} 17 => {node + 1}")
             else:
-                commands.add(f"table_add select_row set_nhop {subnet} 6 => {ports[i%len(ports)]+1}")
+                commands.add(f"table_add select_row set_nhop {qlr_subnet} 17 => {ports[i%len(ports)]+1}")
+
             
-            commands.add(f"table_add select_row set_nhop {subnet} 17 => {ports[i%len(ports)]+1}")
+            commands.add(f"table_add select_row set_nhop {default_subnet} 17 => {ports[i%len(ports)]+1}")
 
         max_iface = max(network[node_name].values()) + 1
         commands.add(f"table_set_default select_row set_nhop 1")

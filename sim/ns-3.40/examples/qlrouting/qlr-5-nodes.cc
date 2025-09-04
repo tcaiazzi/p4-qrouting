@@ -13,6 +13,11 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
+#include "qlr-utils.h"
+#include "socket-utils.h"
+#include "tracer.h"
+#include "utils.h"
+
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
 #include "ns3/csma-module.h"
@@ -29,11 +34,6 @@
 #include <iostream>
 #include <random>
 #include <string>
-
-#include "tracer.h"
-#include "socket-utils.h"
-#include "qlr-utils.h"
-#include "utils.h"
 
 using namespace ns3;
 
@@ -83,8 +83,9 @@ startTcpFlow(Ptr<Node> receiverHost,
                 " with socket index " + std::to_string(socketIndex));
     std::string fileName = Names::FindName(senderHost) + "-" + Names::FindName(receiverHost) + "-" +
                            std::to_string(port);
-    
-    std::string retransmissionPath = getPath(getPath(resultsPath, "retransmissions"), fileName + ".rtx");
+
+    std::string retransmissionPath =
+        getPath(getPath(resultsPath, "retransmissions"), fileName + ".rtx");
     Simulator::Schedule(Seconds(startTime + 0.1),
                         &startTcpRtx,
                         senderHost,
@@ -92,35 +93,31 @@ startTcpFlow(Ptr<Node> receiverHost,
                         socketIndex);
 
     std::string cwndPath = getPath(getPath(resultsPath, "cwnd"), fileName + ".cwnd");
-        Simulator::Schedule(Seconds(startTime + 0.1),
-                            &TraceCwnd,
-                            cwndPath,
-                            senderHost->GetId(),
-                            socketIndex);
+    Simulator::Schedule(Seconds(startTime + 0.1),
+                        &TraceCwnd,
+                        cwndPath,
+                        senderHost->GetId(),
+                        socketIndex);
 }
 
 void
-startUdpFlow(Ptr<Node> receiverHost,
-             std::vector<Ptr<Ipv4Interface>> receiverInterfaces,
+startUdpFlow(std::vector<Ptr<Ipv4Interface>> receiverInterfaces,
+             uint16_t addressIndex,
              Ptr<Node> senderHost,
              uint16_t port,
              std::string backupRateUdp,
              uint32_t start_time,
              uint32_t end_time,
-             uint32_t udpDataSize,
-             bool generateRandom)
+             uint32_t udpDataSize)
 {
-    ApplicationContainer hostReceiverApp = createSinkUdpApplication(port, receiverHost);
-    hostReceiverApp.Start(Seconds(0.0));
-
     ApplicationContainer hostSenderApp =
-        createUdpApplication(receiverInterfaces[0]->GetAddress(0).GetAddress(),
+        createUdpApplication(receiverInterfaces[0]->GetAddress(addressIndex).GetAddress(),
                              port,
                              senderHost,
                              backupRateUdp,
                              udpDataSize);
     hostSenderApp.Start(Seconds(start_time));
-    hostSenderApp.Stop(Seconds(end_time + 1.0));
+    hostSenderApp.Stop(Seconds(end_time));
 }
 
 int
@@ -129,7 +126,6 @@ main(int argc, char* argv[])
 {
     uint32_t activeFlows = 1;
     uint32_t backupFlows = 1;
-    bool generateRandom = false;
     std::string defaultBandwidth = "50Kbps";
     std::string resultName = "flow_monitor.xml";
     float endTime = 20.0f;
@@ -137,7 +133,7 @@ main(int argc, char* argv[])
     float udpEndTime = 10.0f;
     float tcpStartTime = 1.0f;
     float tcpEndTime = 1.0f;
-    std::string activeRateTcp = "50Kbps";
+    std::string activeRateTcp = "100Mbps";
     std::string backupRateUdp = "50Kbps";
     std::string congestionControl = "TcpLinuxReno";
     uint32_t tcpDataSize = 150000000;
@@ -151,9 +147,6 @@ main(int argc, char* argv[])
     cmd.AddValue("fm-name", "The name of the flow monitor result", resultName);
     cmd.AddValue("active-flows", "The number of concurrent flows on the active path", activeFlows);
     cmd.AddValue("backup-flows", "The number of concurrent flows on the backup path", backupFlows);
-    cmd.AddValue("udp-random",
-                 "Select whether UDP flows are randomly distributed.",
-                 generateRandom);
     cmd.AddValue("udp-start-time", "The time to start UDP flows", udpStartTime);
     cmd.AddValue("udp-end-time", "The time to stop UDP flows", udpEndTime);
     cmd.AddValue("tcp-start-time", "The time to start UDP flows", tcpStartTime);
@@ -166,6 +159,7 @@ main(int argc, char* argv[])
     cmd.AddValue("tcp-data-size", "Size of the data sent by TCP applications", tcpDataSize);
     cmd.AddValue("udp-data-size", "Size of the data sent by TCP applications", udpDataSize);
     cmd.AddValue("dump-traffic", "Dump traffic traces", dumpTraffic);
+    cmd.AddValue("tcp-data-size", "Size of the data sent by TCP applications", tcpDataSize);
     cmd.AddValue("cc", "The TCP congestion control used for the experiment", congestionControl);
 
     cmd.AddValue("end", "Simulation End Time", endTime);
@@ -174,6 +168,8 @@ main(int argc, char* argv[])
     cmd.Parse(argc, argv);
 
     LogComponentEnable("QLRoutingExample", LOG_LEVEL_INFO);
+    LogComponentEnable("utils", LOG_LEVEL_DEBUG);
+
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
@@ -312,9 +308,6 @@ main(int argc, char* argv[])
     s4Interfaces.Add(link.Get(0));
     s5Interfaces.Add(link.Get(1));
 
-    
-    
-
     Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
     em->SetAttribute("ErrorRate", DoubleValue(0.01)); // 1% packet loss
     em->SetAttribute("ErrorUnit", StringValue("ERROR_UNIT_PACKET"));
@@ -329,6 +322,12 @@ main(int argc, char* argv[])
     Ipv4AddressHelper host1Ipv4Helper;
     host1Ipv4Helper.SetBase(Ipv4Address("10.0.1.0"), Ipv4Mask("/24"));
     host1Ipv4Helper.Assign(host1Interfaces);
+
+    Ptr<Ipv4> ipv4_host1 = host1->GetObject<Ipv4>();
+    uint32_t h1IfaceIndex = ipv4_host1->GetInterfaceForDevice(host1Interfaces.Get(0));
+    Ipv4InterfaceAddress h1_a2(Ipv4Address("10.1.1.1"), Ipv4Mask("/24"));
+    ipv4_host1->AddAddress(h1IfaceIndex, h1_a2);
+    ipv4_host1->SetUp(h1IfaceIndex);
 
     Ipv4AddressHelper host2Ipv4Helper;
     host2Ipv4Helper.SetBase(Ipv4Address("10.0.2.0"), Ipv4Mask("/24"));
@@ -345,6 +344,13 @@ main(int argc, char* argv[])
     Ipv4AddressHelper host5Ipv4Helper;
     host5Ipv4Helper.SetBase(Ipv4Address("10.0.5.0"), Ipv4Mask("/24"));
     host5Ipv4Helper.Assign(host5Interfaces);
+    addIpv4Address2(host5, host5Interfaces, Ipv4Address("10.1.5.1"), Ipv4Mask("/24"));
+
+    // Ptr<Ipv4> ipv4_host5 = host5->GetObject<Ipv4>();
+    // uint32_t h5IfaceIndex = ipv4_host5->GetInterfaceForDevice(host5Interfaces.Get(0));
+    // Ipv4InterfaceAddress h5_a2(Ipv4Address("10.1.5.1"), Ipv4Mask("/24"));
+    // ipv4_host5->AddAddress(h5IfaceIndex, h5_a2);
+    // ipv4_host5->SetUp(h5IfaceIndex);
 
     std::vector<Ptr<Ipv4Interface>> host1Ipv4Interfaces;
     std::vector<Ptr<Ipv4Interface>> host2Ipv4Interfaces;
@@ -479,9 +485,8 @@ main(int argc, char* argv[])
     // Simulator::Schedule(MicroSeconds(0), &updateQdepth, s4p4);
     // Simulator::Schedule(MicroSeconds(0), &updateQdepth, s5p4);
 
-    startThroughputTrace(s1, s1Interfaces, 1.0, 
-                         getPath(resultsPath, "throughput"));
-    
+    startThroughputTrace(s1, s1Interfaces, 1.0, getPath(resultsPath, "throughput"));
+
     traceQdepth(s1p4, getPath(resultsPath, "qdepth/s1.txt"));
 
     NS_LOG_INFO("Create Applications.");
@@ -489,165 +494,29 @@ main(int argc, char* argv[])
 
     uint16_t activePort = 20000;
 
-    ApplicationContainer host1ReceiverApp = createSinkTcpApplication(activePort + 1, host1);
+    ApplicationContainer host1ReceiverApp = createSinkUdpApplication(activePort + 1, host1);
     host1ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host2ReceiverApp = createSinkTcpApplication(activePort + 2, host2);
+    ApplicationContainer host2ReceiverApp = createSinkUdpApplication(activePort + 2, host2);
     host2ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host3ReceiverApp = createSinkTcpApplication(activePort + 3, host3);
+    ApplicationContainer host3ReceiverApp = createSinkUdpApplication(activePort + 3, host3);
     host3ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host4ReceiverApp = createSinkTcpApplication(activePort + 4, host4);
+    ApplicationContainer host4ReceiverApp = createSinkUdpApplication(activePort + 4, host4);
     host4ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host5ReceiverApp = createSinkTcpApplication(activePort + 5, host5);
+    ApplicationContainer host5ReceiverApp = createSinkUdpApplication(activePort + 5, host5);
     host5ReceiverApp.Start(Seconds(0.0));
 
-    // startTcpFlow(host1,
-    //              host1Ipv4Interfaces,
-    //              host2,
-    //              activePort + 1,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host1,
-    //              host1Ipv4Interfaces,
-    //              host3,
-    //              activePort + 1,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host1,
-    //              host1Ipv4Interfaces,
-    //              host4,
-    //              activePort + 1,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host1,
-    //              host1Ipv4Interfaces,
-    //              host5,
-    //              activePort + 1,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-
-    // startTcpFlow(host2,
-    //              host2Ipv4Interfaces,
-    //              host1,
-    //              activePort + 2,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host2,
-    //              host2Ipv4Interfaces,
-    //              host3,
-    //              activePort + 2,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host2,
-    //              host2Ipv4Interfaces,
-    //              host4,
-    //              activePort + 2,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host2,
-    //              host2Ipv4Interfaces,
-    //              host5,
-    //              activePort + 2,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-
-    // startTcpFlow(host3,
-    //              host3Ipv4Interfaces,
-    //              host1,
-    //              activePort + 3,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host3,
-    //              host3Ipv4Interfaces,
-    //              host2,
-    //              activePort + 3,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host3,
-    //              host3Ipv4Interfaces,
-    //              host4,
-    //              activePort + 3,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host3,
-    //              host3Ipv4Interfaces,
-    //              host5,
-    //              activePort + 3,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-
-    // startTcpFlow(host4,
-    //              host4Ipv4Interfaces,
-    //              host1,
-    //              activePort + 4,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host4,
-    //              host4Ipv4Interfaces,
-    //              host2,
-    //              activePort + 4,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host4,
-    //              host4Ipv4Interfaces,
-    //              host3,
-    //              activePort + 4,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host4,
-    //              host4Ipv4Interfaces,
-    //              host5,
-    //              activePort + 4,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-
-    startTcpFlow(host5,
-                 host5Ipv4Interfaces,
+    startUdpFlow(host5Ipv4Interfaces,
+                 0,
                  host1,
                  activePort + 5,
                  activeRateTcp,
-                 tcpDataSize,
-                 congestionControl);
-    // startTcpFlow(host5,
-    //              host5Ipv4Interfaces,
-    //              host2,
-    //              activePort + 5,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host5,
-    //              host5Ipv4Interfaces,
-    //              host3,
-    //              activePort + 5,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
-    // startTcpFlow(host5,
-    //              host5Ipv4Interfaces,
-    //              host4,
-    //              activePort + 5,
-    //              activeRateTcp,
-    //              tcpDataSize,
-    //              congestionControl);
+                 tcpStartTime,
+                 0,
+                 tcpDataSize);
 
     uint16_t backupPort = 30000;
     NS_LOG_INFO("Create Backup Flow Applications.");
@@ -655,15 +524,18 @@ main(int argc, char* argv[])
     {
         for (uint32_t i = 1; i <= backupFlows; i++)
         {
-            startUdpFlow(host5,
-                         host5Ipv4Interfaces,
+            uint16_t port = backupPort + i;
+            ApplicationContainer hostReceiverApp = createSinkUdpApplication(port, host5);
+            hostReceiverApp.Start(Seconds(0.0));
+
+            startUdpFlow(host5Ipv4Interfaces,
+                         1,
                          host1,
-                         backupPort + i,
+                         port,
                          backupRateUdp,
                          udpStartTime,
                          udpEndTime,
-                         udpDataSize,
-                         generateRandom);
+                         udpDataSize);
         }
     }
 
