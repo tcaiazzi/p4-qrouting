@@ -122,6 +122,8 @@ if __name__ == "__main__":
         for i, (node, subnet) in enumerate(filter(lambda x: x[0]!=node_name, node_to_network.items())):
             if qlr_active:
                 commands.add(f"table_add select_row get_row_num {subnet} 17 {qlr_port} => {node + 1}")
+            else:
+                commands.add(f"table_add select_row set_nhop {subnet} 17 {qlr_port} => {ports[i%len(ports)]+1}")
             
             commands.add(f"table_add select_row set_nhop {subnet} 17 {default_port} => {ports[i%len(ports)]+1}")
 

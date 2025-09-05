@@ -53,8 +53,8 @@ startTcpFlow(Ptr<Node> receiverHost,
              std::vector<Ptr<Ipv4Interface>> receiverInterfaces,
              Ptr<Node> senderHost,
              uint16_t port,
-             std::string activeRateTcp,
-             uint32_t tcpDataSize,
+             std::string qlrRate,
+             uint32_t qlrFlowDataSize,
              std::string congestionControl = "TcpLinuxReno",
              float startTime = 1.0f)
 {
@@ -65,8 +65,8 @@ startTcpFlow(Ptr<Node> receiverHost,
         createTcpApplication(receiverInterfaces[0]->GetAddress(0).GetAddress(),
                              port,
                              senderHost,
-                             activeRateTcp,
-                             tcpDataSize,
+                             qlrRate,
+                             qlrFlowDataSize,
                              congestionControl);
     hostSenderApp.Start(Seconds(startTime));
 
@@ -105,22 +105,18 @@ startUdpFlow(std::vector<Ptr<Ipv4Interface>> receiverInterfaces,
              uint16_t addressIndex,
              Ptr<Node> senderHost,
              uint16_t port,
-             std::string backupRateUdp,
+             std::string backupRate,
              uint32_t start_time,
              uint32_t end_time,
-             uint32_t udpDataSize)
+             uint32_t burstDataSize)
 {
     Ipv4Address dst_addr = receiverInterfaces[0]->GetAddress(addressIndex).GetAddress();
 
-    NS_LOG_INFO("Starting UDP flow to " << dst_addr << " on port " <<
-                 std::to_string(port) << " from " << Names::FindName(senderHost));
+    NS_LOG_INFO("Starting UDP flow to " << dst_addr << " on port " << std::to_string(port)
+                                        << " from " << Names::FindName(senderHost));
 
     ApplicationContainer hostSenderApp =
-        createUdpApplication(dst_addr,
-                             port,
-                             senderHost,
-                             backupRateUdp,
-                             udpDataSize);
+        createUdpApplication(dst_addr, port, senderHost, backupRate, burstDataSize);
     hostSenderApp.Start(Seconds(start_time));
     hostSenderApp.Stop(Seconds(end_time));
 }
@@ -129,20 +125,20 @@ int
 main(int argc, char* argv[])
 
 {
-    uint32_t activeFlows = 1;
-    uint32_t backupFlows = 1;
+    uint32_t qlrFlows = 1;
+    uint32_t burstFlows = 1;
     std::string defaultBandwidth = "50Kbps";
     std::string resultName = "flow_monitor.xml";
     float endTime = 20.0f;
-    float udpStartTime = 1.0f;
-    float udpEndTime = 10.0f;
-    float tcpStartTime = 1.0f;
-    float tcpEndTime = 1.0f;
-    std::string activeRateTcp = "100Mbps";
-    std::string backupRateUdp = "50Kbps";
+    float burstStartTime = 1.0f;
+    float burstEndTime = 10.0f;
+    float qlrFlowStartTime = 1.0f;
+    float qlrFlowEndTime = 1.0f;
+    std::string qlrRate = "100Mbps";
+    std::string backupRate = "50Kbps";
     std::string congestionControl = "TcpLinuxReno";
-    uint32_t tcpDataSize = 150000000;
-    uint32_t udpDataSize = 150000000;
+    uint32_t qlrFlowDataSize = 150000000;
+    uint32_t burstDataSize = 150000000;
     bool dumpTraffic = false;
 
     // Packet::EnablePrinting();
@@ -150,21 +146,20 @@ main(int argc, char* argv[])
     CommandLine cmd;
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
     cmd.AddValue("fm-name", "The name of the flow monitor result", resultName);
-    cmd.AddValue("active-flows", "The number of concurrent flows on the active path", activeFlows);
-    cmd.AddValue("backup-flows", "The number of concurrent flows on the backup path", backupFlows);
-    cmd.AddValue("udp-start-time", "The time to start UDP flows", udpStartTime);
-    cmd.AddValue("udp-end-time", "The time to stop UDP flows", udpEndTime);
-    cmd.AddValue("tcp-start-time", "The time to start UDP flows", tcpStartTime);
-    cmd.AddValue("tcp-end-time", "The time to stop UDP flows", tcpEndTime);
+    cmd.AddValue("qlr-flows", "The number of concurrent qlr flows", qlrFlows);
+    cmd.AddValue("burst-flows", "The number of concurrent bursts", burstFlows);
+    cmd.AddValue("burst-start-time", "The time to start bursts", burstStartTime);
+    cmd.AddValue("burst-end-time", "The time to stop bursts", burstEndTime);
+    cmd.AddValue("qlr-start-time", "The time to start QLR flows", qlrFlowStartTime);
+    cmd.AddValue("qlr-end-time", "The time to stop QLR flows", qlrFlowEndTime);
     cmd.AddValue("default-bw",
                  "The bandwidth to set on all the sender/receiver links",
                  defaultBandwidth);
-    cmd.AddValue("active-rate-tcp", "The TCP rate to set to the active flows", activeRateTcp);
-    cmd.AddValue("backup-rate-udp", "The UDP rate to set to the backup flows", backupRateUdp);
-    cmd.AddValue("tcp-data-size", "Size of the data sent by TCP applications", tcpDataSize);
-    cmd.AddValue("udp-data-size", "Size of the data sent by TCP applications", udpDataSize);
+    cmd.AddValue("qlr-rate", "The rate to set to the QLR flows", qlrRate);
+    cmd.AddValue("burst-rate", "The rate to set to the bursty flows", backupRate);
+    cmd.AddValue("qlr-data-size", "Size of the data sent by QLR flows", qlrFlowDataSize);
+    cmd.AddValue("burst-data-size", "Size of the data sent by bursty flows", burstDataSize);
     cmd.AddValue("dump-traffic", "Dump traffic traces", dumpTraffic);
-    cmd.AddValue("tcp-data-size", "Size of the data sent by TCP applications", tcpDataSize);
     cmd.AddValue("cc", "The TCP congestion control used for the experiment", congestionControl);
 
     cmd.AddValue("end", "Simulation End Time", endTime);
@@ -173,6 +168,9 @@ main(int argc, char* argv[])
     cmd.Parse(argc, argv);
 
     LogComponentEnable("QLRoutingExample", LOG_LEVEL_INFO);
+    // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
+    // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_WARN);
+    LogComponentEnable("qlr-utils", LOG_LEVEL_DEBUG);
 
     // if (verbose)
     {
@@ -189,8 +187,8 @@ main(int argc, char* argv[])
     NS_LOG_INFO("FLow Monitor Name: " + resultName);
     NS_LOG_INFO("Congestion Control: " + congestionControl);
     NS_LOG_INFO("End Time: " + std::to_string(endTime));
-    NS_LOG_INFO("Backup Rate UDP: " + backupRateUdp);
-    NS_LOG_INFO("Data Size UDP: " + std::to_string(udpDataSize));
+    NS_LOG_INFO("Backup Rate UDP: " + backupRate);
+    NS_LOG_INFO("Data Size UDP: " + std::to_string(burstDataSize));
 
     NS_LOG_INFO("Configuring Congestion Control.");
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
@@ -511,23 +509,31 @@ main(int argc, char* argv[])
                  0,
                  host1,
                  qlrPort,
-                 activeRateTcp,
-                 tcpStartTime,
+                 qlrRate,
+                 qlrFlowStartTime,
                  0,
-                 tcpDataSize);
+                 qlrFlowDataSize);
 
-    if (backupFlows > 0)
+    startUdpFlow(host1Ipv4Interfaces, 0, host2, defaultPort, "1Mbps", 0.5, endTime, 0);
+
+    startUdpFlow(host1Ipv4Interfaces, 0, host3, defaultPort, "1Mbps", 0.5, burstEndTime, 0);
+
+    startUdpFlow(host1Ipv4Interfaces, 0, host4, defaultPort, "1Mbps", 0.5, burstEndTime, 0);
+
+    startUdpFlow(host1Ipv4Interfaces, 0, host5, defaultPort, "1Mbps", 0.5, burstEndTime, 0);
+
+    if (burstFlows > 0)
     {
-        for (uint32_t i = 1; i <= backupFlows; i++)
+        for (uint32_t i = 1; i <= burstFlows; i++)
         {
-            startUdpFlow(host5Ipv4Interfaces,
+            startUdpFlow(host3Ipv4Interfaces,
                          0,
                          host1,
                          defaultPort,
-                         backupRateUdp,
-                         udpStartTime,
-                         udpEndTime,
-                         udpDataSize);
+                         backupRate,
+                         burstStartTime,
+                         burstEndTime,
+                         burstDataSize);
         }
     }
 
