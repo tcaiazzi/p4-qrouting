@@ -11,7 +11,6 @@ void addIpv4ArpEntry(Ptr<Ipv4Interface> interface, Ipv4Address ipv4Address, Mac4
 Ptr<Ipv4Interface> getIpv4Interface(Ptr<NetDevice> netDevice);
 void printRoutes(Ptr<Ipv4StaticRouting> routing);
 void addArpEntriesFromInterfaceAddresses(Ptr<Ipv4Interface> nodeInterface, Ptr<Ipv4Interface> ipv4Interface);
-void addIpv4Address(Ptr<Ipv4Interface> ipv4Interface, Ipv4AddressHelper* ipv4AddressHelper);
-void addIpv4Address2(Ptr<Node> host5, NetDeviceContainer host5Interfaces, Ipv4Address address, Ipv4Mask netmask);
+void addIpv4Address(Ptr<Node> host5, NetDeviceContainer host5Interfaces, std::string address, std::string netmask);
 std::string loadCommands(std::string path);
 void printSimulationTime();

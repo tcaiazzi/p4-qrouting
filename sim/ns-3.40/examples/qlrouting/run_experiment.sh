@@ -2,7 +2,7 @@
 
 set -e
 
-experiment_params="--default-bw=100Mbps --tcp-data-size=62500000 --active-rate-tcp=100Mbps --backup-flows=10 --backup-rate-udp=1Mbps --end=10 --udp-start-time=2 --udp-end-time=2.3 --tcp-start-time=1 --dump-traffic"
+experiment_params="--default-bw=100Mbps --tcp-data-size=62500000 --active-rate-tcp=100Mbps --backup-flows=1 --backup-rate-udp=50Mbps --end=10 --udp-start-time=2 --udp-end-time=3 --tcp-start-time=1 --dump-traffic"
 
 pip install --break-system-packages -r requirements.txt
 

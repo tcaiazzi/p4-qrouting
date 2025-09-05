@@ -27,14 +27,16 @@ getPath(std::string directory, std::string file)
 }
 
 void
-addIpv4Address2(Ptr<Node> host5,
+addIpv4Address(Ptr<Node> host5,
                 NetDeviceContainer host5Interfaces,
-                Ipv4Address address,
-                Ipv4Mask netmask)
+                std::string address,
+                std::string netmask)
 {
     Ptr<Ipv4> ipv4Host = host5->GetObject<Ipv4>();
     uint32_t ifaceIndex = ipv4Host->GetInterfaceForDevice(host5Interfaces.Get(0));
-    Ipv4InterfaceAddress ifaceAddress = Ipv4InterfaceAddress(address, netmask);
+    Ipv4Address addr = Ipv4Address(address.c_str());
+    Ipv4Mask mask = Ipv4Mask(netmask.c_str());
+    Ipv4InterfaceAddress ifaceAddress = Ipv4InterfaceAddress(addr, mask);
     ipv4Host->AddAddress(ifaceIndex, ifaceAddress);
     ipv4Host->SetUp(ifaceIndex);
 }
@@ -96,15 +98,6 @@ addArpEntriesFromInterfaceAddresses(Ptr<Ipv4Interface> nodeInterface,
         oss << routing->GetRoute(i) << std::endl;
     }
     NS_LOG_DEBUG(oss.str());
-}
-
-void
-addIpv4Address(Ptr<Ipv4Interface> ipv4Interface, Ipv4AddressHelper* ipv4AddressHelper)
-{
-    Ipv4Address address = ipv4AddressHelper->NewAddress();
-    NS_LOG_DEBUG("Add IPv4 Address: " << address);
-    Ipv4InterfaceAddress interfaceAddress = Ipv4InterfaceAddress(address, Ipv4Mask("/24"));
-    ipv4Interface->AddAddress(interfaceAddress);
 }
 
 std::string

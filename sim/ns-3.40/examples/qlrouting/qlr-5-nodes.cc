@@ -110,8 +110,13 @@ startUdpFlow(std::vector<Ptr<Ipv4Interface>> receiverInterfaces,
              uint32_t end_time,
              uint32_t udpDataSize)
 {
+    Ipv4Address dst_addr = receiverInterfaces[0]->GetAddress(addressIndex).GetAddress();
+
+    NS_LOG_INFO("Starting UDP flow to " << dst_addr << " on port " <<
+                 std::to_string(port) << " from " << Names::FindName(senderHost));
+
     ApplicationContainer hostSenderApp =
-        createUdpApplication(receiverInterfaces[0]->GetAddress(addressIndex).GetAddress(),
+        createUdpApplication(dst_addr,
                              port,
                              senderHost,
                              backupRateUdp,
@@ -169,7 +174,6 @@ main(int argc, char* argv[])
 
     LogComponentEnable("QLRoutingExample", LOG_LEVEL_INFO);
 
-
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
@@ -178,7 +182,6 @@ main(int argc, char* argv[])
         // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
         // LogComponentEnable("utils", LOG_LEVEL_DEBUG);
-
     }
 
     NS_LOG_INFO("#### RUN PARAMETERS ####");
@@ -332,7 +335,7 @@ main(int argc, char* argv[])
     Ipv4AddressHelper host3Ipv4Helper;
     host3Ipv4Helper.SetBase(Ipv4Address("10.0.3.0"), Ipv4Mask("/24"));
     host3Ipv4Helper.Assign(host3Interfaces);
-    
+
     Ipv4AddressHelper host4Ipv4Helper;
     host4Ipv4Helper.SetBase(Ipv4Address("10.0.4.0"), Ipv4Mask("/24"));
     host4Ipv4Helper.Assign(host4Interfaces);
@@ -340,7 +343,7 @@ main(int argc, char* argv[])
     Ipv4AddressHelper host5Ipv4Helper;
     host5Ipv4Helper.SetBase(Ipv4Address("10.0.5.0"), Ipv4Mask("/24"));
     host5Ipv4Helper.Assign(host5Interfaces);
-    
+
     std::vector<Ptr<Ipv4Interface>> host1Ipv4Interfaces;
     std::vector<Ptr<Ipv4Interface>> host2Ipv4Interfaces;
     std::vector<Ptr<Ipv4Interface>> host3Ipv4Interfaces;
@@ -481,18 +484,28 @@ main(int argc, char* argv[])
 
     ApplicationContainer host1ReceiverApp = createSinkUdpApplication(qlrPort, host1);
     host1ReceiverApp.Start(Seconds(0.0));
+    ApplicationContainer defaultHost1ReceiverApp = createSinkUdpApplication(defaultPort, host1);
+    defaultHost1ReceiverApp.Start(Seconds(0.0));
 
     ApplicationContainer host2ReceiverApp = createSinkUdpApplication(qlrPort, host2);
     host2ReceiverApp.Start(Seconds(0.0));
+    ApplicationContainer defaultHost2ReceiverApp = createSinkUdpApplication(defaultPort, host2);
+    defaultHost2ReceiverApp.Start(Seconds(0.0));
 
     ApplicationContainer host3ReceiverApp = createSinkUdpApplication(qlrPort, host3);
     host3ReceiverApp.Start(Seconds(0.0));
+    ApplicationContainer defaultHost3ReceiverApp = createSinkUdpApplication(defaultPort, host3);
+    defaultHost3ReceiverApp.Start(Seconds(0.0));
 
     ApplicationContainer host4ReceiverApp = createSinkUdpApplication(qlrPort, host4);
     host4ReceiverApp.Start(Seconds(0.0));
+    ApplicationContainer defaultHost4ReceiverApp = createSinkUdpApplication(defaultPort, host4);
+    defaultHost4ReceiverApp.Start(Seconds(0.0));
 
     ApplicationContainer host5ReceiverApp = createSinkUdpApplication(qlrPort, host5);
     host5ReceiverApp.Start(Seconds(0.0));
+    ApplicationContainer defaultHost5ReceiverApp = createSinkUdpApplication(defaultPort, host5);
+    defaultHost5ReceiverApp.Start(Seconds(0.0));
 
     startUdpFlow(host5Ipv4Interfaces,
                  0,
@@ -503,23 +516,20 @@ main(int argc, char* argv[])
                  0,
                  tcpDataSize);
 
-    // if (backupFlows > 0)
-    // {
-    //     for (uint32_t i = 1; i <= backupFlows; i++)
-    //     {
-    //         ApplicationContainer hostReceiverApp = createSinkUdpApplication(defaultPort, host5);
-    //         hostReceiverApp.Start(Seconds(0.0));
-
-    //         startUdpFlow(host5Ipv4Interfaces,
-    //                      1,
-    //                      host1,
-    //                      defaultPort,
-    //                      backupRateUdp,
-    //                      udpStartTime,
-    //                      udpEndTime,
-    //                      udpDataSize);
-    //     }
-    // }
+    if (backupFlows > 0)
+    {
+        for (uint32_t i = 1; i <= backupFlows; i++)
+        {
+            startUdpFlow(host5Ipv4Interfaces,
+                         0,
+                         host1,
+                         defaultPort,
+                         backupRateUdp,
+                         udpStartTime,
+                         udpEndTime,
+                         udpDataSize);
+        }
+    }
 
     if (dumpTraffic)
     {
