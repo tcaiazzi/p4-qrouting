@@ -181,3 +181,4 @@ sim/ns-3.40/examples/qlrouting/qlr_build
 sim/ns-3.40/examples/qlrouting/results*
 sim/ns-3.40/examples/qlrouting/parsed-results
 sim/ns-3.40/examples/qlrouting/figures*
+sim/ns-3.40/examples/qlrouting/logs*

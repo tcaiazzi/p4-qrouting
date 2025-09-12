@@ -58,9 +58,6 @@ startTcpFlow(Ptr<Node> receiverHost,
              std::string congestionControl = "TcpLinuxReno",
              float startTime = 1.0f)
 {
-    // ApplicationContainer hostReceiverApp = createSinkTcpApplication(port, receiverHost);
-    // hostReceiverApp.Start(Seconds(0.0));
-
     ApplicationContainer hostSenderApp =
         createTcpApplication(receiverInterfaces[0]->GetAddress(0).GetAddress(),
                              port,
@@ -105,20 +102,20 @@ startUdpFlow(std::vector<Ptr<Ipv4Interface>> receiverInterfaces,
              uint16_t addressIndex,
              Ptr<Node> senderHost,
              uint16_t port,
-             std::string backupRate,
+             std::string rate,
              uint32_t start_time,
-             uint32_t end_time,
-             uint32_t burstDataSize)
+             float end_time,
+             float burstDataSize)
 {
     Ipv4Address dst_addr = receiverInterfaces[0]->GetAddress(addressIndex).GetAddress();
 
-    NS_LOG_INFO("Starting UDP flow to " << dst_addr << " on port " << std::to_string(port)
-                                        << " from " << Names::FindName(senderHost));
+    NS_LOG_INFO("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr << " on port " << std::to_string(port));
 
     ApplicationContainer hostSenderApp =
-        createUdpApplication(dst_addr, port, senderHost, backupRate, burstDataSize);
+        createUdpApplication(dst_addr, port, senderHost, rate, burstDataSize);
     hostSenderApp.Start(Seconds(start_time));
-    hostSenderApp.Stop(Seconds(end_time));
+    if (end_time > 0)
+        hostSenderApp.Stop(Seconds(end_time));
 }
 
 int
@@ -130,12 +127,14 @@ main(int argc, char* argv[])
     std::string defaultBandwidth = "50Kbps";
     std::string resultName = "flow_monitor.xml";
     float endTime = 20.0f;
-    float burstStartTime = 1.0f;
-    float burstEndTime = 10.0f;
+    float burstStartTime = 2.0f;
+    float burstEndTime = 2.1f;
+    float burstNum = 2;
+    float burstInterval = 0.5f;
     float qlrFlowStartTime = 1.0f;
     float qlrFlowEndTime = 1.0f;
     std::string qlrRate = "100Mbps";
-    std::string backupRate = "50Kbps";
+    std::string burstRate = "50Kbps";
     std::string congestionControl = "TcpLinuxReno";
     uint32_t qlrFlowDataSize = 150000000;
     uint32_t burstDataSize = 150000000;
@@ -150,13 +149,15 @@ main(int argc, char* argv[])
     cmd.AddValue("burst-flows", "The number of concurrent bursts", burstFlows);
     cmd.AddValue("burst-start-time", "The time to start bursts", burstStartTime);
     cmd.AddValue("burst-end-time", "The time to stop bursts", burstEndTime);
+    cmd.AddValue("burst-num", "The number of bursts", burstNum);
+    cmd.AddValue("burst-interval", "The interval time between bursts", burstInterval);
     cmd.AddValue("qlr-start-time", "The time to start QLR flows", qlrFlowStartTime);
     cmd.AddValue("qlr-end-time", "The time to stop QLR flows", qlrFlowEndTime);
     cmd.AddValue("default-bw",
                  "The bandwidth to set on all the sender/receiver links",
                  defaultBandwidth);
     cmd.AddValue("qlr-rate", "The rate to set to the QLR flows", qlrRate);
-    cmd.AddValue("burst-rate", "The rate to set to the bursty flows", backupRate);
+    cmd.AddValue("burst-rate", "The rate to set to the bursty flows", burstRate);
     cmd.AddValue("qlr-data-size", "Size of the data sent by QLR flows", qlrFlowDataSize);
     cmd.AddValue("burst-data-size", "Size of the data sent by bursty flows", burstDataSize);
     cmd.AddValue("dump-traffic", "Dump traffic traces", dumpTraffic);
@@ -187,7 +188,7 @@ main(int argc, char* argv[])
     NS_LOG_INFO("FLow Monitor Name: " + resultName);
     NS_LOG_INFO("Congestion Control: " + congestionControl);
     NS_LOG_INFO("End Time: " + std::to_string(endTime));
-    NS_LOG_INFO("Backup Rate UDP: " + backupRate);
+    NS_LOG_INFO("Backup Rate UDP: " + burstRate);
     NS_LOG_INFO("Data Size UDP: " + std::to_string(burstDataSize));
 
     NS_LOG_INFO("Configuring Congestion Control.");
@@ -513,27 +514,46 @@ main(int argc, char* argv[])
                  qlrFlowStartTime,
                  0,
                  qlrFlowDataSize);
+    
+    startUdpFlow(host1Ipv4Interfaces, 0, host2, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host1Ipv4Interfaces, 0, host3, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host1Ipv4Interfaces, 0, host4, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host1Ipv4Interfaces, 0, host5, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    
+    startUdpFlow(host2Ipv4Interfaces, 0, host1, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host2Ipv4Interfaces, 0, host3, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host2Ipv4Interfaces, 0, host4, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host2Ipv4Interfaces, 0, host5, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
 
-    startUdpFlow(host1Ipv4Interfaces, 0, host2, defaultPort, "1Mbps", 0.5, endTime, 0);
+    startUdpFlow(host3Ipv4Interfaces, 0, host1, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host3Ipv4Interfaces, 0, host2, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host3Ipv4Interfaces, 0, host4, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host3Ipv4Interfaces, 0, host5, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
 
-    startUdpFlow(host1Ipv4Interfaces, 0, host3, defaultPort, "1Mbps", 0.5, burstEndTime, 0);
+    startUdpFlow(host4Ipv4Interfaces, 0, host1, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host4Ipv4Interfaces, 0, host2, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host4Ipv4Interfaces, 0, host3, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host4Ipv4Interfaces, 0, host5, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
 
-    startUdpFlow(host1Ipv4Interfaces, 0, host4, defaultPort, "1Mbps", 0.5, burstEndTime, 0);
-
-    startUdpFlow(host1Ipv4Interfaces, 0, host5, defaultPort, "1Mbps", 0.5, burstEndTime, 0);
+    startUdpFlow(host5Ipv4Interfaces, 0, host2, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host5Ipv4Interfaces, 0, host3, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host5Ipv4Interfaces, 0, host4, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
 
     if (burstFlows > 0)
     {
-        for (uint32_t i = 1; i <= burstFlows; i++)
+        for (uint32_t burstIdx = 1; burstIdx <= burstNum; burstIdx++)
         {
-            startUdpFlow(host3Ipv4Interfaces,
-                         0,
-                         host1,
-                         defaultPort,
-                         backupRate,
-                         burstStartTime,
-                         burstEndTime,
-                         burstDataSize);
+            for (uint32_t i = 1; i <= burstFlows; i++)
+            {
+                startUdpFlow(host3Ipv4Interfaces,
+                            0,
+                            host1,
+                            defaultPort,
+                            burstRate,
+                            burstStartTime + (burstIdx - 1) * burstInterval,
+                            burstEndTime + (burstIdx - 1) * burstInterval,
+                            0);
+            }
         }
     }
 
