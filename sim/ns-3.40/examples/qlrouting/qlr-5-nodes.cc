@@ -51,15 +51,17 @@ std::map<Ptr<Node>, uint32_t> nodeToNextTcpSocketIndex;
 void
 startTcpFlow(Ptr<Node> receiverHost,
              std::vector<Ptr<Ipv4Interface>> receiverInterfaces,
+             uint16_t addressIndex,
              Ptr<Node> senderHost,
              uint16_t port,
+             float startTime,
              std::string qlrRate,
              uint32_t qlrFlowDataSize,
-             std::string congestionControl = "TcpLinuxReno",
-             float startTime = 1.0f)
+             std::string congestionControl = "TcpLinuxReno"
+             )
 {
     ApplicationContainer hostSenderApp =
-        createTcpApplication(receiverInterfaces[0]->GetAddress(0).GetAddress(),
+        createTcpApplication(receiverInterfaces[0]->GetAddress(addressIndex).GetAddress(),
                              port,
                              senderHost,
                              qlrRate,
@@ -109,13 +111,33 @@ startUdpFlow(std::vector<Ptr<Ipv4Interface>> receiverInterfaces,
 {
     Ipv4Address dst_addr = receiverInterfaces[0]->GetAddress(addressIndex).GetAddress();
 
-    NS_LOG_INFO("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr << " on port " << std::to_string(port));
+    NS_LOG_INFO("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr
+                                          << " on port " << std::to_string(port));
 
     ApplicationContainer hostSenderApp =
         createUdpApplication(dst_addr, port, senderHost, rate, burstDataSize);
     hostSenderApp.Start(Seconds(start_time));
     if (end_time > 0)
         hostSenderApp.Stop(Seconds(end_time));
+}
+
+Ptr<P4SwitchNetDevice>
+configureP4Switch(Ptr<Node> switchNode,
+                  std::string commandsPath,
+                  NetDeviceContainer switchInterfaces,
+                  P4SwitchHelper switchHelper)
+{
+    switchHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands(commandsPath)));
+    NetDeviceContainer p4DevContainer = switchHelper.Install(switchNode, switchInterfaces);
+    Ptr<P4SwitchNetDevice> p4Switch = DynamicCast<P4SwitchNetDevice>(p4DevContainer.Get(0));
+    p4Switch->m_mmu->SetAlphaIngress(1.0 / 8);
+    p4Switch->m_mmu->SetBufferPool(64 * 1024 * 1024);
+    p4Switch->m_mmu->SetIngressPool(64 * 1024 * 1024);
+    p4Switch->m_mmu->SetAlphaEgress(1.0 / 8);
+    p4Switch->m_mmu->SetEgressPool(64 * 1024 * 1024);
+    p4Switch->m_mmu->node_id = p4Switch->GetNode()->GetId();
+    computeQueueBufferSlice(p4Switch);
+    return p4Switch;
 }
 
 int
@@ -400,70 +422,35 @@ main(int argc, char* argv[])
                                  StringValue("/ns3/ns-3.40/examples/qlrouting/qlr_build/qlr.json"));
     qlrHelper.SetDeviceAttribute("PacketDeparser", PointerValue(CreateObject<QLRDeparser>()));
 
-    qlrHelper.SetDeviceAttribute(
-        "PipelineCommands",
-        StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s1.txt")));
-    NetDeviceContainer s1p4Cont = qlrHelper.Install(s1, s1Interfaces);
-    Ptr<P4SwitchNetDevice> s1p4 = DynamicCast<P4SwitchNetDevice>(s1p4Cont.Get(0));
-    s1p4->m_mmu->SetAlphaIngress(1.0 / 8);
-    s1p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
-    s1p4->m_mmu->SetIngressPool(64 * 1024 * 1024);
-    s1p4->m_mmu->SetAlphaEgress(1.0 / 8);
-    s1p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
-    s1p4->m_mmu->node_id = s1p4->GetNode()->GetId();
-    computeQueueBufferSlice(s1p4);
+    Ptr<P4SwitchNetDevice> s1p4 =
+        configureP4Switch(s1,
+                          "/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s1.txt",
+                          s1Interfaces,
+                          qlrHelper);
 
-    qlrHelper.SetDeviceAttribute(
-        "PipelineCommands",
-        StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s2.txt")));
-    NetDeviceContainer s2p4Cont = qlrHelper.Install(s2, s2Interfaces);
-    Ptr<P4SwitchNetDevice> s2p4 = DynamicCast<P4SwitchNetDevice>(s2p4Cont.Get(0));
-    s2p4->m_mmu->SetAlphaIngress(1.0 / 8);
-    s2p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
-    s2p4->m_mmu->SetIngressPool(64 * 1024 * 1024);
-    s2p4->m_mmu->SetAlphaEgress(1.0 / 8);
-    s2p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
-    s2p4->m_mmu->node_id = s2p4->GetNode()->GetId();
-    computeQueueBufferSlice(s2p4);
+    Ptr<P4SwitchNetDevice> s2p4 =
+        configureP4Switch(s2,
+                          "/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s2.txt",
+                          s2Interfaces,
+                          qlrHelper);
 
-    qlrHelper.SetDeviceAttribute(
-        "PipelineCommands",
-        StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s3.txt")));
-    NetDeviceContainer s3p4Cont = qlrHelper.Install(s3, s3Interfaces);
-    Ptr<P4SwitchNetDevice> s3p4 = DynamicCast<P4SwitchNetDevice>(s3p4Cont.Get(0));
-    s3p4->m_mmu->SetAlphaIngress(1.0 / 8);
-    s3p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
-    s3p4->m_mmu->SetIngressPool(64 * 1024 * 1024);
-    s3p4->m_mmu->SetAlphaEgress(1.0 / 8);
-    s3p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
-    s3p4->m_mmu->node_id = s3p4->GetNode()->GetId();
-    computeQueueBufferSlice(s3p4);
+    Ptr<P4SwitchNetDevice> s3p4 =
+        configureP4Switch(s3,
+                          "/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s3.txt",
+                          s3Interfaces,
+                          qlrHelper);
 
-    qlrHelper.SetDeviceAttribute(
-        "PipelineCommands",
-        StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s4.txt")));
-    NetDeviceContainer s4p4Cont = qlrHelper.Install(s4, s4Interfaces);
-    Ptr<P4SwitchNetDevice> s4p4 = DynamicCast<P4SwitchNetDevice>(s4p4Cont.Get(0));
-    s4p4->m_mmu->SetAlphaIngress(1.0 / 8);
-    s4p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
-    s4p4->m_mmu->SetIngressPool(64 * 1024 * 1024);
-    s4p4->m_mmu->SetAlphaEgress(1.0 / 8);
-    s4p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
-    s4p4->m_mmu->node_id = s4p4->GetNode()->GetId();
-    computeQueueBufferSlice(s4p4);
+    Ptr<P4SwitchNetDevice> s4p4 =
+        configureP4Switch(s4,
+                          "/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s4.txt",
+                          s4Interfaces,
+                          qlrHelper);
 
-    qlrHelper.SetDeviceAttribute(
-        "PipelineCommands",
-        StringValue(loadCommands("/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s5.txt")));
-    NetDeviceContainer s5p4Cont = qlrHelper.Install(s5, s5Interfaces);
-    Ptr<P4SwitchNetDevice> s5p4 = DynamicCast<P4SwitchNetDevice>(s5p4Cont.Get(0));
-    s5p4->m_mmu->SetAlphaIngress(1.0 / 8);
-    s5p4->m_mmu->SetBufferPool(64 * 1024 * 1024);
-    s5p4->m_mmu->SetIngressPool(64 * 1024 * 1024);
-    s5p4->m_mmu->SetAlphaEgress(1.0 / 8);
-    s5p4->m_mmu->SetEgressPool(64 * 1024 * 1024);
-    s5p4->m_mmu->node_id = s5p4->GetNode()->GetId();
-    computeQueueBufferSlice(s5p4);
+    Ptr<P4SwitchNetDevice> s5p4 =
+        configureP4Switch(s5,
+                          "/ns3/ns-3.40/examples/qlrouting/resources/5_nodes/s5.txt",
+                          s5Interfaces,
+                          qlrHelper);
 
     Simulator::Schedule(MicroSeconds(0), &updateQdepth, s1p4);
     // Simulator::Schedule(MicroSeconds(0), &updateQdepth, s2p4);
@@ -481,63 +468,64 @@ main(int argc, char* argv[])
     uint16_t qlrPort = 22222;
     uint16_t defaultPort = 20000;
 
-    ApplicationContainer host1ReceiverApp = createSinkUdpApplication(qlrPort, host1);
+    ApplicationContainer host1ReceiverApp = createSinkTcpApplication(qlrPort, host1);
     host1ReceiverApp.Start(Seconds(0.0));
     ApplicationContainer defaultHost1ReceiverApp = createSinkUdpApplication(defaultPort, host1);
     defaultHost1ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host2ReceiverApp = createSinkUdpApplication(qlrPort, host2);
+    ApplicationContainer host2ReceiverApp = createSinkTcpApplication(qlrPort, host2);
     host2ReceiverApp.Start(Seconds(0.0));
     ApplicationContainer defaultHost2ReceiverApp = createSinkUdpApplication(defaultPort, host2);
     defaultHost2ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host3ReceiverApp = createSinkUdpApplication(qlrPort, host3);
+    ApplicationContainer host3ReceiverApp = createSinkTcpApplication(qlrPort, host3);
     host3ReceiverApp.Start(Seconds(0.0));
     ApplicationContainer defaultHost3ReceiverApp = createSinkUdpApplication(defaultPort, host3);
     defaultHost3ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host4ReceiverApp = createSinkUdpApplication(qlrPort, host4);
+    ApplicationContainer host4ReceiverApp = createSinkTcpApplication(qlrPort, host4);
     host4ReceiverApp.Start(Seconds(0.0));
     ApplicationContainer defaultHost4ReceiverApp = createSinkUdpApplication(defaultPort, host4);
     defaultHost4ReceiverApp.Start(Seconds(0.0));
 
-    ApplicationContainer host5ReceiverApp = createSinkUdpApplication(qlrPort, host5);
+    ApplicationContainer host5ReceiverApp = createSinkTcpApplication(qlrPort, host5);
     host5ReceiverApp.Start(Seconds(0.0));
     ApplicationContainer defaultHost5ReceiverApp = createSinkUdpApplication(defaultPort, host5);
     defaultHost5ReceiverApp.Start(Seconds(0.0));
 
-    startUdpFlow(host5Ipv4Interfaces,
+    startTcpFlow(host5,
+                 host5Ipv4Interfaces,
                  0,
                  host1,
                  qlrPort,
-                 qlrRate,
                  qlrFlowStartTime,
-                 0,
-                 qlrFlowDataSize);
-    
-    startUdpFlow(host1Ipv4Interfaces, 0, host2, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host1Ipv4Interfaces, 0, host3, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host1Ipv4Interfaces, 0, host4, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host1Ipv4Interfaces, 0, host5, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    
-    startUdpFlow(host2Ipv4Interfaces, 0, host1, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host2Ipv4Interfaces, 0, host3, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host2Ipv4Interfaces, 0, host4, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host2Ipv4Interfaces, 0, host5, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+                 qlrRate,
+                 qlrFlowDataSize,
+                 congestionControl);
 
-    startUdpFlow(host3Ipv4Interfaces, 0, host1, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host3Ipv4Interfaces, 0, host2, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host3Ipv4Interfaces, 0, host4, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host3Ipv4Interfaces, 0, host5, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host1Ipv4Interfaces, 0, host2, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host1Ipv4Interfaces, 0, host3, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host1Ipv4Interfaces, 0, host4, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host1Ipv4Interfaces, 0, host5, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
 
-    startUdpFlow(host4Ipv4Interfaces, 0, host1, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host4Ipv4Interfaces, 0, host2, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host4Ipv4Interfaces, 0, host3, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host4Ipv4Interfaces, 0, host5, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host2Ipv4Interfaces, 0, host1, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host2Ipv4Interfaces, 0, host3, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host2Ipv4Interfaces, 0, host4, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host2Ipv4Interfaces, 0, host5, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
 
-    startUdpFlow(host5Ipv4Interfaces, 0, host2, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host5Ipv4Interfaces, 0, host3, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
-    startUdpFlow(host5Ipv4Interfaces, 0, host4, qlrPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host3Ipv4Interfaces, 0, host1, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host3Ipv4Interfaces, 0, host2, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host3Ipv4Interfaces, 0, host4, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host3Ipv4Interfaces, 0, host5, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+
+    startUdpFlow(host4Ipv4Interfaces, 0, host1, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host4Ipv4Interfaces, 0, host2, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host4Ipv4Interfaces, 0, host3, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host4Ipv4Interfaces, 0, host5, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+
+    startUdpFlow(host5Ipv4Interfaces, 0, host2, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host5Ipv4Interfaces, 0, host3, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startUdpFlow(host5Ipv4Interfaces, 0, host4, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
 
     if (burstFlows > 0)
     {
@@ -546,13 +534,13 @@ main(int argc, char* argv[])
             for (uint32_t i = 1; i <= burstFlows; i++)
             {
                 startUdpFlow(host3Ipv4Interfaces,
-                            0,
-                            host1,
-                            defaultPort,
-                            burstRate,
-                            burstStartTime + (burstIdx - 1) * burstInterval,
-                            burstEndTime + (burstIdx - 1) * burstInterval,
-                            0);
+                             0,
+                             host1,
+                             defaultPort,
+                             burstRate,
+                             burstStartTime + (burstIdx - 1) * burstInterval,
+                             burstEndTime + (burstIdx - 1) * burstInterval,
+                             0);
             }
         }
     }

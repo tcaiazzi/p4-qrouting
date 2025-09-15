@@ -2,7 +2,7 @@
 
 set -e
 
-experiment_params="--default-bw=100Mbps --qlr-data-size=62500000 --qlr-rate=80Mbps --burst-flows=40 --burst-rate=1Mbps --end=20 --burst-start-time=2 --burst-end-time=2.2 --burst-num=10 --burst-interval=0.5 --qlr-start-time=1"
+experiment_params="--default-bw=100Mbps --qlr-data-size=62500000 --qlr-rate=80Mbps --burst-flows=40 --burst-rate=5Mbps --end=20 --burst-start-time=2 --burst-end-time=2.2 --burst-num=10 --burst-interval=0.5 --qlr-start-time=1 --dump-traffic"
 
 pip install --break-system-packages -r requirements.txt
 

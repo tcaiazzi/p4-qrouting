@@ -59,7 +59,6 @@ control IngressPipe(inout headers hdr,
         key = {
             hdr.ipv4.dst_addr: lpm;
             hdr.ipv4.protocol: exact;
-            meta.l4_lookup.dst_port: exact;
         }
         actions = {
             get_row_num;

@@ -121,11 +121,11 @@ if __name__ == "__main__":
         ports = list(network[node_name].values())
         for i, (node, subnet) in enumerate(filter(lambda x: x[0]!=node_name, node_to_network.items())):
             if qlr_active:
-                commands.add(f"table_add select_row get_row_num {subnet} 17 {qlr_port} => {node + 1}")
+                commands.add(f"table_add select_row get_row_num {subnet} 6 => {node + 1}")
             else:
-                commands.add(f"table_add select_row set_nhop {subnet} 17 {qlr_port} => {ports[i%len(ports)]+1}")
+                commands.add(f"table_add select_row set_nhop {subnet} 6 => {ports[i%len(ports)]+1}")
             
-            commands.add(f"table_add select_row set_nhop {subnet} 17 {default_port} => {ports[i%len(ports)]+1}")
+            commands.add(f"table_add select_row set_nhop {subnet} 17 => {ports[i%len(ports)]+1}")
 
         max_iface = max(network[node_name].values()) + 1
         commands.add(f"table_set_default select_row set_nhop 1")
