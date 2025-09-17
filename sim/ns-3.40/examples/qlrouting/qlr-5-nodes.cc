@@ -55,7 +55,6 @@ startTcpFlow(Ptr<Node> receiverHost,
              Ptr<Node> senderHost,
              uint16_t port,
              float startTime,
-             std::string qlrRate,
              uint32_t qlrFlowDataSize,
              std::string congestionControl = "TcpLinuxReno"
              )
@@ -64,7 +63,6 @@ startTcpFlow(Ptr<Node> receiverHost,
         createTcpApplication(receiverInterfaces[0]->GetAddress(addressIndex).GetAddress(),
                              port,
                              senderHost,
-                             qlrRate,
                              qlrFlowDataSize,
                              congestionControl);
     hostSenderApp.Start(Seconds(startTime));
@@ -499,7 +497,6 @@ main(int argc, char* argv[])
                  host1,
                  qlrPort,
                  qlrFlowStartTime,
-                 qlrRate,
                  qlrFlowDataSize,
                  congestionControl);
 

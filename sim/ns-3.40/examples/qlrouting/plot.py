@@ -202,7 +202,7 @@ def plot_fct_histogram_figure(results, flow_info):
             if t.sourceAddress == src_addr:
                 if t.destinationAddress == dst_addr:
                     if t.destinationPort == dst_port:
-                        print(f"i: {i}, Flow {t} FCT: {flow.fct}")
+                        print(f"i: {i}, Flow {t.sourceAddress}, {t.destinationAddress}, {t.sourcePort}, {t.destinationPort}, {t.protocol} FCT: {flow.fct}")
                         fcts.append(flow.fct)
         axes.hist(
             fcts,
@@ -211,7 +211,7 @@ def plot_fct_histogram_figure(results, flow_info):
             hatch=hatch,
             edgecolor=color,
             rwidth=0.8,
-            bins=range(0, 100, 1),
+            bins=range(0, 15, 1),
         )
 
     plt.clf()
@@ -321,7 +321,7 @@ def plot_tcp_retransmission_figure(results):
                 if "host1-host5" not in file_name:
                     continue
                 to_plot = parse_data_file(os.path.join(experiment_results_path, file_name))
-                label = "-".join(file_name.split("-")[:2])
+                
                 axes.plot(to_plot['x'], to_plot['y'], label=label,
                             linestyle=linestyle, fillstyle='none', color=color, marker=marker)
             break
@@ -333,21 +333,18 @@ def plot_tcp_retransmission_figure(results):
         2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
     )   
 
-    plot_retransmissions_line(axs[0], "qlr", "red", None, "QLR Flows", "solid")
-    plot_retransmissions_line(axs[1], "no-qlr", 'orange', None, "TCP Flows", "solid")
+    plot_retransmissions_line(axs[0], "qlr", "green", None, "QLR", "solid")
+    plot_retransmissions_line(axs[1], "no-qlr", 'red', None, "No-QLR", "solid")
 
     plt.xlabel('Time [s]')
-    axs[0].set_xticks(range(3, 7))
-    axs[1].set_xticks(range(3, 7))
-    axs[0].set_xlim([3, 7])
-    axs[1].set_xlim([3, 7])
+    axs[0].set_xlim([0, 10])
+    axs[1].set_xlim([0, 10])
 
     plt.ylabel('N. TCP Retransmissions', loc='bottom')
     # plt.yticks(range(0, 200, 20))
     axs[0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
     axs[1].legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
-    axs[0].set_title("QLR", loc='left')
-    axs[1].set_title("NO QLR", loc='left')
+
 
     plt.savefig(
         os.path.join(figures_path, f"retransmissions.pdf"), format="pdf", bbox_inches='tight'
@@ -360,7 +357,6 @@ def plot_qdepth_figure(results):
         results_path = os.path.join(results, experiment_type)
         for experiment_id in os.listdir(results_path):
             experiment_results_path = os.path.join(results_path, experiment_id, "qdepth")
-            print(f"experiment_results_path: {experiment_results_path}")
             for file_name in os.listdir(experiment_results_path):
                 if "s1" not in file_name:
                     continue
@@ -407,7 +403,6 @@ def plot_cumulative_tcp_retransmission_figure(results):
                 exp_res = parse_data_file(os.path.join(experiment_results_path, file_name))
                 if exp_res["y"]:
                     experiment_results.append(exp_res['y'][-1])
-                    print(f"experiment_results: {exp_res}")
 
             to_plot['y'].append(np.sum(experiment_results))
         plt.bar(offset, np.mean(to_plot['y']), label=label,
@@ -416,8 +411,8 @@ def plot_cumulative_tcp_retransmission_figure(results):
 
     plt.clf()
     plt.grid(linestyle='--', linewidth=0.5)
-    plot_retransmissions_bar("qlr", "red", None, "QLR", "solid", offset=1)
-    plot_retransmissions_bar("no-qlr", 'green', None, "NO-QLR", "solid", offset=2)
+    plot_retransmissions_bar("qlr", "green", None, "QLR", "solid", offset=1)
+    plot_retransmissions_bar("no-qlr", 'red', None, "NO-QLR", "solid", offset=2)
 
     plt.xticks([1, 2], ['QLR', 'NO-QLR'])
 
@@ -482,9 +477,9 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(3.5, 2))
 
-    # plot_cwnd_figure(results_path)
-    # plot_cumulative_tcp_retransmission_figure(results_path)
-    # plot_tcp_retransmission_figure(results_path)
+    plot_cwnd_figure(results_path)
+    plot_cumulative_tcp_retransmission_figure(results_path)
+    plot_tcp_retransmission_figure(results_path)
     plot_throughput_figure(results_path)
     plot_qdepth_figure(results_path)
 
