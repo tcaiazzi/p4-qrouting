@@ -1,12 +1,28 @@
 #pragma once
+
 #include "qlr-utils.h"
 
+#include "socket-utils.h"
+#include "tracer.h"
+#include "utils.h"
+
+#include "ns3/applications-module.h"
 #include "ns3/core-module.h"
+#include "ns3/csma-module.h"
+#include "ns3/error-model.h"
+#include "ns3/flow-monitor-helper.h"
+#include "ns3/flow-monitor-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/network-module.h"
 #include "ns3/p4-switch-module.h"
 
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <map>
+#include <random>
+#include <string>
 
 using namespace ns3;
 
@@ -65,8 +81,9 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
     Simulator::Schedule(NanoSeconds(200), &updateQdepth, p4Device);
 }
 
-void 
-traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdepthFile){
+void
+traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdepthFile)
+{
     uint64_t totalBufferSlice = queueBufferSlice[p4Device->GetNode()->GetId()];
     uint64_t colorSlice = (uint64_t)(totalBufferSlice / 4.0f);
 
@@ -76,12 +93,13 @@ traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdep
         std::string nodeName = p4Device->GetName();
         for (size_t p = 1; p < p4Device->GetNPorts(); ++p)
         {
-            
             uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
-            *qdepthFile ->GetStream() << Simulator::Now().GetSeconds() << " " << p + 1 << " " << egressBytes << std::endl;
+            *qdepthFile->GetStream()
+                << Simulator::Now().GetSeconds() << " " << p + 1 << " " << egressBytes << std::endl;
             *qdepthFile->GetStream() << std::flush;
         }
     }
+
 
     Simulator::Schedule(Seconds(0.1), &traceQdepthUpdate, p4Device, qdepthFile);
 }
@@ -152,4 +170,406 @@ QLRDeparser::get_ns3_packet(std::unique_ptr<bm::Packet> bm_packet)
     p->AddHeader(eth);
 
     return p;
+}
+
+Ptr<P4SwitchNetDevice>
+configureP4Switch(Ptr<Node> switchNode, std::string commandsPath, P4SwitchHelper switchHelper)
+{
+    NS_LOG_INFO("Configuring P4 Switch " << Names::FindName(switchNode) << " with commands from "
+                                         << commandsPath);
+    switchHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands(commandsPath)));
+    NetDeviceContainer p4DevContainer = switchHelper.Install(switchNode, getAllDevices(switchNode));
+    Ptr<P4SwitchNetDevice> p4Switch = DynamicCast<P4SwitchNetDevice>(p4DevContainer.Get(0));
+    p4Switch->m_mmu->SetAlphaIngress(1.0 / 8);
+    p4Switch->m_mmu->SetBufferPool(64 * 1024 * 1024);
+    p4Switch->m_mmu->SetIngressPool(64 * 1024 * 1024);
+    p4Switch->m_mmu->SetAlphaEgress(1.0 / 8);
+    p4Switch->m_mmu->SetEgressPool(64 * 1024 * 1024);
+    p4Switch->m_mmu->node_id = p4Switch->GetNode()->GetId();
+    computeQueueBufferSlice(p4Switch);
+
+    Simulator::Schedule(MicroSeconds(0), &updateQdepth, p4Switch);
+
+    return p4Switch;
+}
+
+std::pair<NodeContainer, NodeContainer>
+createTopology(const std::vector<std::pair<int, int>> edges,
+               uint16_t numNodes,
+               std::string switchBandwidth,
+               std::string hostBandwidth,
+               bool dumpTraffic,
+               std::string resultsPath,
+               std::map<Ptr<Node>, Ptr<P4SwitchNetDevice>>& p4SwitchMap)
+{
+    NodeContainer switches;
+    switches.Create(numNodes);
+
+    std::map<uint32_t, NetDeviceContainer> switchInterfaces = {};
+
+    for (uint32_t i = 0; i < numNodes; i++)
+    {
+        std::string switchName = "s" + std::to_string(i + 1);
+        Names::Add(switchName, switches.Get(i));
+    }
+
+    NodeContainer hosts = addHosts(switches,
+                                   std::vector<int>{1, 1, 1, 1, 1},
+                                   hostBandwidth,
+                                   dumpTraffic,
+                                   resultsPath);
+
+    CsmaHelper csma;
+    csma.SetChannelAttribute("DataRate", StringValue(switchBandwidth));
+    csma.SetDeviceAttribute("Mtu", UintegerValue(1500));
+
+    for (const auto& edge : edges)
+    {
+        NetDeviceContainer link =
+            csma.Install(NodeContainer(switches.Get(edge.first), switches.Get(edge.second)));
+        switchInterfaces[edge.first].Add(link.Get(0));
+        switchInterfaces[edge.second].Add(link.Get(1));
+    }
+
+    P4SwitchHelper qlrHelper;
+    qlrHelper.SetDeviceAttribute("PipelineJson",
+                                 StringValue("/ns3/ns-3.40/examples/qlrouting/qlr_build/qlr.json"));
+    qlrHelper.SetDeviceAttribute("PacketDeparser", PointerValue(CreateObject<QLRDeparser>()));
+
+    for (uint32_t i = 0; i < numNodes; i++)
+    {
+        std::string commandsPath = "/ns3/ns-3.40/examples/qlrouting/resources/" +
+                                   std::to_string(numNodes) + "_nodes/s" + std::to_string(i + 1) +
+                                   ".txt";
+        Ptr<Node> switchNode = switches.Get(i);
+
+        Ptr<P4SwitchNetDevice> p4Switch = configureP4Switch(switchNode, commandsPath, qlrHelper);
+        traceQdepth(p4Switch,
+                    getPath(resultsPath, "qdepth/" + Names::FindName(switchNode) + ".txt"));
+    }
+
+    if (dumpTraffic)
+    {
+        std::string tracesPath = getPath(resultsPath, "traces/dump");
+        std::filesystem::create_directories(tracesPath);
+        csma.EnablePcapAll(tracesPath, true);
+    }
+
+    return {switches, hosts};
+}
+
+
+std::map<Ptr<Node>, uint32_t> nodeToNextTcpSocketIndex;
+
+void
+startTcpFlow(Ptr<Node> receiverHost,
+             uint16_t addressIndex,
+             Ptr<Node> senderHost,
+             uint16_t port,
+             float startTime,
+             uint32_t qlrFlowDataSize,
+             std::string resultsPath,
+             std::string congestionControl)
+{
+    Ptr<Ipv4> receiverHostIpv4 = receiverHost->GetObject<Ipv4>();
+
+    ApplicationContainer hostSenderApp =
+        createTcpApplication(receiverHostIpv4->GetAddress(1, addressIndex).GetAddress(),
+                             port,
+                             senderHost,
+                             60000000, 
+                             congestionControl);
+    hostSenderApp.Start(Seconds(startTime));
+    
+    if (nodeToNextTcpSocketIndex.find(senderHost) == nodeToNextTcpSocketIndex.end())
+    {
+        nodeToNextTcpSocketIndex[senderHost] = 1;
+    }
+    uint32_t socketIndex = nodeToNextTcpSocketIndex[senderHost];
+    nodeToNextTcpSocketIndex[senderHost] = socketIndex + 1;
+
+    std::string fileName = Names::FindName(senderHost) + "-" + Names::FindName(receiverHost) + "-" +
+                           std::to_string(port);
+
+    std::string retransmissionPath =
+        getPath(getPath(resultsPath, "retransmissions"), fileName + ".rtx");
+    NS_LOG_INFO("Starting TCP Retransmission tracking for " + Names::FindName(senderHost) + " -> " +
+                Names::FindName(receiverHost) + " on port " + std::to_string(port) +
+                " with socket index " + std::to_string(socketIndex) + " saving to " +
+                retransmissionPath);
+
+    Simulator::Schedule(Seconds(startTime + 0.2),
+                        &startTcpRtx,
+                        senderHost,
+                        retransmissionPath,
+                        socketIndex);
+
+    std::string cwndPath = getPath(getPath(resultsPath, "cwnd"), fileName + ".cwnd");
+
+    NS_LOG_INFO("Starting CWND tracking for " + Names::FindName(senderHost) + " -> " +
+                Names::FindName(receiverHost) + " on port " + std::to_string(port) +
+                " with socket index " + std::to_string(socketIndex) + " saving to " + cwndPath);
+    ;
+    Simulator::Schedule(Seconds(startTime + 0.2),
+                        &TraceCwnd,
+                        cwndPath,
+                        senderHost->GetId(),
+                        socketIndex);
+
+}
+
+void
+startUdpFlow(Ptr<Node> receiverHost,
+             uint16_t addressIndex,
+             Ptr<Node> senderHost,
+             uint16_t port,
+             std::string rate,
+             float start_time,
+             float end_time,
+             float burstDataSize)
+{
+    Ptr<Ipv4> receiverHostIpv4 = receiverHost->GetObject<Ipv4>();
+
+    Ipv4Address dst_addr = receiverHostIpv4->GetAddress(1, addressIndex).GetAddress();
+
+    NS_LOG_DEBUG("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr
+                                           << " on port " << std::to_string(port) << " rate "
+                                           << rate << " start " << std::to_string(start_time)
+                                           << " end " << std::to_string(end_time) << " dataSize "
+                                           << burstDataSize);
+
+    ApplicationContainer hostSenderApp =
+        createUdpApplication(dst_addr, port, senderHost, rate, burstDataSize);
+    hostSenderApp.Start(Seconds(start_time));
+    if (end_time > 0)
+        hostSenderApp.Stop(Seconds(end_time));
+}
+
+void
+startBackgroundTraffic(NodeContainer hosts,
+                       uint16_t addressIndex,
+                       uint16_t destinationPort,
+                       std::string dataRate,
+                       float startTime,
+                       float endTime,
+                       uint16_t dataSize)
+{
+    for (uint16_t i = 0; i < hosts.GetN(); i++)
+    {
+        Ptr<Node> sourceHost = hosts.Get(i);
+        NS_LOG_DEBUG("Source Host: " << Names::FindName(sourceHost));
+        for (uint16_t j = 0; j < hosts.GetN(); j++)
+        {
+            if (i == j)
+                continue;
+            Ptr<Node> destinationHost = hosts.Get(j);
+
+            NS_LOG_DEBUG("Background UDP: " << Names::FindName(sourceHost) << " -> "
+                                            << Names::FindName(destinationHost)
+                                            << " addrIdx=" << addressIndex
+                                            << " port=" << destinationPort << " rate=" << dataRate);
+            startUdpFlow(destinationHost,
+                         addressIndex,
+                         sourceHost,
+                         destinationPort,
+                         dataRate,
+                         startTime,
+                         endTime,
+                         dataSize);
+        }
+    }
+}
+
+void
+startBurstTraffic(Ptr<Node> sourceNode,
+                  Ptr<Node> destinationNode,
+                  uint16_t addressIndex,
+                  uint16_t destinationPort,
+                  std::string dataRate,
+                  float startTime,
+                  float endTime,
+                  uint16_t dataSize,
+                  float burstInterval,
+                  uint16_t burstFlows,
+                  uint16_t burstNum)
+{
+    for (uint32_t burstIdx = 1; burstIdx <= burstNum; burstIdx++)
+    {
+        for (uint32_t i = 1; i <= burstFlows; i++)
+        {
+            startUdpFlow(destinationNode,
+                         0,
+                         sourceNode,
+                         destinationPort,
+                         dataRate,
+                         startTime + (burstIdx - 1) * burstInterval,
+                         endTime + (burstIdx - 1) * burstInterval,
+                         0);
+        }
+    }
+}
+
+NodeContainer
+addHosts(NodeContainer switches,
+         const std::vector<int> hostsVector,
+         std::string hostBandwidth,
+         bool dumpTraffic,
+         std::string resultsPath)
+{
+    NodeContainer hosts;
+    hosts.Create(hostsVector.size());
+
+    std::map<uint32_t, NetDeviceContainer> hostInterfaces = {};
+
+    CsmaHelper csma_host;
+    csma_host.SetChannelAttribute("DataRate", StringValue(hostBandwidth));
+    csma_host.SetDeviceAttribute("Mtu", UintegerValue(1500));
+
+    for (uint32_t i = 0; i < hostsVector.size(); i++)
+    {
+        if (hostsVector[i] == 1)
+        {
+            Ptr<Node> host = hosts.Get(i);
+            Names::Add("host" + std::to_string(i + 1), host);
+
+            Ptr<Node> switchNode = switches.Get(i);
+
+            NetDeviceContainer link = csma_host.Install(NodeContainer(host, switchNode));
+            hostInterfaces[i].Add(link.Get(0));
+            // switchInterfaces[i].Add(link.Get(1));
+        }
+    }
+
+    InternetStackHelper hostStack;
+    hostStack.SetIpv4StackInstall(true);
+    hostStack.SetIpv6StackInstall(false);
+    hostStack.Install(hosts);
+
+    for (uint32_t i = 0; i < hostsVector.size(); i++)
+    {
+        NS_LOG_DEBUG("Configuring host " << Names::FindName(hosts.Get(i)));
+        if (hostsVector[i] == 1)
+        {
+            Ptr<Node> host = hosts.Get(i);
+
+            Ipv4AddressHelper hostIpv4Helper;
+            std::string ipAddress = "10.0." + std::to_string(i + 1) + ".0";
+            NS_LOG_DEBUG("Assigning IP " << ipAddress << ".1/24 to " << Names::FindName(host));
+            hostIpv4Helper.SetBase(Ipv4Address(ipAddress.c_str()), Ipv4Mask("/24"));
+            hostIpv4Helper.Assign(hostInterfaces[i]);
+        }
+    }
+
+    for (uint32_t i = 0; i < hostsVector.size(); i++)
+    {
+        for (uint32_t j = 0; j < hostsVector.size(); j++)
+        {
+            if (i == j)
+                continue;
+
+            Ptr<Ipv4Interface> hostIpv4Interface = getIpv4Interface(hostInterfaces[i].Get(0));
+            Ptr<Ipv4Interface> destinationIpv4Interface =
+                getIpv4Interface(hostInterfaces[j].Get(0));
+            addArpEntriesFromInterfaceAddresses(hostIpv4Interface, destinationIpv4Interface);
+        }
+    }
+
+    if (dumpTraffic)
+    {
+        std::string tracesPath = getPath(resultsPath, "traces/dump");
+        NS_LOG_INFO("Dumping host traffic in " << tracesPath);
+        std::filesystem::create_directories(tracesPath);
+        csma_host.EnablePcapAll(tracesPath, true);
+    }
+
+    return hosts;
+}
+
+void
+generateWorkload(NodeContainer hosts,
+                 float endTime,
+                 float qlrFlowStartTime,
+                 uint16_t qlrFlowDataSize,
+                 std::string congestionControl,
+                 uint16_t burstFlows,
+                 uint16_t burstNum,
+                 float burstMaxTime,
+                 std::string burstRate,
+                 uint16_t burstDataSize,
+                 int seed,
+                 std::string resultsPath)
+{
+    std::mt19937 randomGen;
+
+    uint16_t qlrPort = 22222;
+    uint16_t defaultPort = 20000;
+
+    for (uint16_t i = 0; i < hosts.GetN(); i++)
+    {
+        Ptr<Node> host = hosts.Get(i);
+        ApplicationContainer hostReceiverApp = createSinkTcpApplication(qlrPort, host);
+        hostReceiverApp.Start(Seconds(0.0));
+        ApplicationContainer defaultHostReceiverApp = createSinkUdpApplication(defaultPort, host);
+        defaultHostReceiverApp.Start(Seconds(0.0));
+    }
+
+    Ptr<Node> hostReceiver = hosts.Get(4);
+
+    for (uint16_t i = 0; i < hosts.GetN(); i++)
+    {
+        if (i == 4)
+            continue;
+        Ptr<Node> hostSender = hosts.Get(i);
+        startTcpFlow(hostReceiver,
+                     0,
+                     hostSender,
+                     qlrPort,
+                     qlrFlowStartTime,
+                     qlrFlowDataSize,
+                     resultsPath,
+                     congestionControl);
+    }
+
+    startBackgroundTraffic(hosts, 0, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+
+    if (burstFlows > 0)
+    {
+        randomGen = std::mt19937(seed);
+        std::uniform_real_distribution startTimeDistribution =
+            std::uniform_real_distribution(1.0, 6.0);
+        std::uniform_real_distribution burstLengthDistribution =
+            std::uniform_real_distribution(0.1, 0.5);
+        std::uniform_real_distribution burstIntervalDistribution =
+            std::uniform_real_distribution(0.3, 1.0);
+
+        for (uint16_t i = 0; i < hosts.GetN(); i++)
+        {
+            Ptr<Node> sourceHost = hosts.Get(i);
+            for (uint16_t j = 0; j < hosts.GetN(); j++)
+            {
+                if (i == j || j == 4)
+                    continue;
+
+                NS_LOG_INFO("Burst UDP: " << Names::FindName(sourceHost) << " -> "
+                                           << Names::FindName(hosts.Get(j)) << " addrIdx=" << 0
+                                           << " port=" << defaultPort << " rate " << burstRate << " burstflows " << burstFlows);
+                float startTime = startTimeDistribution(randomGen);
+                float endTime = startTime + burstLengthDistribution(randomGen);
+                float interval = burstIntervalDistribution(randomGen);
+
+                Ptr<Node> destinationHost = hosts.Get(j);
+                startBurstTraffic(destinationHost,
+                                  sourceHost,
+                                  0,
+                                  defaultPort,
+                                  burstRate,
+                                  startTime,
+                                  endTime,
+                                  burstDataSize,
+                                  interval,
+                                  burstFlows,
+                                  burstNum);
+            }
+        }
+    }
 }

@@ -13,10 +13,10 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
     cmd = []
     row_slices = [64] * 8
     print("Generating commands for node:", start, "to goal:", goal)
-    print(f"Node {start} neighbors:", net[start])
+    # print(f"Node {start} neighbors:", net[start])
 
     for e in node_dag.edges:
-        print(f"Processing edge: {e}")
+        # print(f"Processing edge: {e}")
         if start == e[0]:
             iface_num = net[start][e[1]]
             row_slices[iface_num] = 0

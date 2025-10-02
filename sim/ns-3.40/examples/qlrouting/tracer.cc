@@ -92,6 +92,8 @@ TraceCwnd(std::string fileName, uint32_t nodeId, uint32_t socketId)
     Config::Connect("/NodeList/" + std::to_string(nodeId) + "/$ns3::TcpL4Protocol/SocketList/" +
                         std::to_string(socketId) + "/CongestionWindow",
                     MakeCallback(&CwndTracer));
+
+    
 }
 
 std::map<std::string, std::pair<uint64_t, uint64_t>> ctx2tpInfo;
@@ -143,9 +145,9 @@ startThroughputPortTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId
 }
 
 void
-startThroughputTrace(Ptr<Node> node, NetDeviceContainer nodeInterfaces, uint32_t startTime, std::string resultsPath)
-{
-    for (uint32_t i = 0; i < nodeInterfaces.GetN(); ++i)
+startThroughputTrace(Ptr<Node> node, float startTime, std::string resultsPath)
+{   
+    for (uint32_t i = 0; i < node->GetNDevices(); ++i)
     {
         std::string throughputFileName = Names::FindName(node) + "-" + std::to_string(i) + ".tp";
         std::string throughputPath = getPath(resultsPath, throughputFileName);
@@ -196,6 +198,7 @@ startTcpRtx(Ptr<Node> node, std::string fileName, uint32_t socketId)
     std::string nsString = "/NodeList/" + std::to_string(node->GetId()) +
                            "/$ns3::TcpL4Protocol/SocketList/" + std::to_string(socketId) + "/Tx";
 
+    NS_LOG_DEBUG("Connecting to " << nsString << " for TCP Retransmission tracking");
     auto fileIt = rtxStream.find(nsString);
     if (fileIt == rtxStream.end())
         rtxStream[nsString] = fopen(fileName.c_str(), "w");

@@ -14,3 +14,4 @@ void addArpEntriesFromInterfaceAddresses(Ptr<Ipv4Interface> nodeInterface, Ptr<I
 void addIpv4Address(Ptr<Node> host5, NetDeviceContainer host5Interfaces, std::string address, std::string netmask);
 std::string loadCommands(std::string path);
 void printSimulationTime();
+NetDeviceContainer getAllDevices (Ptr<Node> node);

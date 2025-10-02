@@ -42,7 +42,7 @@ def parse_data_file(file_path):
 
     return parsed_result
 
-def parse_qdepth_file(file_path):
+def parse_qdepth_file(file_path, divide_by=None):
     parsed_result = {}
     with open(file_path, "r") as cwnd_file:
         lines = cwnd_file.readlines()
@@ -55,7 +55,7 @@ def parse_qdepth_file(file_path):
             parsed_result[line[1]] = {"x": [], "y": []}
         
         parsed_result[line[1]]["x"].append(float(line[0]))
-        parsed_result[line[1]]["y"].append(float(line[2]))
+        parsed_result[line[1]]["y"].append(float(line[2]) if divide_by is None else float(line[2])/divide_by)
 
     return parsed_result
 
@@ -70,13 +70,13 @@ def plot_delay_histogram_figure(results, flow_info):
         for flow in sim.flows:
             flow: Flow = flow
             t: FiveTuple = flow.fiveTuple
-            if t.sourceAddress == src_addr:
-                if t.destinationAddress == dst_addr:
-                    if t.destinationPort == dst_port:
-                        for bin in flow.delayHistogram:
-                            to_plot.extend(
-                                [float(bin.get("start")) * 1000] * int(bin.get("count"))
-                            )
+            # if t.sourceAddress == src_addr:
+            if t.destinationAddress == dst_addr:
+                if t.destinationPort == dst_port:
+                    for bin in flow.delayHistogram:
+                        to_plot.extend(
+                            [float(bin.get("start")) * 1000] * int(bin.get("count"))
+                        )
                 axes.hist(
                     to_plot,
                     label=label,
@@ -84,7 +84,7 @@ def plot_delay_histogram_figure(results, flow_info):
                     hatch=hatch,
                     edgecolor=color,
                     rwidth=0.8,
-                    bins=range(0, 1000, 50),
+                    bins=range(0, 1500, 10),
                 )
                 
                 axes.set_ylim([0.1, 100000])
@@ -97,15 +97,19 @@ def plot_delay_histogram_figure(results, flow_info):
 
     plt.clf()
 
+    columns = 2
     fig, axs = plt.subplots(
-        len(flow_info), 1, sharey="all", tight_layout=True, figsize=(4, 4)
+        int(len(flow_info)/columns), columns, sharey="all", tight_layout=True, figsize=(10, 10)
     )
+    print(f"axs: {axs}")
     handles = []
-    for ax_n, (src_addr, dst_addr, dst_port, label, color, hatch, flow_monitor_path) in enumerate(flow_info):
-        plot_delay_histogram(axs[ax_n], src_addr, dst_addr, dst_port, label, color, hatch, flow_monitor_path)
-        handles.append(
-            mpatches.Patch(fill=None, hatch=hatch, edgecolor=color, label=label)
-        )
+    for col_idx, axes in enumerate(axs):
+        for ax_n, _ in enumerate(axes):
+            (src_addr, dst_addr, dst_port, label, color, hatch, flow_monitor_path) = flow_info[ax_n + col_idx*columns]
+            plot_delay_histogram(axs[col_idx][ax_n], src_addr, dst_addr, dst_port, label, color, hatch, flow_monitor_path)
+            handles.append(
+                mpatches.Patch(fill=None, hatch=hatch, edgecolor=color, label=label)
+            )
     plt.xlabel("Delay [ms]")
 
     fig.legend(
@@ -134,13 +138,13 @@ def plot_jitter_histogram_figure(results, flow_info):
         for flow in sim.flows:
             flow: Flow = flow
             t: FiveTuple = flow.fiveTuple
-            if t.sourceAddress == src_addr:
-                if t.destinationAddress == dst_addr:
-                    if t.destinationPort == dst_port:
-                        for bin in flow.jitterHistogram:
-                            to_plot.extend(
-                                [float(bin.get("start")) * 1000] * int(bin.get("count"))
-                            )
+            # if t.sourceAddress == src_addr:
+            if t.destinationAddress == dst_addr:
+                if t.destinationPort == dst_port:
+                    for bin in flow.jitterHistogram:
+                        to_plot.extend(
+                            [float(bin.get("start")) * 1000] * int(bin.get("count"))
+                        )
                     axes.hist(
                         to_plot,
                         label=label,
@@ -148,7 +152,7 @@ def plot_jitter_histogram_figure(results, flow_info):
                         hatch=hatch,
                         edgecolor=color,
                         rwidth=0.8,
-                        bins=range(0, 500, 5),
+                        bins=range(0, 500, 10),
                     )
                     axes.set_xlim([0, 500])
                     axes.set_ylim([0.1, 100000])
@@ -199,11 +203,11 @@ def plot_fct_histogram_figure(results, flow_info):
         for flow in sim.flows:
             flow: Flow = flow
             t: FiveTuple = flow.fiveTuple
-            if t.sourceAddress == src_addr:
-                if t.destinationAddress == dst_addr:
-                    if t.destinationPort == dst_port:
-                        print(f"i: {i}, Flow {t.sourceAddress}, {t.destinationAddress}, {t.sourcePort}, {t.destinationPort}, {t.protocol} FCT: {flow.fct}")
-                        fcts.append(flow.fct)
+            # if t.sourceAddress == src_addr:
+            if t.destinationAddress == dst_addr:
+                if t.destinationPort == dst_port:
+                    print(f"i: {i}, Flow {t.sourceAddress}, {t.destinationAddress}, {t.sourcePort}, {t.destinationPort}, {t.protocol} FCT: {flow.fct}")
+                    fcts.append(flow.fct)
         axes.hist(
             fcts,
             label=label,
@@ -211,7 +215,7 @@ def plot_fct_histogram_figure(results, flow_info):
             hatch=hatch,
             edgecolor=color,
             rwidth=0.8,
-            bins=range(0, 15, 1),
+            bins=range(0, 25, 1),
         )
 
     plt.clf()
@@ -255,10 +259,13 @@ def plot_throughput_figure(results):
                 if port == "0":
                     continue
                 file_path = os.path.join(experiment_results_path, file_name)
+                print(file_path)
                 to_plot = parse_data_file(file_path)
-                to_plot_x = [x for x in to_plot["x"] if x <= 12]
+                to_plot_x = [x for x in to_plot["x"] if x <= 25]
                 to_plot_y = to_plot["y"][: len(to_plot_x)]
-
+                print(max(to_plot_x))
+                print(max(to_plot_y))
+                
                 axes.plot(
                     to_plot_x,
                     [y / 1000000 for y in to_plot_y],
@@ -269,9 +276,6 @@ def plot_throughput_figure(results):
                     marker=marker,
                 )
                 color_idx += 1
-
-            break
-
     plt.clf()
     plt.grid(linestyle="--", linewidth=0.5)
     print(f"Plotting throughput")
@@ -280,8 +284,8 @@ def plot_throughput_figure(results):
         2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
     )        
     
-    plot_throughput_line(axs[0], "qlr", ["red", "orange"], None, "QLR", "solid") 
-    plot_throughput_line(axs[1], "no-qlr", ["blue", "purple"], None, "NO-QLR", "solid")
+    plot_throughput_line(axs[0], "qlr", ["green", "darkgreen"], None, "QLR", "solid") 
+    plot_throughput_line(axs[1], "no-qlr", ["red", "darkred"], None, "NO-QLR", "solid")
 
     # plt.xticks(range(0, 13))
     # plt.xlim([0, 13])
@@ -313,17 +317,15 @@ def plot_throughput_figure(results):
 
 
 def plot_tcp_retransmission_figure(results):
-    def plot_retransmissions_line(axes, experiment_type, color, marker, label, linestyle):
+    def plot_retransmissions_line(axes, experiment_type, colors, marker, label, linestyle):
         results_path = os.path.join(results, experiment_type)
         for experiment_id in os.listdir(results_path):
             experiment_results_path = os.path.join(results_path, experiment_id, "retransmissions")
-            for file_name in os.listdir(experiment_results_path):
-                if "host1-host5" not in file_name:
-                    continue
+            for idx, file_name in enumerate(os.listdir(experiment_results_path)):
                 to_plot = parse_data_file(os.path.join(experiment_results_path, file_name))
-                
+                label = "-".join(file_name.split("-")[:2])
                 axes.plot(to_plot['x'], to_plot['y'], label=label,
-                            linestyle=linestyle, fillstyle='none', color=color, marker=marker)
+                            linestyle=linestyle, fillstyle='none', color=colors[idx], marker=marker)
             break
         return to_plot['x']
 
@@ -333,12 +335,12 @@ def plot_tcp_retransmission_figure(results):
         2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
     )   
 
-    plot_retransmissions_line(axs[0], "qlr", "green", None, "QLR", "solid")
-    plot_retransmissions_line(axs[1], "no-qlr", 'red', None, "No-QLR", "solid")
+    plot_retransmissions_line(axs[0], "qlr", ["green", "limegreen", "forestgreen", "darkseagreen"], None, "QLR", "solid")
+    plot_retransmissions_line(axs[1], "no-qlr", ["red", "firebrick", "indianred", "darkred"], None, "No-QLR", "solid")
 
     plt.xlabel('Time [s]')
-    axs[0].set_xlim([0, 10])
-    axs[1].set_xlim([0, 10])
+    axs[0].set_xlim([0, 25])
+    axs[1].set_xlim([0, 25])
 
     plt.ylabel('N. TCP Retransmissions', loc='bottom')
     # plt.yticks(range(0, 200, 20))
@@ -361,7 +363,7 @@ def plot_qdepth_figure(results):
                 if "s1" not in file_name:
                     continue
                 file_path = os.path.join(experiment_results_path, file_name)
-                to_plot = parse_qdepth_file(file_path)
+                to_plot = parse_qdepth_file(file_path, divide_by=1000)
                 
                 for i, (port, port_results) in enumerate(sorted(to_plot.items(), key=lambda x: int(x[0]))): 
                     axes.plot(port_results['x'], port_results['y'], label=label + "-" + str(int(port)-1),
@@ -374,15 +376,15 @@ def plot_qdepth_figure(results):
     fig, axs = plt.subplots(
         2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
     )   
-    plot_qdepth_line(axs[0], "qlr", ["red", "orange"], None, "s1", "solid")
-    plot_qdepth_line(axs[1], "no-qlr", ["blue", "purple"], None, "s1", "solid")
+    plot_qdepth_line(axs[0], "qlr", ["green", "darkgreen"], None, "s1", "solid")
+    plot_qdepth_line(axs[1], "no-qlr", ["red", "orange"], None, "s1", "solid")
 
     plt.xlabel('Time [s]')
     # plt.xticks(range(0, 13))
     # plt.xlim([0, 13])
 
-    plt.ylabel('QDepth [Bytes]')
-    # plt.yticks(range(0, 200, 20))
+    plt.ylabel('QDepth [KBytes]')
+    # plt.yticks(range(0, 100, 1))
     axs[0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
     axs[1].legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), labelspacing=0.2, ncols=3, prop={'size': 6})
     axs[0].set_title("QLR", loc='left')
@@ -483,6 +485,8 @@ if __name__ == "__main__":
     plot_throughput_figure(results_path)
     plot_qdepth_figure(results_path)
 
+    plt.figure(figsize=(3.5, 10))
+
     plot_fct_histogram_figure(
         results_path,
         [
@@ -493,7 +497,7 @@ if __name__ == "__main__":
                 "NO-QLR",
                 "red",
                 "////",
-                os.path.join(results_path, "no-qlr/1/flow_monitor.xml"),
+                os.path.join(results_path, "no-qlr/0/flow_monitor.xml"),
             ),
             (
                 "10.0.1.1",
@@ -502,7 +506,7 @@ if __name__ == "__main__":
                 "QLR",
                 "green",
                 "////",
-                os.path.join(results_path, "qlr/1/flow_monitor.xml"),
+                os.path.join(results_path, "qlr/0/flow_monitor.xml"),
             ),
         ],
     )
@@ -514,19 +518,73 @@ if __name__ == "__main__":
                 "10.0.1.1",
                 "10.0.5.1",
                 22222,
-                "NO-QLR",
+                "NO-QLR-1-5",
                 "red",
                 "////",
-                os.path.join(results_path, "no-qlr/1/flow_monitor.xml"),
+                os.path.join(results_path, "no-qlr/0/flow_monitor.xml"),
             ),
             (
                 "10.0.1.1",
                 "10.0.5.1",
                 22222,
-                "QLR",
+                "QLR-1-5",
                 "green",
                 "////",
-                os.path.join(results_path, "qlr/1/flow_monitor.xml"),
+                os.path.join(results_path, "qlr/0/flow_monitor.xml"),
+            ),
+            (
+                "10.0.2.1",
+                "10.0.5.1",
+                22222,
+                "NO-QLR-2-5",
+                "red",
+                "||||",
+                os.path.join(results_path, "no-qlr/0/flow_monitor.xml"),
+            ),
+            (
+                "10.0.2.1",
+                "10.0.5.1",
+                22222,
+                "QLR-2-5",
+                "green",
+                "||||",
+                os.path.join(results_path, "qlr/0/flow_monitor.xml"),
+            ),
+            (
+                "10.0.3.1",
+                "10.0.5.1",
+                22222,
+                "NO-QLR-3-5",
+                "red",
+                "x",
+                os.path.join(results_path, "no-qlr/0/flow_monitor.xml"),
+            ),
+            (
+                "10.0.3.1",
+                "10.0.5.1",
+                22222,
+                "QLR-3-5",
+                "green",
+                "x",
+                os.path.join(results_path, "qlr/0/flow_monitor.xml"),
+            ),
+            (
+                "10.0.4.1",
+                "10.0.5.1",
+                22222,
+                "NO-QLR-4-5",
+                "red",
+                "x",
+                os.path.join(results_path, "no-qlr/0/flow_monitor.xml"),
+            ),
+            (
+                "10.0.4.1",
+                "10.0.5.1",
+                22222,
+                "QLR-4-5",
+                "green",
+                "x",
+                os.path.join(results_path, "qlr/0/flow_monitor.xml"),
             ),
         ],
     )
@@ -541,7 +599,7 @@ if __name__ == "__main__":
                 "NO-QLR",
                 "red",
                 "////",
-                os.path.join(results_path, "no-qlr/1/flow_monitor.xml"),
+                os.path.join(results_path, "no-qlr/0/flow_monitor.xml"),
             ),
             (
                 "10.0.1.1",
@@ -550,7 +608,7 @@ if __name__ == "__main__":
                 "QLR",
                 "green",
                 "////",
-                os.path.join(results_path, "qlr/1/flow_monitor.xml"),
+                os.path.join(results_path, "qlr/0/flow_monitor.xml"),
             ),
         ],
     )

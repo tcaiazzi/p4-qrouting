@@ -126,3 +126,12 @@ printSimulationTime()
     std::cout << "Simulation Time: " << Simulator::Now().GetSeconds() << std::endl;
     Simulator::Schedule(Seconds(1), printSimulationTime);
 }
+
+
+NetDeviceContainer getAllDevices (Ptr<Node> node) {
+    NetDeviceContainer devices;
+    for (uint32_t i = 0; i < node->GetNDevices(); i++) {
+        devices.Add(node->GetDevice(i));
+    }
+    return devices;
+}

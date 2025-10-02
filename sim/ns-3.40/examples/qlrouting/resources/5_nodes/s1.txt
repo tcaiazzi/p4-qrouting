@@ -18,12 +18,12 @@ table_add select_port_from_row_col set_nhop 4 1 => 2
 table_add select_port_from_row_col set_nhop 4 2 => 3
 table_add select_port_from_row_col set_nhop 5 1 => 2
 table_add select_port_from_row_col set_nhop 5 2 => 3
+table_add select_row get_row_num 10.0.2.0/24 6 => 2
+table_add select_row get_row_num 10.0.3.0/24 6 => 3
+table_add select_row get_row_num 10.0.4.0/24 6 => 4
+table_add select_row get_row_num 10.0.5.0/24 6 => 5
 table_add select_row set_nhop 10.0.2.0/24 17 => 2
-table_add select_row set_nhop 10.0.2.0/24 6 => 2
 table_add select_row set_nhop 10.0.3.0/24 17 => 3
-table_add select_row set_nhop 10.0.3.0/24 6 => 3
 table_add select_row set_nhop 10.0.4.0/24 17 => 2
-table_add select_row set_nhop 10.0.4.0/24 6 => 2
 table_add select_row set_nhop 10.0.5.0/24 17 => 3
-table_add select_row set_nhop 10.0.5.0/24 6 => 3
 table_set_default select_row set_nhop 1

@@ -21,3 +21,8 @@ ApplicationContainer createUdpApplication(Ipv4Address addressToReach,
                                           std::string dataRate,
                                           uint32_t maxBytes);
 ApplicationContainer createSinkUdpApplication(uint16_t port, Ptr<Node> node);
+
+uint32_t GetSocketCount(Ptr<Node> node);
+void PrintTcpSocketsOfNode(uint32_t nodeId);
+
+void PrintTcpSocketsOfNodes(NodeContainer nodes);
