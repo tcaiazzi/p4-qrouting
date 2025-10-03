@@ -18,15 +18,8 @@
 #include "tracer.h"
 #include "utils.h"
 
-#include "ns3/applications-module.h"
-#include "ns3/core-module.h"
-#include "ns3/csma-module.h"
-#include "ns3/error-model.h"
 #include "ns3/flow-monitor-helper.h"
 #include "ns3/flow-monitor-module.h"
-#include "ns3/internet-module.h"
-#include "ns3/network-module.h"
-#include "ns3/p4-switch-module.h"
 
 #include <filesystem>
 #include <fstream>
@@ -45,55 +38,65 @@ int
 main(int argc, char* argv[])
 
 {
-    uint32_t qlrFlows = 1;
-    uint32_t burstFlows = 1;
-    std::string defaultBandwidth = "50Kbps";
-    std::string resultName = "flow_monitor.xml";
-    float endTime = 20.0f;
-    float burstMaxTime = 0.5;
-    float burstNum = 2;
-    float burstInterval = 0.5f;
-    float qlrFlowStartTime = 1.0f;
-    float qlrFlowEndTime = 1.0f;
-    std::string qlrRate = "100Mbps";
-    std::string burstRate = "50Kbps";
-    std::string congestionControl = "TcpLinuxReno";
-    uint32_t qlrFlowDataSize = 150000000;
-    uint32_t burstDataSize = 150000000;
-    bool dumpTraffic = false;
+    uint32_t destinationId;
+    uint32_t qlrFlowsForHost;
+    float qlrFlowStartTime;
+    uint32_t qlrFlowDataSize;
+    std::string congestionControl;
+
+    uint32_t backgroundFlowsForHost;
+    std::string backgroundFlowRate;
+
+    uint32_t burstFlows;
+    float burstMinStartTime;
+    float burstMaxStartTime;
+    float burstMinDuration;
+    float burstMaxDuration;
+    float burstMinInterval;
+    float burstMaxInterval;
+    uint32_t burstDataSize;
+    float burstNum;
+    std::string burstRate;
     uint32_t seed = 10;
 
-    std::string resultsPath = "";
+    std::string switchBandwidth;
+
+    float endTime;
+    std::string resultName = "flow_monitor.xml";
+    bool dumpTraffic = false;
+    std::string resultsPath;
 
     // Packet::EnablePrinting();
 
     CommandLine cmd;
-    cmd.AddValue("results-path", "The path where to save results", resultsPath);
-    cmd.AddValue("fm-name", "The name of the flow monitor result", resultName);
-    cmd.AddValue("qlr-flows", "The number of concurrent qlr flows", qlrFlows);
-    cmd.AddValue("burst-flows", "The number of concurrent bursts", burstFlows);
-    cmd.AddValue("burst-max-time", "The maximum lenght in second for a burst", burstMaxTime);
-    cmd.AddValue("burst-num", "The number of bursts", burstNum);
-    cmd.AddValue("burst-interval", "The interval time between bursts", burstInterval);
+    cmd.AddValue("destination-id", "Destination node ID", destinationId);
+    cmd.AddValue("qlr-flows", "The number of qlr flows from each source", qlrFlowsForHost);
     cmd.AddValue("qlr-start-time", "The time to start QLR flows", qlrFlowStartTime);
-    cmd.AddValue("qlr-end-time", "The time to stop QLR flows", qlrFlowEndTime);
-    cmd.AddValue("default-bw",
-                 "The bandwidth to set on all the sender/receiver links",
-                 defaultBandwidth);
-    cmd.AddValue("qlr-rate", "The rate to set to the QLR flows", qlrRate);
-    cmd.AddValue("burst-rate", "The rate to set to the bursty flows", burstRate);
     cmd.AddValue("qlr-data-size", "Size of the data sent by QLR flows", qlrFlowDataSize);
-    cmd.AddValue("burst-data-size", "Size of the data sent by bursty flows", burstDataSize);
-    cmd.AddValue("dump-traffic", "Dump traffic traces", dumpTraffic);
     cmd.AddValue("cc", "The TCP congestion control used for the experiment", congestionControl);
 
-    cmd.AddValue("end", "Simulation End Time", endTime);
-    cmd.AddValue("verbose", "Verbose output", verbose);
+    cmd.AddValue("background-flows", "Number of background flows per host", backgroundFlowsForHost);
+    cmd.AddValue("background-rate", "Rate of background flows", backgroundFlowRate);
+    cmd.AddValue("burst-flows", "The number of concurrent bursts", burstFlows);
+    cmd.AddValue("burst-min-start-time", "Minimum start time for bursts", burstMinStartTime);
+    cmd.AddValue("burst-max-start-time", "Maximum start time for bursts", burstMaxStartTime);
+    cmd.AddValue("burst-min-duration", "Minimum duration for bursts", burstMinDuration);
+    cmd.AddValue("burst-max-duration", "Maximum duration for bursts", burstMaxDuration);
+    cmd.AddValue("burst-min-interval", "Minimum interval between bursts", burstMinInterval);
+    cmd.AddValue("burst-max-interval", "Maximum interval between bursts", burstMaxInterval);
+    cmd.AddValue("burst-data-size", "Size of the data sent by bursty flows", burstDataSize);
+    cmd.AddValue("burst-num", "The number of bursts", burstNum);
+    cmd.AddValue("burst-rate", "The rate to set to the bursty flows", burstRate);
     cmd.AddValue("seed", "The seed to use for the experiment", seed);
-
+    cmd.AddValue("default-bw",
+                 "The bandwidth to set on all the sender/receiver links",
+                 switchBandwidth);
+    cmd.AddValue("end", "Simulation End Time", endTime);
+    cmd.AddValue("fm-name", "The name of the flow monitor result", resultName);
+    cmd.AddValue("dump-traffic", "Dump traffic traces", dumpTraffic);
+    cmd.AddValue("results-path", "The path where to save results", resultsPath);
+    
     cmd.Parse(argc, argv);
-    ;
-
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
@@ -110,25 +113,33 @@ main(int argc, char* argv[])
     }
 
     NS_LOG_INFO("#### RUN PARAMETERS ####");
-    NS_LOG_INFO("Results Path: " + resultsPath);
-    NS_LOG_INFO("Flow Monitor Name: " + resultName);
-    NS_LOG_INFO("QLR Flows: " + std::to_string(qlrFlows));
-    NS_LOG_INFO("Burst Flows: " + std::to_string(burstFlows));
-    NS_LOG_INFO("Burst Max Time: " + std::to_string(burstMaxTime));
-    NS_LOG_INFO("Burst Num: " + std::to_string(burstNum));
-    NS_LOG_INFO("Burst Interval: " + std::to_string(burstInterval));
-    NS_LOG_INFO("QLR Start Time: " + std::to_string(qlrFlowStartTime));
-    NS_LOG_INFO("QLR End Time: " + std::to_string(qlrFlowEndTime));
-    NS_LOG_INFO("Default Bandwidth: " + defaultBandwidth);
-    NS_LOG_INFO("QLR Rate: " + qlrRate);
-    NS_LOG_INFO("Burst Rate: " + burstRate);
-    NS_LOG_INFO("QLR Data Size: " + std::to_string(qlrFlowDataSize));
-    NS_LOG_INFO("Burst Data Size: " + std::to_string(burstDataSize));
-    NS_LOG_INFO("Dump Traffic: " + std::string(dumpTraffic ? "true" : "false"));
-    NS_LOG_INFO("Congestion Control: " + congestionControl);
-    NS_LOG_INFO("End Time: " + std::to_string(endTime));
-    NS_LOG_INFO("Verbose: " + std::string(verbose ? "true" : "false"));
-    NS_LOG_INFO("Seed: " + std::to_string(seed));
+    NS_LOG_INFO("destinationId: " + std::to_string(destinationId));
+    NS_LOG_INFO("qlrFlowsForHost: " + std::to_string(qlrFlowsForHost));
+    NS_LOG_INFO("qlrFlowStartTime: " + std::to_string(qlrFlowStartTime));
+    NS_LOG_INFO("qlrFlowDataSize: " + std::to_string(qlrFlowDataSize));
+    NS_LOG_INFO("congestionControl: " + congestionControl);
+
+    NS_LOG_INFO("backgroundFlowsForHost: " + std::to_string(backgroundFlowsForHost));
+    NS_LOG_INFO("backgroundFlowRate: " + backgroundFlowRate);
+
+    NS_LOG_INFO("burstFlows: " + std::to_string(burstFlows));
+    NS_LOG_INFO("burstMinStartTime: " + std::to_string(burstMinStartTime));
+    NS_LOG_INFO("burstMaxStartTime: " + std::to_string(burstMaxStartTime));
+    NS_LOG_INFO("burstMinDuration: " + std::to_string(burstMinDuration));
+    NS_LOG_INFO("burstMaxDuration: " + std::to_string(burstMaxDuration));
+    NS_LOG_INFO("burstMinInterval: " + std::to_string(burstMinInterval));
+    NS_LOG_INFO("burstMaxInterval: " + std::to_string(burstMaxInterval));
+    NS_LOG_INFO("burstDataSize: " + std::to_string(burstDataSize));
+    NS_LOG_INFO("burstNum: " + std::to_string(burstNum));
+    NS_LOG_INFO("burstRate: " + burstRate);
+    NS_LOG_INFO("seed: " + std::to_string(seed));
+
+    NS_LOG_INFO("switchBandwidth: " + switchBandwidth);
+
+    NS_LOG_INFO("endTime: " + std::to_string(endTime));
+    NS_LOG_INFO("resultName: " + resultName);
+    NS_LOG_INFO("dumpTraffic: " + std::string(dumpTraffic ? "true" : "false"));
+    NS_LOG_INFO("resultsPath: " + resultsPath);
 
     NS_LOG_INFO("Configuring Congestion Control.");
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
@@ -149,7 +160,7 @@ main(int argc, char* argv[])
     std::pair<NodeContainer, NodeContainer> nodes =
         createTopology({{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}, {2, 4}, {3, 4}},
                        5,
-                       defaultBandwidth,
+                       switchBandwidth,
                        "100Gbps",
                        dumpTraffic,
                        resultsPath,
@@ -163,12 +174,21 @@ main(int argc, char* argv[])
 
     generateWorkload(hosts,
                      endTime,
+                     destinationId,
+                     qlrFlowsForHost,
                      qlrFlowStartTime,
                      qlrFlowDataSize,
                      congestionControl,
+                     backgroundFlowsForHost,
+                     backgroundFlowRate,
                      burstFlows,
                      burstNum,
-                     burstMaxTime,
+                     burstMinStartTime,
+                     burstMaxStartTime,
+                     burstMinDuration,
+                     burstMaxDuration,
+                     burstMinInterval,
+                     burstMaxInterval,
                      burstRate,
                      burstDataSize,
                      seed,
@@ -218,10 +238,11 @@ main(int argc, char* argv[])
             proto = "OTHER";
         }
 
-        if (verbose) {
-        std::cout << "Flow " << flow.first << " (" << t.sourceAddress << " -> "
-                  << t.destinationAddress << ") [" << proto << "] Throughput: " << throughput
-                  << " Mbit/s" << std::endl;
+        if (verbose)
+        {
+            std::cout << "Flow " << flow.first << " (" << t.sourceAddress << " -> "
+                      << t.destinationAddress << ") [" << proto << "] Throughput: " << throughput
+                      << " Mbit/s" << std::endl;
         }
     }
 

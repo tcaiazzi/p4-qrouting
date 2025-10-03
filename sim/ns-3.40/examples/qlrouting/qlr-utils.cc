@@ -100,7 +100,6 @@ traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdep
         }
     }
 
-
     Simulator::Schedule(Seconds(0.1), &traceQdepthUpdate, p4Device, qdepthFile);
 }
 
@@ -258,7 +257,6 @@ createTopology(const std::vector<std::pair<int, int>> edges,
     return {switches, hosts};
 }
 
-
 std::map<Ptr<Node>, uint32_t> nodeToNextTcpSocketIndex;
 
 void
@@ -277,10 +275,10 @@ startTcpFlow(Ptr<Node> receiverHost,
         createTcpApplication(receiverHostIpv4->GetAddress(1, addressIndex).GetAddress(),
                              port,
                              senderHost,
-                             60000000, 
+                             60000000,
                              congestionControl);
     hostSenderApp.Start(Seconds(startTime));
-    
+
     if (nodeToNextTcpSocketIndex.find(senderHost) == nodeToNextTcpSocketIndex.end())
     {
         nodeToNextTcpSocketIndex[senderHost] = 1;
@@ -315,7 +313,6 @@ startTcpFlow(Ptr<Node> receiverHost,
                         cwndPath,
                         senderHost->GetId(),
                         socketIndex);
-
 }
 
 void
@@ -347,12 +344,13 @@ startUdpFlow(Ptr<Node> receiverHost,
 
 void
 startBackgroundTraffic(NodeContainer hosts,
-                       uint16_t addressIndex,
+                       uint32_t addressIndex,
                        uint16_t destinationPort,
+                       uint32_t backgroundFlowsForHost,
                        std::string dataRate,
                        float startTime,
                        float endTime,
-                       uint16_t dataSize)
+                       uint32_t dataSize)
 {
     for (uint16_t i = 0; i < hosts.GetN(); i++)
     {
@@ -364,18 +362,21 @@ startBackgroundTraffic(NodeContainer hosts,
                 continue;
             Ptr<Node> destinationHost = hosts.Get(j);
 
-            NS_LOG_DEBUG("Background UDP: " << Names::FindName(sourceHost) << " -> "
-                                            << Names::FindName(destinationHost)
-                                            << " addrIdx=" << addressIndex
-                                            << " port=" << destinationPort << " rate=" << dataRate);
-            startUdpFlow(destinationHost,
-                         addressIndex,
-                         sourceHost,
-                         destinationPort,
-                         dataRate,
-                         startTime,
-                         endTime,
-                         dataSize);
+            for (uint32_t k = 0; k < backgroundFlowsForHost; k++)
+            {
+                NS_LOG_DEBUG("Background UDP: " << Names::FindName(sourceHost) << " -> "
+                                                << Names::FindName(destinationHost) << " addrIdx="
+                                                << addressIndex << " port=" << destinationPort
+                                                << " rate=" << dataRate);
+                startUdpFlow(destinationHost,
+                             addressIndex,
+                             sourceHost,
+                             destinationPort,
+                             dataRate,
+                             startTime,
+                             endTime,
+                             dataSize);
+            }
         }
     }
 }
@@ -488,14 +489,23 @@ addHosts(NodeContainer switches,
 void
 generateWorkload(NodeContainer hosts,
                  float endTime,
+                 uint32_t destinationId,
+                 uint32_t qlrFlowsForHost,
                  float qlrFlowStartTime,
-                 uint16_t qlrFlowDataSize,
+                 uint32_t qlrFlowDataSize,
                  std::string congestionControl,
-                 uint16_t burstFlows,
-                 uint16_t burstNum,
-                 float burstMaxTime,
+                 uint32_t backgroundFlowsForHost,
+                 std::string backgroundFlowRate,
+                 uint32_t burstFlows,
+                 uint32_t burstNum,
+                 float burstMinStartTime,
+                 float burstMaxStartTime,
+                 float burstMinDuration,
+                 float burstMaxDuration,
+                 float burstMinInterval,
+                 float burstMaxInterval,
                  std::string burstRate,
-                 uint16_t burstDataSize,
+                 uint32_t burstDataSize,
                  int seed,
                  std::string resultsPath)
 {
@@ -513,14 +523,15 @@ generateWorkload(NodeContainer hosts,
         defaultHostReceiverApp.Start(Seconds(0.0));
     }
 
-    Ptr<Node> hostReceiver = hosts.Get(4);
+    Ptr<Node> hostReceiver = hosts.Get(destinationId);
 
     for (uint16_t i = 0; i < hosts.GetN(); i++)
     {
-        if (i == 4)
+        if (i == destinationId)
             continue;
         Ptr<Node> hostSender = hosts.Get(i);
-        startTcpFlow(hostReceiver,
+        for (uint32_t f = 0; f < qlrFlowsForHost; f++) {
+            startTcpFlow(hostReceiver,
                      0,
                      hostSender,
                      qlrPort,
@@ -528,19 +539,21 @@ generateWorkload(NodeContainer hosts,
                      qlrFlowDataSize,
                      resultsPath,
                      congestionControl);
+        }
+        
     }
 
-    startBackgroundTraffic(hosts, 0, defaultPort, "1Mbps", qlrFlowStartTime, endTime, 0);
+    startBackgroundTraffic(hosts, 0, defaultPort, backgroundFlowsForHost, backgroundFlowRate, qlrFlowStartTime - 0.2f, endTime, 0);
 
     if (burstFlows > 0)
     {
         randomGen = std::mt19937(seed);
         std::uniform_real_distribution startTimeDistribution =
-            std::uniform_real_distribution(1.0, 6.0);
-        std::uniform_real_distribution burstLengthDistribution =
-            std::uniform_real_distribution(0.1, 0.5);
+            std::uniform_real_distribution(burstMinStartTime, burstMaxStartTime);
+        std::uniform_real_distribution burstDurationDistribution =
+            std::uniform_real_distribution(burstMinDuration, burstMaxDuration);
         std::uniform_real_distribution burstIntervalDistribution =
-            std::uniform_real_distribution(0.3, 1.0);
+            std::uniform_real_distribution(burstMinInterval, burstMaxInterval);
 
         for (uint16_t i = 0; i < hosts.GetN(); i++)
         {
@@ -550,11 +563,12 @@ generateWorkload(NodeContainer hosts,
                 if (i == j || j == 4)
                     continue;
 
-                NS_LOG_INFO("Burst UDP: " << Names::FindName(sourceHost) << " -> "
-                                           << Names::FindName(hosts.Get(j)) << " addrIdx=" << 0
-                                           << " port=" << defaultPort << " rate " << burstRate << " burstflows " << burstFlows);
+                NS_LOG_DEBUG("Burst UDP: " << Names::FindName(sourceHost) << " -> "
+                                          << Names::FindName(hosts.Get(j)) << " addrIdx=" << 0
+                                          << " port=" << defaultPort << " rate " << burstRate
+                                          << " burstflows " << burstFlows);
                 float startTime = startTimeDistribution(randomGen);
-                float endTime = startTime + burstLengthDistribution(randomGen);
+                float endTime = startTime + burstDurationDistribution(randomGen);
                 float interval = burstIntervalDistribution(randomGen);
 
                 Ptr<Node> destinationHost = hosts.Get(j);
