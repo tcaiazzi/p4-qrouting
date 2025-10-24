@@ -38,13 +38,13 @@ pip install --break-system-packages -r requirements.txt
 
 for cc in "TcpLinuxReno" "TcpCubic" "TcpBbr"; do
 
-    RESULTS_DIR="5_nodes_${BURST_NUM}_${cc}"
+    RESULTS_DIR="5_nodes_${cc}_${BURST_FLOWS}_${BURST_RATE}"
     RESULTS_PATH="results/$RESULTS_DIR"
     mkdir -p logs/$RESULTS_DIR/qlr
     mkdir -p logs/$RESULTS_DIR/no-qlr
 
     experiment_params_cc="$experiment_params --cc=$cc"
-    
+
     for i in {0..4}; do
         SEED=$(($SEED_BASE + $i*5))
         mkdir -p $RESULTS_PATH/qlr/$i
@@ -59,5 +59,5 @@ for cc in "TcpLinuxReno" "TcpCubic" "TcpBbr"; do
     done
 done
 
-chmod -R 777 results 
+chmod -R 777 results
 # python3 plot.py results/5_nodes figures/5_nodes
