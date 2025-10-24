@@ -27,7 +27,7 @@ HOST_BW="${HOST_BW:-100Gbps}"
 SWITCH_BW="${SWITCH_BW:-100Mbps}"
 EDGES="${EDGES:-0,1;0,2;1,2}"
 HOSTS="${HOSTS:-1,1,1,1,1}"
-SWITCHES="${SWITCHES:-5}"
+SWITCHES="${SWITCHES:-3}"
 
 END="${END:-20}"
 FM_NAME="${FM_NAME:-flow_monitor.xml}"
@@ -41,7 +41,7 @@ pip install --break-system-packages -r requirements.txt
 
 for cc in "TcpLinuxReno" "TcpCubic" "TcpBbr"; do
 
-    RESULTS_DIR="5_nodes_${cc}_${BURST_FLOWS}_${BURST_RATE}"
+    RESULTS_DIR="${SWITCHES}_nodes_${cc}_${BURST_FLOWS}_${BURST_RATE}"
     RESULTS_PATH="results/$RESULTS_DIR"
     mkdir -p logs/$RESULTS_DIR/qlr
     mkdir -p logs/$RESULTS_DIR/no-qlr
