@@ -194,6 +194,7 @@ configureP4Switch(Ptr<Node> switchNode, std::string commandsPath, P4SwitchHelper
 
 std::pair<NodeContainer, NodeContainer>
 createTopology(const std::vector<std::pair<int, int>> edges,
+               std::vector<int> hostsVector,
                uint16_t numNodes,
                std::string switchBandwidth,
                std::string hostBandwidth,
@@ -213,7 +214,7 @@ createTopology(const std::vector<std::pair<int, int>> edges,
     }
 
     NodeContainer hosts = addHosts(switches,
-                                   std::vector<int>{1, 1, 1, 1, 1},
+                                   hostsVector,
                                    hostBandwidth,
                                    dumpTraffic,
                                    resultsPath);
@@ -390,23 +391,18 @@ startBurstTraffic(Ptr<Node> sourceNode,
                   float startTime,
                   float endTime,
                   uint16_t dataSize,
-                  float burstInterval,
-                  uint16_t burstFlows,
-                  uint16_t burstNum)
+                  uint16_t burstFlows)
 {
-    for (uint32_t burstIdx = 1; burstIdx <= burstNum; burstIdx++)
+    for (uint32_t i = 1; i <= burstFlows; i++)
     {
-        for (uint32_t i = 1; i <= burstFlows; i++)
-        {
-            startUdpFlow(destinationNode,
-                         0,
-                         sourceNode,
-                         destinationPort,
-                         dataRate,
-                         startTime + (burstIdx - 1) * burstInterval,
-                         endTime + (burstIdx - 1) * burstInterval,
-                         0);
-        }
+        startUdpFlow(destinationNode,
+                     addressIndex,
+                     sourceNode,
+                     destinationPort,
+                     dataRate,
+                     startTime,
+                     endTime,
+                     dataSize);
     }
 }
 
@@ -497,7 +493,6 @@ generateWorkload(NodeContainer hosts,
                  uint32_t backgroundFlowsForHost,
                  std::string backgroundFlowRate,
                  uint32_t burstFlows,
-                 uint32_t burstNum,
                  float burstMinStartTime,
                  float burstMaxStartTime,
                  float burstMinDuration,
@@ -530,20 +525,27 @@ generateWorkload(NodeContainer hosts,
         if (i == destinationId)
             continue;
         Ptr<Node> hostSender = hosts.Get(i);
-        for (uint32_t f = 0; f < qlrFlowsForHost; f++) {
+        for (uint32_t f = 0; f < qlrFlowsForHost; f++)
+        {
             startTcpFlow(hostReceiver,
-                     0,
-                     hostSender,
-                     qlrPort,
-                     qlrFlowStartTime,
-                     qlrFlowDataSize,
-                     resultsPath,
-                     congestionControl);
+                         0,
+                         hostSender,
+                         qlrPort,
+                         qlrFlowStartTime,
+                         qlrFlowDataSize,
+                         resultsPath,
+                         congestionControl);
         }
-        
     }
 
-    startBackgroundTraffic(hosts, 0, defaultPort, backgroundFlowsForHost, backgroundFlowRate, qlrFlowStartTime - 0.2f, endTime, 0);
+    startBackgroundTraffic(hosts,
+                           0,
+                           defaultPort,
+                           backgroundFlowsForHost,
+                           backgroundFlowRate,
+                           qlrFlowStartTime - 0.2f,
+                           endTime,
+                           0);
 
     if (burstFlows > 0)
     {
@@ -558,31 +560,39 @@ generateWorkload(NodeContainer hosts,
         for (uint16_t i = 0; i < hosts.GetN(); i++)
         {
             Ptr<Node> sourceHost = hosts.Get(i);
+            float startTime = startTimeDistribution(randomGen);
+            float endTime = startTime + burstDurationDistribution(randomGen);
             for (uint16_t j = 0; j < hosts.GetN(); j++)
             {
-                if (i == j || j == 4)
+                if (i == j || j == destinationId)
                     continue;
 
+                Ptr<Node> destinationHost = hosts.Get(j);
+
                 NS_LOG_DEBUG("Burst UDP: " << Names::FindName(sourceHost) << " -> "
-                                          << Names::FindName(hosts.Get(j)) << " addrIdx=" << 0
-                                          << " port=" << defaultPort << " rate " << burstRate
-                                          << " burstflows " << burstFlows);
-                float startTime = startTimeDistribution(randomGen);
-                float endTime = startTime + burstDurationDistribution(randomGen);
+                                           << Names::FindName(destinationHost) << " addrIdx=" << 0
+                                           << " port=" << defaultPort << " rate " << burstRate
+                                           << " burstflows " << burstFlows);
+
                 float interval = burstIntervalDistribution(randomGen);
 
-                Ptr<Node> destinationHost = hosts.Get(j);
+                NS_LOG_INFO("Scheduling burst from " << Names::FindName(sourceHost) << " to "
+                                                     << Names::FindName(destinationHost)
+                                                     << " startTime: " << startTime + interval
+                                                     << " endTime: " << endTime + interval
+                                                     << " burstRate " << burstRate << " burstFlows "
+                                                     << burstFlows);
+
                 startBurstTraffic(destinationHost,
                                   sourceHost,
                                   0,
                                   defaultPort,
                                   burstRate,
-                                  startTime,
-                                  endTime,
+                                  startTime + interval,
+                                  endTime + interval,
                                   burstDataSize,
-                                  interval,
-                                  burstFlows,
-                                  burstNum);
+                                  burstFlows);
+
             }
         }
     }

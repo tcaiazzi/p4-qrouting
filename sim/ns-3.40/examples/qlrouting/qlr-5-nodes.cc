@@ -38,6 +38,9 @@ int
 main(int argc, char* argv[])
 
 {
+    std::vector<std::pair<int, int>> edges =
+        {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}, {2, 4}, {3, 4}};
+
     uint32_t destinationId;
     uint32_t qlrFlowsForHost;
     float qlrFlowStartTime;
@@ -55,7 +58,6 @@ main(int argc, char* argv[])
     float burstMinInterval;
     float burstMaxInterval;
     uint32_t burstDataSize;
-    float burstNum;
     std::string burstRate;
     uint32_t seed = 10;
 
@@ -85,7 +87,6 @@ main(int argc, char* argv[])
     cmd.AddValue("burst-min-interval", "Minimum interval between bursts", burstMinInterval);
     cmd.AddValue("burst-max-interval", "Maximum interval between bursts", burstMaxInterval);
     cmd.AddValue("burst-data-size", "Size of the data sent by bursty flows", burstDataSize);
-    cmd.AddValue("burst-num", "The number of bursts", burstNum);
     cmd.AddValue("burst-rate", "The rate to set to the bursty flows", burstRate);
     cmd.AddValue("seed", "The seed to use for the experiment", seed);
     cmd.AddValue("default-bw",
@@ -95,7 +96,7 @@ main(int argc, char* argv[])
     cmd.AddValue("fm-name", "The name of the flow monitor result", resultName);
     cmd.AddValue("dump-traffic", "Dump traffic traces", dumpTraffic);
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
-    
+
     cmd.Parse(argc, argv);
     // if (verbose)
     {
@@ -130,7 +131,6 @@ main(int argc, char* argv[])
     NS_LOG_INFO("burstMinInterval: " + std::to_string(burstMinInterval));
     NS_LOG_INFO("burstMaxInterval: " + std::to_string(burstMaxInterval));
     NS_LOG_INFO("burstDataSize: " + std::to_string(burstDataSize));
-    NS_LOG_INFO("burstNum: " + std::to_string(burstNum));
     NS_LOG_INFO("burstRate: " + burstRate);
     NS_LOG_INFO("seed: " + std::to_string(seed));
 
@@ -159,6 +159,7 @@ main(int argc, char* argv[])
 
     std::pair<NodeContainer, NodeContainer> nodes =
         createTopology({{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}, {2, 4}, {3, 4}},
+                       std::vector<int>{1, 1, 1, 1, 1},
                        5,
                        switchBandwidth,
                        "100Gbps",
@@ -182,7 +183,6 @@ main(int argc, char* argv[])
                      backgroundFlowsForHost,
                      backgroundFlowRate,
                      burstFlows,
-                     burstNum,
                      burstMinStartTime,
                      burstMaxStartTime,
                      burstMinDuration,

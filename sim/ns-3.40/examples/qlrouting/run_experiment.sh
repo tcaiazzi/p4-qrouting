@@ -13,15 +13,14 @@ QLR_DATA_SIZE="${QLR_DATA_SIZE:-50000000}"
 BACKGROUND_FLOWS="${BACKGROUND_FLOWS:-1}"
 BACKGROUND_RATE="${BACKGROUND_RATE:-10Mbps}"
 
-BURST_FLOWS="${BURST_FLOWS:-70}"
-BURST_MIN_START_TIME="${BURST_MIN_START_TIME:-0.5}"
-BURST_MAX_START_TIME="${BURST_MAX_START_TIME:-6.0}"
+BURST_FLOWS="${BURST_FLOWS:-40}"
+BURST_MIN_START_TIME="${BURST_MIN_START_TIME:-1.0}"
+BURST_MAX_START_TIME="${BURST_MAX_START_TIME:-5.0}"
 BURST_MIN_DURATION="${BURST_MIN_DURATION:-0.1}"
-BURST_MAX_DURATION="${BURST_MAX_DURATION:-0.2}"
-BURST_MIN_INTERVAL="${BURST_MIN_INTERVAL:-0.5}"
-BURST_MAX_INTERVAL="${BURST_MAX_INTERVAL:-1.0}"
+BURST_MAX_DURATION="${BURST_MAX_DURATION:-0.4}"
+BURST_MIN_INTERVAL="${BURST_MIN_INTERVAL:-0.3}"
+BURST_MAX_INTERVAL="${BURST_MAX_INTERVAL:-0.6}"
 BURST_DATA_SIZE="${BURST_DATA_SIZE:-0}"
-BURST_NUM="${BURST_NUM:-5}"
 BURST_RATE="${BURST_RATE:-1Mbps}"
 SEED="${SEED:-10}"
 
@@ -31,7 +30,7 @@ END="${END:-20}"
 FM_NAME="${FM_NAME:-flow_monitor.xml}"
 DUMP_TRAFFIC="${DUMP_TRAFFIC:---dump-traffic}"
 
-experiment_params="--destination-id=$DESTINATION_ID --qlr-flows=$QLR_FLOWS --qlr-start-time=$QLR_START_TIME --qlr-data-size=$QLR_DATA_SIZE --background-flows=$BACKGROUND_FLOWS --background-rate=$BACKGROUND_RATE --burst-flows=$BURST_FLOWS --burst-min-start-time=$BURST_MIN_START_TIME --burst-max-start-time=$BURST_MAX_START_TIME --burst-min-duration=$BURST_MIN_DURATION --burst-max-duration=$BURST_MAX_DURATION --burst-min-interval=$BURST_MIN_INTERVAL --burst-max-interval=$BURST_MAX_INTERVAL --burst-data-size=$BURST_DATA_SIZE --burst-num=$BURST_NUM --burst-rate=$BURST_RATE --seed=$SEED --default-bw=$DEFAULT_BW --end=$END --fm-name=$FM_NAME $DUMP_TRAFFIC"
+experiment_params="--destination-id=$DESTINATION_ID --qlr-flows=$QLR_FLOWS --qlr-start-time=$QLR_START_TIME --qlr-data-size=$QLR_DATA_SIZE --background-flows=$BACKGROUND_FLOWS --background-rate=$BACKGROUND_RATE --burst-flows=$BURST_FLOWS --burst-min-start-time=$BURST_MIN_START_TIME --burst-max-start-time=$BURST_MAX_START_TIME --burst-min-duration=$BURST_MIN_DURATION --burst-max-duration=$BURST_MAX_DURATION --burst-min-interval=$BURST_MIN_INTERVAL --burst-max-interval=$BURST_MAX_INTERVAL --burst-data-size=$BURST_DATA_SIZE --burst-rate=$BURST_RATE --seed=$SEED --default-bw=$DEFAULT_BW --end=$END --fm-name=$FM_NAME $DUMP_TRAFFIC"
 
 echo "$experiment_params"
 
@@ -46,7 +45,7 @@ for cc in "TcpLinuxReno" "TcpCubic" "TcpBbr"; do
 
     experiment_params_cc="$experiment_params --cc=$cc"
     
-    for i in {0..0}; do
+    for i in {0..4}; do
         SEED=$(($SEED_BASE + $i*5))
         mkdir -p $RESULTS_PATH/qlr/$i
         python3 generate_commands_5_nodes.py resources/5_nodes 1

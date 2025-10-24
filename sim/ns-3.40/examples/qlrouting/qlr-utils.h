@@ -54,12 +54,11 @@ void startBurstTraffic(Ptr<Node> sourceNode,
                        float startTime,
                        float endTime,
                        uint16_t dataSize,
-                       float burstInterval,
-                       uint16_t burstFlows,
-                       uint16_t burstNum);
+                       uint16_t burstFlows);
 
 std::pair<NodeContainer, NodeContainer> createTopology(
     const std::vector<std::pair<int, int>> edges,
+    std::vector<int> hostsVector,
     uint16_t numNodes,
     std::string switchBandwidth,
     std::string hostBandwidth,
@@ -83,7 +82,6 @@ void generateWorkload(NodeContainer hosts,
                       uint32_t backgroundFlowsForHost,
                       std::string backgroundFlowRate,
                       uint32_t burstFlows,
-                      uint32_t burstNum,
                       float burstMinStartTime,
                       float burstMaxStartTime,
                       float burstMinDuration,

@@ -33,47 +33,7 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
 
     return cmd
 
-
-if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print(
-            "Usage: generate_commands_5_nodes.py <dst_path> <qlr_active>\n"
-        )
-        exit(1)
-
-    dst_path = os.path.abspath(sys.argv[1])
-    qlr_active = bool(int(sys.argv[2]))
-    
-
-    print(f"Destination path: {dst_path}, QLR active: {qlr_active}")
-
-    network = {
-        0: {1: 1, 2: 2},
-        1: {0: 1, 2: 2, 3: 3},
-        2: {0: 1, 1: 2, 3: 3, 4: 4},
-        3: {1: 1, 2: 2, 4: 3},
-        4: {2: 1, 3: 2},
-    }
-
-    dags = {k: nx.DiGraph() for k in network}
-
-    dags[0].add_nodes_from(network.keys())
-    dags[0].add_edges_from([(1,0), (2,0), (3,1), (3,4), (4,2)])
-
-    dags[1].add_nodes_from(network.keys())
-    dags[1].add_edges_from([(0,1), (2,0), (2,1), (3,1), (3,4), (4,2)])
-
-    dags[2].add_nodes_from(network.keys())
-    dags[2].add_edges_from([(0,1), (0,2), (1,2), (1,3), (3,2), (4,2), (4,3)])
-
-    dags[3].add_nodes_from(network.keys())
-    dags[3].add_edges_from([(0,1), (0,2), (1,3), (2,3), (2,4), (4,3)])
-
-    dags[4].add_nodes_from(network.keys())
-    dags[4].add_edges_from([(0,1), (0,2), (1,3), (2,4), (3,2), (3,4)])
-    
-    subnets = ipaddress.ip_network("10.0.0.0/16").subnets(prefixlen_diff=8)
-    next(subnets)  
+def generate_all_commands(network: dict, dags: dict, subnets):
     node_to_network = {k: next(subnets) for k in network}
     for node_name in network:
         commands = set()
@@ -136,3 +96,46 @@ if __name__ == "__main__":
         commands_path = os.path.join(dst_path, f"s{node_name + 1}.txt")
         with open(commands_path, "w") as f: 
             f.write("\n".join(sorted(list(commands))))
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print(
+            "Usage: generate_commands_5_nodes.py <dst_path> <qlr_active>\n"
+        )
+        exit(1)
+
+    dst_path = os.path.abspath(sys.argv[1])
+    qlr_active = bool(int(sys.argv[2]))
+    
+
+    print(f"Destination path: {dst_path}, QLR active: {qlr_active}")
+
+    network = {
+        0: {1: 1, 2: 2},
+        1: {0: 1, 2: 2, 3: 3},
+        2: {0: 1, 1: 2, 3: 3, 4: 4},
+        3: {1: 1, 2: 2, 4: 3},
+        4: {2: 1, 3: 2},
+    }
+
+    dags = {k: nx.DiGraph() for k in network}
+
+    dags[0].add_nodes_from(network.keys())
+    dags[0].add_edges_from([(1,0), (2,0), (3,1), (3,4), (4,2)])
+
+    dags[1].add_nodes_from(network.keys())
+    dags[1].add_edges_from([(0,1), (2,0), (2,1), (3,1), (3,4), (4,2)])
+
+    dags[2].add_nodes_from(network.keys())
+    dags[2].add_edges_from([(0,1), (0,2), (1,2), (1,3), (3,2), (4,2), (4,3)])
+
+    dags[3].add_nodes_from(network.keys())
+    dags[3].add_edges_from([(0,1), (0,2), (1,3), (2,3), (2,4), (4,3)])
+
+    dags[4].add_nodes_from(network.keys())
+    dags[4].add_edges_from([(0,1), (0,2), (1,3), (2,4), (3,2), (3,4)])
+    
+    subnets = ipaddress.ip_network("10.0.0.0/16").subnets(prefixlen_diff=8)
+    next(subnets)  
+    
+    generate_all_commands(network, dags, subnets)
