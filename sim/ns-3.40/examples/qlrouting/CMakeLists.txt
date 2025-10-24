@@ -12,3 +12,15 @@ build_example(
     ${libflow-monitor}
     ${GMP_LIBRARIES}
 )
+
+build_example(
+        NAME qlr-experiment
+        SOURCE_FILES qlr-experiment.cc tracer.cc socket-utils.cc utils.cc qlr-utils.cc
+        LIBRARIES_TO_LINK
+        ${libcsma}
+        ${libinternet}
+        ${libapplications}
+        ${libp4-switch}
+        ${libflow-monitor}
+        ${GMP_LIBRARIES}
+)

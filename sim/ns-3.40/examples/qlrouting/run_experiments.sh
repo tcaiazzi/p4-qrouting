@@ -39,19 +39,27 @@ echo "$experiment_params"
 
 pip install --break-system-packages -r requirements.txt
 
-cc="TcpLinuxReno"
+for cc in "TcpLinuxReno" "TcpCubic" "TcpBbr"; do
 
-RESULTS_DIR="5_nodes_${cc}_${BURST_FLOWS}_${BURST_RATE}"
-RESULTS_PATH="results/$RESULTS_DIR"
-mkdir -p logs/$RESULTS_DIR/qlr
-mkdir -p logs/$RESULTS_DIR/no-qlr
+    RESULTS_DIR="5_nodes_${cc}_${BURST_FLOWS}_${BURST_RATE}"
+    RESULTS_PATH="results/$RESULTS_DIR"
+    mkdir -p logs/$RESULTS_DIR/qlr
+    mkdir -p logs/$RESULTS_DIR/no-qlr
 
-experiment_params_cc="$experiment_params --cc=$cc"
+    experiment_params_cc="$experiment_params --cc=$cc"
 
-SEED=$(($SEED_BASE + $i*5))
-mkdir -p $RESULTS_PATH/qlr/$i
-python3 generate_commands_5_nodes.py resources/5_nodes 1
-sleep 1
-../../ns3 run qlr-experiment -- $experiment_params_cc --results-path="examples/qlrouting/$RESULTS_PATH/qlr/$i/" --seed=$SEED  |& tee logs/$RESULTS_DIR/qlr/qlr_${cc}_$i.log
+    for i in {0..4}; do
+        SEED=$(($SEED_BASE + $i*5))
+        mkdir -p $RESULTS_PATH/qlr/$i
+        python3 generate_commands_5_nodes.py resources/5_nodes 1
+        sleep 1
+        ../../ns3 run qlr-experiment -- $experiment_params_cc --results-path="examples/qlrouting/$RESULTS_PATH/qlr/$i/" --seed=$SEED  |& tee logs/$RESULTS_DIR/qlr/qlr_${cc}_$i.log
+
+        mkdir -p $RESULTS_PATH/no-qlr/$i
+        python3 generate_commands_5_nodes.py resources/5_nodes 0
+        sleep 1
+        ../../ns3 run qlr-experiment -- $experiment_params_cc --results-path="examples/qlrouting/$RESULTS_PATH/no-qlr/$i/" --seed=$SEED  |& tee logs/$RESULTS_DIR/no-qlr/no-qlr_${cc}_$i.log
+    done
+done
 
 chmod -R 777 results
