@@ -44,22 +44,21 @@ for cc in "TcpLinuxReno" "TcpCubic" "TcpBbr"; do
 
     RESULTS_DIR="${SWITCHES}_nodes_${cc}_${BURST_FLOWS}_${BURST_RATE}"
     RESULTS_PATH="results/$RESULTS_DIR"
-    mkdir -p logs/$RESULTS_DIR/qlr
-    mkdir -p logs/$RESULTS_DIR/no-qlr
 
     experiment_params_cc="$experiment_params --cc=$cc"
 
-    for i in {0..4}; do
-        SEED=$(($SEED_BASE + $i*5))
-        mkdir -p $RESULTS_PATH/qlr/$i
-        python3 generate_commands_5_nodes.py resources/5_nodes 1
-        sleep 1
-        ../../ns3 run qlr-experiment -- $experiment_params_cc --results-path="examples/qlrouting/$RESULTS_PATH/qlr/$i/" --seed=$SEED  |& tee logs/$RESULTS_DIR/qlr/qlr_${cc}_$i.log
-
-        mkdir -p $RESULTS_PATH/no-qlr/$i
-        python3 generate_commands_5_nodes.py resources/5_nodes 0
-        sleep 1
-        ../../ns3 run qlr-experiment -- $experiment_params_cc --results-path="examples/qlrouting/$RESULTS_PATH/no-qlr/$i/" --seed=$SEED  |& tee logs/$RESULTS_DIR/no-qlr/no-qlr_${cc}_$i.log
+    for qlr_active in 1 0; do
+        experiments_results_dir=$RESULTS_PATH/qlr_${qlr_active}/$i
+        mkdir -p $experiments_results_dir
+        python3 generate_tables.py ${SWITCHES}
+        cd /ns3/ns-3.40/examples/qlrouting/p4src && p4c -o ../qlr_build ./qlr.p4 && cd ..
+        python3 generate_p4_commands.py "resources/${SWITCHES}_nodes" ${qlr_active} --edges $EDGES --host-vector $HOSTS --dags $DAGS
+        for i in {0..4}; do
+            SEED=$(($SEED_BASE + $i*5))
+            
+            sleep 1
+            ../../ns3 run qlr-experiment -- $experiment_params_cc --results-path="examples/qlrouting/${experiments_results_dir}" --seed=$SEED  |& tee examples/qlrouting/${experiments_results_dir}/run_${i}.log
+        done
     done
 done
 

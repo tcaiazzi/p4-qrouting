@@ -202,6 +202,29 @@ createTopology(const std::vector<std::pair<int, int>> edges,
                std::string resultsPath,
                std::map<Ptr<Node>, Ptr<P4SwitchNetDevice>>& p4SwitchMap)
 {
+    NS_LOG_INFO("Creating topology with parameters:");
+    NS_LOG_INFO("Number of nodes: " << numNodes);
+    NS_LOG_INFO("Switch bandwidth: " << switchBandwidth);
+    NS_LOG_INFO("Host bandwidth: " << hostBandwidth);
+    NS_LOG_INFO("Dump traffic: " << (dumpTraffic ? "true" : "false"));
+    NS_LOG_INFO("Results path: " << resultsPath);
+    
+    // Log edges
+    std::ostringstream edgesStr;
+    edgesStr << "Edges: ";
+    for (const auto& edge : edges) {
+        edgesStr << "(" << edge.first << "," << edge.second << ") ";
+    }
+    NS_LOG_INFO(edgesStr.str());
+    
+    // Log hosts vector
+    std::ostringstream hostsStr;
+    hostsStr << "Hosts vector: ";
+    for (int host : hostsVector) {
+        hostsStr << host << " ";
+    }
+    NS_LOG_INFO(hostsStr.str());
+    
     NodeContainer switches;
     switches.Create(numNodes);
 

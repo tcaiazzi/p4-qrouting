@@ -276,8 +276,8 @@ def plot_throughput_figure(results):
         2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
     )        
     
-    plot_throughput_line(axs[0], "qlr", ["green", "darkgreen"], None, "QLR", "solid") 
-    plot_throughput_line(axs[1], "no-qlr", ["red", "darkred"], None, "NO-QLR", "solid")
+    plot_throughput_line(axs[0], "qlr_1", ["green", "darkgreen"], None, "QLR", "solid") 
+    plot_throughput_line(axs[1], "qlr_0", ["red", "darkred"], None, "NO-QLR", "solid")
 
     # plt.xticks(range(0, 13))
     # plt.xlim([0, 13])
@@ -327,8 +327,8 @@ def plot_tcp_retransmission_figure(results):
         2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
     )   
 
-    plot_retransmissions_line(axs[0], "qlr", ["green", "limegreen", "forestgreen", "darkseagreen"], None, "QLR", "solid")
-    plot_retransmissions_line(axs[1], "no-qlr", ["red", "firebrick", "indianred", "darkred"], None, "No-QLR", "solid")
+    plot_retransmissions_line(axs[0], "qlr_1", ["green", "limegreen", "forestgreen", "darkseagreen"], None, "QLR", "solid")
+    plot_retransmissions_line(axs[1], "qlr_0", ["red", "firebrick", "indianred", "darkred"], None, "No-QLR", "solid")
 
     plt.xlabel('Time [s]')
     axs[0].set_xlim([0, 25])
@@ -368,8 +368,8 @@ def plot_qdepth_figure(results):
     fig, axs = plt.subplots(
         2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
     )   
-    plot_qdepth_line(axs[0], "qlr", ["green", "darkgreen"], None, "s1", "solid")
-    plot_qdepth_line(axs[1], "no-qlr", ["red", "orange"], None, "s1", "solid")
+    plot_qdepth_line(axs[0], "qlr_1", ["green", "darkgreen"], None, "s1", "solid")
+    plot_qdepth_line(axs[1], "qlr_0", ["red", "orange"], None, "s1", "solid")
 
     plt.xlabel('Time [s]')
     # plt.xticks(range(0, 13))
@@ -421,10 +421,11 @@ def plot_cumulative_tcp_retransmission_figure(results):
 def plot_cwnd_figure(results):
     def plot_cwnd_line(axes, experiment_type, color, marker, label, linestyle):
         results_path = os.path.join(results, experiment_type)
+        to_plot = {}
         for experiment_id in os.listdir(results_path):
             experiment_results_path = os.path.join(results_path, experiment_id, "cwnd")
             for file_name in os.listdir(experiment_results_path):
-                if "host1-host5" not in file_name:
+                if "host1-" not in file_name:
                     continue
                 to_plot = parse_data_file(os.path.join(experiment_results_path, file_name))
                 to_plot["y"] = [val/1000 for val in to_plot["y"]] 
@@ -433,15 +434,15 @@ def plot_cwnd_figure(results):
                             linestyle=linestyle, fillstyle='none', color=color, marker=marker)
             break
         return to_plot['x']
-
+        
     plt.clf()
     plt.grid(linestyle='--', linewidth=0.5)
     fig, axs = plt.subplots(
         2, 1, sharey="all", tight_layout=True, figsize=(4, 4)
     )   
 
-    plot_cwnd_line(axs[0], "qlr", "red", None, "QLR Flows", "solid")
-    plot_cwnd_line(axs[1], "no-qlr", 'orange', None, "TCP Flows", "solid")
+    plot_cwnd_line(axs[0], "qlr_1", "red", None, "QLR Flows", "solid")
+    plot_cwnd_line(axs[1], "qlr_0", 'orange', None, "TCP Flows", "solid")
 
     plt.xlabel('Time [s]')
     plt.ylabel('Cwnd Size [KB]')
@@ -484,7 +485,7 @@ if __name__ == "__main__":
         [
             (
                 "10.0.1.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "NO-QLR",
                 "red",
@@ -493,7 +494,7 @@ if __name__ == "__main__":
             ),
             (
                 "10.0.1.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "QLR",
                 "green",
@@ -508,7 +509,7 @@ if __name__ == "__main__":
         [
             (
                 "10.0.1.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "NO-QLR-1-5",
                 "red",
@@ -517,7 +518,7 @@ if __name__ == "__main__":
             ),
             (
                 "10.0.1.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "QLR-1-5",
                 "green",
@@ -526,7 +527,7 @@ if __name__ == "__main__":
             ),
             (
                 "10.0.2.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "NO-QLR-2-5",
                 "red",
@@ -535,7 +536,7 @@ if __name__ == "__main__":
             ),
             (
                 "10.0.2.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "QLR-2-5",
                 "green",
@@ -544,7 +545,7 @@ if __name__ == "__main__":
             ),
             (
                 "10.0.3.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "NO-QLR-3-5",
                 "red",
@@ -553,7 +554,7 @@ if __name__ == "__main__":
             ),
             (
                 "10.0.3.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "QLR-3-5",
                 "green",
@@ -562,7 +563,7 @@ if __name__ == "__main__":
             ),
             (
                 "10.0.4.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "NO-QLR-4-5",
                 "red",
@@ -571,7 +572,7 @@ if __name__ == "__main__":
             ),
             (
                 "10.0.4.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "QLR-4-5",
                 "green",
@@ -586,7 +587,7 @@ if __name__ == "__main__":
         [
             (
                 "10.0.1.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "NO-QLR",
                 "red",
@@ -595,7 +596,7 @@ if __name__ == "__main__":
             ),
             (
                 "10.0.1.1",
-                "10.0.5.1",
+                "10.0.2.1",
                 22222,
                 "QLR",
                 "green",

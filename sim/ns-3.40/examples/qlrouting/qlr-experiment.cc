@@ -138,11 +138,11 @@ main(int argc, char* argv[])
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_WARN);
-        // LogComponentEnable("P4SwitchHelper", LOG_LEVEL_WARN);
-        // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
+        LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
+        //LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
+        //LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
+        LogComponentEnable("P4SwitchHelper", LOG_LEVEL_DEBUG);
+        //LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
         // LogComponentEnable("utils", LOG_LEVEL_DEBUG);
         LogComponentEnable("qlr-utils", LOG_LEVEL_INFO);
         LogComponentEnable("socket-utils", LOG_LEVEL_DEBUG);

@@ -9,9 +9,9 @@ RUN apt update && apt install -y gdb cmake build-essential
 
 # COPY ns-3.40 /ns3/ns-3.40
 
-# RUN cd ns-3.40 && \
-#     CXXFLAGS="-W -Wall -g" ./ns3 configure --enable-examples && \
-#     ./ns3 build
+RUN cd ns-3.40 && \
+    CXXFLAGS="-W -Wall -g" ./ns3 configure --enable-examples && \
+    ./ns3 build
 
 RUN apt clean && \
     rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
