@@ -52,7 +52,7 @@ i=0
 SEED=$(($SEED_BASE + $i*5))
 mkdir -p $RESULTS_PATH/qlr_${QLR_ACTIVE}/$i
 python3 generate_tables.py 5
-python3 generate_p4_commands.py "resources/${SWITCHES}_nodes" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
+python3 generate_p4_commands.py "resources/${SWITCHES}_nodes/commands" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
 
 cd /ns3/ns-3.40/examples/qlrouting/p4src && p4c -o ../qlr_build ./qlr.p4 && cd ..
 

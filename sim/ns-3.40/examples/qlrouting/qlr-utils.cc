@@ -1,6 +1,7 @@
 #pragma once
 
 #include "qlr-utils.h"
+#include "workload_parser.h"
 
 #include "socket-utils.h"
 #include "tracer.h"
@@ -208,23 +209,25 @@ createTopology(const std::vector<std::pair<int, int>> edges,
     NS_LOG_INFO("Host bandwidth: " << hostBandwidth);
     NS_LOG_INFO("Dump traffic: " << (dumpTraffic ? "true" : "false"));
     NS_LOG_INFO("Results path: " << resultsPath);
-    
+
     // Log edges
     std::ostringstream edgesStr;
     edgesStr << "Edges: ";
-    for (const auto& edge : edges) {
+    for (const auto& edge : edges)
+    {
         edgesStr << "(" << edge.first << "," << edge.second << ") ";
     }
     NS_LOG_INFO(edgesStr.str());
-    
+
     // Log hosts vector
     std::ostringstream hostsStr;
     hostsStr << "Hosts vector: ";
-    for (int host : hostsVector) {
+    for (int host : hostsVector)
+    {
         hostsStr << host << " ";
     }
     NS_LOG_INFO(hostsStr.str());
-    
+
     NodeContainer switches;
     switches.Create(numNodes);
 
@@ -236,11 +239,7 @@ createTopology(const std::vector<std::pair<int, int>> edges,
         Names::Add(switchName, switches.Get(i));
     }
 
-    NodeContainer hosts = addHosts(switches,
-                                   hostsVector,
-                                   hostBandwidth,
-                                   dumpTraffic,
-                                   resultsPath);
+    NodeContainer hosts = addHosts(switches, hostsVector, hostBandwidth, dumpTraffic, resultsPath);
 
     CsmaHelper csma;
     csma.SetChannelAttribute("DataRate", StringValue(switchBandwidth));
@@ -262,8 +261,8 @@ createTopology(const std::vector<std::pair<int, int>> edges,
     for (uint32_t i = 0; i < numNodes; i++)
     {
         std::string commandsPath = "/ns3/ns-3.40/examples/qlrouting/resources/" +
-                                   std::to_string(numNodes) + "_nodes/s" + std::to_string(i + 1) +
-                                   ".txt";
+                                   std::to_string(numNodes) + "_nodes/commands/s" +
+                                   std::to_string(i + 1) + ".txt";
         Ptr<Node> switchNode = switches.Get(i);
 
         Ptr<P4SwitchNetDevice> p4Switch = configureP4Switch(switchNode, commandsPath, qlrHelper);
@@ -353,7 +352,7 @@ startUdpFlow(Ptr<Node> receiverHost,
 
     Ipv4Address dst_addr = receiverHostIpv4->GetAddress(1, addressIndex).GetAddress();
 
-    NS_LOG_DEBUG("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr
+    NS_LOG_INFO("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr
                                            << " on port " << std::to_string(port) << " rate "
                                            << rate << " start " << std::to_string(start_time)
                                            << " end " << std::to_string(end_time) << " dataSize "
@@ -506,6 +505,53 @@ addHosts(NodeContainer switches,
 }
 
 void
+generateWorkloadFromFile(NodeContainer hosts,
+                 std::string workloadFilePath,
+                 std::string congestionControl,
+                 std::string resultsPath)
+{
+    auto workloads = WorkloadParser::parseFile(workloadFilePath);
+
+    uint16_t qlrPort = 22222;
+    uint16_t defaultPort = 20000;
+
+    for (uint16_t i = 0; i < hosts.GetN(); i++)
+    {
+        Ptr<Node> host = hosts.Get(i);
+        ApplicationContainer hostReceiverApp = createSinkTcpApplication(qlrPort, host);
+        hostReceiverApp.Start(Seconds(0.0));
+        ApplicationContainer defaultHostReceiverApp = createSinkUdpApplication(defaultPort, host);
+        defaultHostReceiverApp.Start(Seconds(0.0));
+    }
+
+    for (const auto& wl : workloads) {
+        Ptr<Node> senderHost = hosts.Get(wl.sourceId);
+        Ptr<Node> receiverHost = hosts.Get(wl.destinationId);
+        if(wl.protocol == 6) {
+            startTcpFlow(receiverHost,
+                         0,
+                         senderHost,
+                         wl.dstPort,
+                         wl.startTime,
+                         wl.dataSize,
+                         resultsPath,
+                         congestionControl);
+        } else if(wl.protocol == 17) {
+            startUdpFlow(receiverHost,
+                         0,
+                         senderHost,
+                         wl.dstPort,
+                         wl.dataRate,
+                         wl.startTime,
+                         wl.endTime,
+                         wl.dataSize);
+        } else {
+            NS_LOG_ERROR("Unknown protocol " << wl.protocol << " in workload file.");
+        }
+    }
+}
+
+void
 generateWorkload(NodeContainer hosts,
                  float endTime,
                  uint32_t destinationId,
@@ -599,12 +645,11 @@ generateWorkload(NodeContainer hosts,
 
                 float interval = burstIntervalDistribution(randomGen);
 
-                NS_LOG_INFO("Scheduling burst from " << Names::FindName(sourceHost) << " to "
-                                                     << Names::FindName(destinationHost)
-                                                     << " startTime: " << startTime + interval
-                                                     << " endTime: " << endTime + interval
-                                                     << " burstRate " << burstRate << " burstFlows "
-                                                     << burstFlows);
+                NS_LOG_INFO("Scheduling burst from "
+                            << Names::FindName(sourceHost) << " to "
+                            << Names::FindName(destinationHost) << " startTime: "
+                            << startTime + interval << " endTime: " << endTime + interval
+                            << " burstRate " << burstRate << " burstFlows " << burstFlows);
 
                 startBurstTraffic(destinationHost,
                                   sourceHost,
@@ -615,7 +660,6 @@ generateWorkload(NodeContainer hosts,
                                   endTime + interval,
                                   burstDataSize,
                                   burstFlows);
-
             }
         }
     }

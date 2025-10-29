@@ -72,6 +72,12 @@ NodeContainer addHosts(NodeContainer switches,
                        bool dumpTraffic,
                        std::string resultsPath);
 
+
+void generateWorkloadFromFile(NodeContainer hosts,
+                      std::string workloadFilePath,
+                      std::string congestionControl,
+                      std::string resultsPath);
+
 void generateWorkload(NodeContainer hosts,
                       float endTime,
                       uint32_t destinationId,

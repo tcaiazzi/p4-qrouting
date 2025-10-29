@@ -214,25 +214,9 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
 
-    generateWorkload(hosts,
-                     endTime,
-                     destinationId,
-                     qlrFlowsForHost,
-                     qlrFlowStartTime,
-                     qlrFlowDataSize,
+    generateWorkloadFromFile(hosts,
+                     "examples/qlrouting/resources/3_nodes/workloads/wl1.csv",
                      congestionControl,
-                     backgroundFlowsForHost,
-                     backgroundFlowRate,
-                     burstFlows,
-                     burstMinStartTime,
-                     burstMaxStartTime,
-                     burstMinDuration,
-                     burstMaxDuration,
-                     burstMinInterval,
-                     burstMaxInterval,
-                     burstRate,
-                     burstDataSize,
-                     seed,
                      resultsPath);
 
     FlowMonitorHelper flowHelper;
