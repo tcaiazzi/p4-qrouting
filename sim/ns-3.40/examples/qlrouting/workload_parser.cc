@@ -40,9 +40,9 @@ std::vector<WorkloadFlow> WorkloadParser::parseFile(std::string filename) {
 
         std::istringstream ss(line);
         WorkloadFlow wl;
-        std::string srcStr, dstStr, startStr, endStr, protoStr, portStr, dataRateStr, dataSizeStr;
+        std::string srcStr, dstStr, startStr, endStr, protoStr, portStr, dataRateStr, dataSizeStr, flowsNumberStr;
 
-        // Parse comma-separated values. Expect 8 fields but tolerate missing trailing field.
+        // Parse comma-separated values. Expect up to 9 fields but tolerate missing trailing fields.
         if (!std::getline(ss, srcStr, ',')) continue;
         if (!std::getline(ss, dstStr, ',')) continue;
         if (!std::getline(ss, startStr, ',')) continue;
@@ -50,13 +50,15 @@ std::vector<WorkloadFlow> WorkloadParser::parseFile(std::string filename) {
         if (!std::getline(ss, protoStr, ',')) continue;
         if (!std::getline(ss, portStr, ',')) continue;
         if (!std::getline(ss, dataRateStr, ',')) continue;
-        if (!std::getline(ss, dataSizeStr)) dataSizeStr.clear(); // allow empty
+        if (!std::getline(ss, dataSizeStr, ',')) dataSizeStr.clear(); // allow empty
+        if (!std::getline(ss, flowsNumberStr)) flowsNumberStr.clear(); // optional final field
 
         // Trim individual fields
         trim_inplace(srcStr); trim_inplace(dstStr);
         trim_inplace(startStr); trim_inplace(endStr);
         trim_inplace(protoStr); trim_inplace(portStr);
         trim_inplace(dataRateStr); trim_inplace(dataSizeStr);
+        trim_inplace(flowsNumberStr);
 
         try {
             // sourceId / destinationId
@@ -106,6 +108,19 @@ std::vector<WorkloadFlow> WorkloadParser::parseFile(std::string filename) {
                 wl.dataSize = static_cast<u_int32_t>(ds);
             } else {
                 wl.dataSize = 0;
+            }
+
+            // flowsNumber: optional, default 1
+            if (!flowsNumberStr.empty()) {
+                unsigned long fn = parseUnsigned(flowsNumberStr, "flowsNumber", line);
+                if (fn == 0) {
+                    // zero flows doesn't make sense; treat as error
+                    throw std::runtime_error("flowsNumber must be >= 1 in line: " + line);
+                }
+                if (fn > std::numeric_limits<u_int32_t>::max()) throw std::runtime_error("flowsNumber out of range in line: " + line);
+                wl.flowsNumber = static_cast<u_int32_t>(fn);
+            } else {
+                wl.flowsNumber = 1;
             }
         } catch (const std::exception &e) {
             throw; // propagate descriptive error

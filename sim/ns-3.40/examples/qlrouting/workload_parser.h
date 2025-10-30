@@ -13,6 +13,7 @@ struct WorkloadFlow {
     u_int16_t dstPort = 0;
     std::string dataRate;
     u_int32_t dataSize;
+    u_int32_t flowsNumber = 1;
 };
 
 class WorkloadParser {

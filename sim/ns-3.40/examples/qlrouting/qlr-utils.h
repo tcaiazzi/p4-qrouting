@@ -24,7 +24,7 @@ void startTcpFlow(Ptr<Node> receiverHost,
                   Ptr<Node> senderHost,
                   uint16_t port,
                   float startTime,
-                  uint32_t qlrFlowDataSize,
+                  uint32_t flowDataSize,
                   std::string resultsPath,
                   std::string congestionControl = "TcpLinuxReno");
 
@@ -72,11 +72,10 @@ NodeContainer addHosts(NodeContainer switches,
                        bool dumpTraffic,
                        std::string resultsPath);
 
-
 void generateWorkloadFromFile(NodeContainer hosts,
-                      std::string workloadFilePath,
-                      std::string congestionControl,
-                      std::string resultsPath);
+                              std::string workloadFilePath,
+                              std::string congestionControl,
+                              std::string resultsPath);
 
 void generateWorkload(NodeContainer hosts,
                       float endTime,

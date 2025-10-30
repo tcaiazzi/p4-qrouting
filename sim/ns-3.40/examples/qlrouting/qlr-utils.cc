@@ -1,11 +1,11 @@
 #pragma once
 
 #include "qlr-utils.h"
-#include "workload_parser.h"
 
 #include "socket-utils.h"
 #include "tracer.h"
 #include "utils.h"
+#include "workload_parser.h"
 
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
@@ -288,7 +288,7 @@ startTcpFlow(Ptr<Node> receiverHost,
              Ptr<Node> senderHost,
              uint16_t port,
              float startTime,
-             uint32_t qlrFlowDataSize,
+             uint32_t flowDataSize,
              std::string resultsPath,
              std::string congestionControl)
 {
@@ -298,7 +298,7 @@ startTcpFlow(Ptr<Node> receiverHost,
         createTcpApplication(receiverHostIpv4->GetAddress(1, addressIndex).GetAddress(),
                              port,
                              senderHost,
-                             60000000,
+                             flowDataSize,
                              congestionControl);
     hostSenderApp.Start(Seconds(startTime));
 
@@ -353,10 +353,10 @@ startUdpFlow(Ptr<Node> receiverHost,
     Ipv4Address dst_addr = receiverHostIpv4->GetAddress(1, addressIndex).GetAddress();
 
     NS_LOG_INFO("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr
-                                           << " on port " << std::to_string(port) << " rate "
-                                           << rate << " start " << std::to_string(start_time)
-                                           << " end " << std::to_string(end_time) << " dataSize "
-                                           << burstDataSize);
+                                          << " on port " << std::to_string(port) << " rate " << rate
+                                          << " start " << std::to_string(start_time) << " end "
+                                          << std::to_string(end_time) << " dataSize "
+                                          << burstDataSize);
 
     ApplicationContainer hostSenderApp =
         createUdpApplication(dst_addr, port, senderHost, rate, burstDataSize);
@@ -506,9 +506,9 @@ addHosts(NodeContainer switches,
 
 void
 generateWorkloadFromFile(NodeContainer hosts,
-                 std::string workloadFilePath,
-                 std::string congestionControl,
-                 std::string resultsPath)
+                         std::string workloadFilePath,
+                         std::string congestionControl,
+                         std::string resultsPath)
 {
     auto workloads = WorkloadParser::parseFile(workloadFilePath);
 
@@ -524,28 +524,40 @@ generateWorkloadFromFile(NodeContainer hosts,
         defaultHostReceiverApp.Start(Seconds(0.0));
     }
 
-    for (const auto& wl : workloads) {
+    for (const auto& wl : workloads)
+    {
         Ptr<Node> senderHost = hosts.Get(wl.sourceId);
         Ptr<Node> receiverHost = hosts.Get(wl.destinationId);
-        if(wl.protocol == 6) {
-            startTcpFlow(receiverHost,
-                         0,
-                         senderHost,
-                         wl.dstPort,
-                         wl.startTime,
-                         wl.dataSize,
-                         resultsPath,
-                         congestionControl);
-        } else if(wl.protocol == 17) {
-            startUdpFlow(receiverHost,
-                         0,
-                         senderHost,
-                         wl.dstPort,
-                         wl.dataRate,
-                         wl.startTime,
-                         wl.endTime,
-                         wl.dataSize);
-        } else {
+        if (wl.protocol == 6)
+        {
+            for (uint32_t f = 0; f < wl.flowsNumber; f++)
+            {
+                startTcpFlow(receiverHost,
+                             0,
+                             senderHost,
+                             wl.dstPort,
+                             wl.startTime,
+                             wl.dataSize,
+                             resultsPath,
+                             congestionControl);
+            }
+        }
+        else if (wl.protocol == 17)
+        {
+            for (uint32_t f = 0; f < wl.flowsNumber; f++)
+            {
+                startUdpFlow(receiverHost,
+                             0,
+                             senderHost,
+                             wl.dstPort,
+                             wl.dataRate,
+                             wl.startTime,
+                             wl.endTime,
+                             wl.dataSize);
+            }
+        }
+        else
+        {
             NS_LOG_ERROR("Unknown protocol " << wl.protocol << " in workload file.");
         }
     }
