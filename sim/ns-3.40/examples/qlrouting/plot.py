@@ -96,17 +96,26 @@ def plot_delay_histogram_figure(results, flow_info):
     plt.clf()
 
     columns = 2
+    subplots_rows = int(len(flow_info)/columns)
     fig, axs = plt.subplots(
-        int(len(flow_info)/columns), columns, sharey="all", tight_layout=True, figsize=(10, 10)
+        subplots_rows, columns, sharey="all", tight_layout=True, figsize=(10, 2.5*subplots_rows)
     )
     handles = []
-    for col_idx, axes in enumerate(axs):
-        for ax_n, _ in enumerate(axes):
-            (src_addr, dst_addr, dst_port, label, color, hatch, flow_monitor_path) = flow_info[ax_n + col_idx*columns]
-            plot_delay_histogram(axs[col_idx][ax_n], src_addr, dst_addr, dst_port, label, color, hatch, os.path.join(flow_monitor_path, str(col_idx), "flow_monitor.xml"))
+    if subplots_rows > 1:
+        for col_idx, axes in enumerate(axs):
+            for ax_n, _ in enumerate(axes):
+                (src_addr, dst_addr, dst_port, label, color, hatch, flow_monitor_path) = flow_info[ax_n + col_idx*columns]
+                plot_delay_histogram(axs[col_idx][ax_n], src_addr, dst_addr, dst_port, label, color, hatch, os.path.join(flow_monitor_path, str(col_idx), "flow_monitor.xml"))
+                handles.append(
+                    mpatches.Patch(fill=None, hatch=hatch, edgecolor=color, label=label)
+                )
+    else:
+        for ax_n, (src_addr, dst_addr, dst_port, label, color, hatch, flow_monitor_path) in enumerate(flow_info):
+            plot_delay_histogram(axs[ax_n], src_addr, dst_addr, dst_port, label, color, hatch, os.path.join(flow_monitor_path, "flow_monitor.xml"))
             handles.append(
                 mpatches.Patch(fill=None, hatch=hatch, edgecolor=color, label=label)
             )
+        
     plt.xlabel("Delay [ms]")
 
     fig.legend(
@@ -405,8 +414,8 @@ def plot_cumulative_tcp_retransmission_figure(results):
 
     plt.clf()
     plt.grid(linestyle='--', linewidth=0.5)
-    plot_retransmissions_bar("qlr", "green", None, "QLR", "solid", offset=1)
-    plot_retransmissions_bar("no-qlr", 'red', None, "NO-QLR", "solid", offset=2)
+    plot_retransmissions_bar("qlr_1", "green", None, "QLR", "solid", offset=1)
+    plot_retransmissions_bar("qlr_0", 'red', None, "NO-QLR", "solid", offset=2)
 
     plt.xticks([1, 2], ['QLR', 'NO-QLR'])
 
@@ -490,7 +499,7 @@ if __name__ == "__main__":
                 "NO-QLR",
                 "red",
                 "////",
-                os.path.join(results_path, "no-qlr/0/flow_monitor.xml"),
+                os.path.join(results_path, "qlr_0/0/flow_monitor.xml"),
             ),
             (
                 "10.0.1.1",
@@ -499,7 +508,7 @@ if __name__ == "__main__":
                 "QLR",
                 "green",
                 "////",
-                os.path.join(results_path, "qlr/0/flow_monitor.xml"),
+                os.path.join(results_path, "qlr_1/0/flow_monitor.xml"),
             ),
         ],
     )
@@ -514,7 +523,7 @@ if __name__ == "__main__":
                 "NO-QLR-1-5",
                 "red",
                 "////",
-                os.path.join(results_path, "no-qlr"),
+                os.path.join(results_path, "qlr_0", "0"),
             ),
             (
                 "10.0.1.1",
@@ -523,62 +532,62 @@ if __name__ == "__main__":
                 "QLR-1-5",
                 "green",
                 "////",
-                os.path.join(results_path, "qlr"),
+                os.path.join(results_path, "qlr_1", "0"),
             ),
-            (
-                "10.0.2.1",
-                "10.0.2.1",
-                22222,
-                "NO-QLR-2-5",
-                "red",
-                "||||",
-                os.path.join(results_path, "no-qlr"),
-            ),
-            (
-                "10.0.2.1",
-                "10.0.2.1",
-                22222,
-                "QLR-2-5",
-                "green",
-                "||||",
-                os.path.join(results_path, "qlr"),
-            ),
-            (
-                "10.0.3.1",
-                "10.0.2.1",
-                22222,
-                "NO-QLR-3-5",
-                "red",
-                "x",
-                os.path.join(results_path, "no-qlr"),
-            ),
-            (
-                "10.0.3.1",
-                "10.0.2.1",
-                22222,
-                "QLR-3-5",
-                "green",
-                "x",
-                os.path.join(results_path, "qlr"),
-            ),
-            (
-                "10.0.4.1",
-                "10.0.2.1",
-                22222,
-                "NO-QLR-4-5",
-                "red",
-                "x",
-                os.path.join(results_path, "no-qlr"),
-            ),
-            (
-                "10.0.4.1",
-                "10.0.2.1",
-                22222,
-                "QLR-4-5",
-                "green",
-                "x",
-                os.path.join(results_path, "qlr"),
-            ),
+            # (
+            #     "10.0.2.1",
+            #     "10.0.2.1",
+            #     22222,
+            #     "NO-QLR-2-5",
+            #     "red",
+            #     "||||",
+            #     os.path.join(results_path, "no-qlr"),
+            # ),
+            # (
+            #     "10.0.2.1",
+            #     "10.0.2.1",
+            #     22222,
+            #     "QLR-2-5",
+            #     "green",
+            #     "||||",
+            #     os.path.join(results_path, "qlr"),
+            # ),
+            # (
+            #     "10.0.3.1",
+            #     "10.0.2.1",
+            #     22222,
+            #     "NO-QLR-3-5",
+            #     "red",
+            #     "x",
+            #     os.path.join(results_path, "no-qlr"),
+            # ),
+            # (
+            #     "10.0.3.1",
+            #     "10.0.2.1",
+            #     22222,
+            #     "QLR-3-5",
+            #     "green",
+            #     "x",
+            #     os.path.join(results_path, "qlr"),
+            # ),
+            # (
+            #     "10.0.4.1",
+            #     "10.0.2.1",
+            #     22222,
+            #     "NO-QLR-4-5",
+            #     "red",
+            #     "x",
+            #     os.path.join(results_path, "no-qlr"),
+            # ),
+            # (
+            #     "10.0.4.1",
+            #     "10.0.2.1",
+            #     22222,
+            #     "QLR-4-5",
+            #     "green",
+            #     "x",
+            #     os.path.join(results_path, "qlr"),
+            # ),
         ],
     )
 
@@ -592,7 +601,7 @@ if __name__ == "__main__":
                 "NO-QLR",
                 "red",
                 "////",
-                os.path.join(results_path, "no-qlr/0/flow_monitor.xml"),
+                os.path.join(results_path, "qlr_0/0/flow_monitor.xml"),
             ),
             (
                 "10.0.1.1",
@@ -601,7 +610,7 @@ if __name__ == "__main__":
                 "QLR",
                 "green",
                 "////",
-                os.path.join(results_path, "qlr/0/flow_monitor.xml"),
+                os.path.join(results_path, "qlr_1/0/flow_monitor.xml"),
             ),
         ],
     )

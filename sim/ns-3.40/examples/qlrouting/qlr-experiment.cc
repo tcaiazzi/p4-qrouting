@@ -65,6 +65,8 @@ main(int argc, char* argv[])
     std::string burstRate;
     uint32_t seed = 10;
 
+
+    std::string workloadFilePath;
     std::string switchBandwidth;
     std::string hostBandwidth;
 
@@ -80,11 +82,11 @@ main(int argc, char* argv[])
     cmd.AddValue("hosts", "Host vector for each switch (format: 1,1,1,1,1)", hostVectorString);
     cmd.AddValue("switches", "Number of switches", numSwitches);
     cmd.AddValue("destination-id", "Destination node ID", destinationId);
+    
     cmd.AddValue("qlr-flows", "The number of qlr flows from each source", qlrFlowsForHost);
     cmd.AddValue("qlr-start-time", "The time to start QLR flows", qlrFlowStartTime);
     cmd.AddValue("qlr-data-size", "Size of the data sent by QLR flows", qlrFlowDataSize);
     cmd.AddValue("cc", "The TCP congestion control used for the experiment", congestionControl);
-
     cmd.AddValue("background-flows", "Number of background flows per host", backgroundFlowsForHost);
     cmd.AddValue("background-rate", "Rate of background flows", backgroundFlowRate);
     cmd.AddValue("burst-flows", "The number of concurrent bursts", burstFlows);
@@ -96,6 +98,9 @@ main(int argc, char* argv[])
     cmd.AddValue("burst-max-interval", "Maximum interval between bursts", burstMaxInterval);
     cmd.AddValue("burst-data-size", "Size of the data sent by bursty flows", burstDataSize);
     cmd.AddValue("burst-rate", "The rate to set to the bursty flows", burstRate);
+
+    cmd.AddValue("workload-file", "Path to the workload file", workloadFilePath);
+
     cmd.AddValue("seed", "The seed to use for the experiment", seed);
     cmd.AddValue("switch-bw",
                  "The bandwidth to set on all inter-switch links",
@@ -155,28 +160,29 @@ main(int argc, char* argv[])
     NS_LOG_INFO("hostVector: " + hostVectorString);
     NS_LOG_INFO("numSwitches: " + std::to_string(numSwitches));
     NS_LOG_INFO("destinationId: " + std::to_string(destinationId));
-    NS_LOG_INFO("qlrFlowsForHost: " + std::to_string(qlrFlowsForHost));
-    NS_LOG_INFO("qlrFlowStartTime: " + std::to_string(qlrFlowStartTime));
-    NS_LOG_INFO("qlrFlowDataSize: " + std::to_string(qlrFlowDataSize));
-    NS_LOG_INFO("congestionControl: " + congestionControl);
-
-    NS_LOG_INFO("backgroundFlowsForHost: " + std::to_string(backgroundFlowsForHost));
-    NS_LOG_INFO("backgroundFlowRate: " + backgroundFlowRate);
-
-    NS_LOG_INFO("burstFlows: " + std::to_string(burstFlows));
-    NS_LOG_INFO("burstMinStartTime: " + std::to_string(burstMinStartTime));
-    NS_LOG_INFO("burstMaxStartTime: " + std::to_string(burstMaxStartTime));
-    NS_LOG_INFO("burstMinDuration: " + std::to_string(burstMinDuration));
-    NS_LOG_INFO("burstMaxDuration: " + std::to_string(burstMaxDuration));
-    NS_LOG_INFO("burstMinInterval: " + std::to_string(burstMinInterval));
-    NS_LOG_INFO("burstMaxInterval: " + std::to_string(burstMaxInterval));
-    NS_LOG_INFO("burstDataSize: " + std::to_string(burstDataSize));
-    NS_LOG_INFO("burstRate: " + burstRate);
+    
+    if (workloadFilePath.empty()) {
+        NS_LOG_INFO("qlrFlowsForHost: " + std::to_string(qlrFlowsForHost));
+        NS_LOG_INFO("qlrFlowStartTime: " + std::to_string(qlrFlowStartTime));
+        NS_LOG_INFO("qlrFlowDataSize: " + std::to_string(qlrFlowDataSize));
+        NS_LOG_INFO("congestionControl: " + congestionControl);
+        NS_LOG_INFO("backgroundFlowsForHost: " + std::to_string(backgroundFlowsForHost));
+        NS_LOG_INFO("backgroundFlowRate: " + backgroundFlowRate);
+        NS_LOG_INFO("burstFlows: " + std::to_string(burstFlows));
+        NS_LOG_INFO("burstMinStartTime: " + std::to_string(burstMinStartTime));
+        NS_LOG_INFO("burstMaxStartTime: " + std::to_string(burstMaxStartTime));
+        NS_LOG_INFO("burstMinDuration: " + std::to_string(burstMinDuration));
+        NS_LOG_INFO("burstMaxDuration: " + std::to_string(burstMaxDuration));
+        NS_LOG_INFO("burstMinInterval: " + std::to_string(burstMinInterval));
+        NS_LOG_INFO("burstMaxInterval: " + std::to_string(burstMaxInterval));
+        NS_LOG_INFO("burstDataSize: " + std::to_string(burstDataSize));
+        NS_LOG_INFO("burstRate: " + burstRate);
+    } else {
+        NS_LOG_INFO("workloadFilePath: " + workloadFilePath);
+    }
     NS_LOG_INFO("seed: " + std::to_string(seed));
-
     NS_LOG_INFO("switchBandwidth: " + switchBandwidth);
     NS_LOG_INFO("hostBandwidth: " + hostBandwidth);
-
     NS_LOG_INFO("endTime: " + std::to_string(endTime));
     NS_LOG_INFO("resultName: " + resultName);
     NS_LOG_INFO("dumpTraffic: " + std::string(dumpTraffic ? "true" : "false"));
@@ -215,7 +221,7 @@ main(int argc, char* argv[])
     NS_LOG_INFO("Create Active Flow Applications.");
 
     generateWorkloadFromFile(hosts,
-                     "examples/qlrouting/resources/3_nodes/workloads/wl1.csv",
+                     workloadFilePath,
                      congestionControl,
                      resultsPath);
 
