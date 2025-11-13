@@ -39,39 +39,17 @@ main(int argc, char* argv[])
 
 {
     std::vector<std::pair<int, int>> edges =
-    {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}, {2, 4}, {3, 4}};
+        {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}, {2, 4}, {3, 4}};
     std::string edgesString = "0,1;0,2;1,2;1,3;2,3;2,4;3,4";
     std::vector<int> hostVector = {1, 1, 1, 1, 1};
     std::string hostVectorString = "1,1,1,1,1";
     uint32_t numSwitches = 5;
-
-    uint32_t destinationId;
-    uint32_t qlrFlowsForHost;
-    float qlrFlowStartTime;
-    uint32_t qlrFlowDataSize;
     std::string congestionControl;
-
-    uint32_t backgroundFlowsForHost;
-    std::string backgroundFlowRate;
-
-    uint32_t burstFlows;
-    float burstMinStartTime;
-    float burstMaxStartTime;
-    float burstMinDuration;
-    float burstMaxDuration;
-    float burstMinInterval;
-    float burstMaxInterval;
-    uint32_t burstDataSize;
-    std::string burstRate;
-    uint32_t seed = 10;
-
-
     std::string workloadFilePath;
     std::string switchBandwidth;
     std::string hostBandwidth;
 
     float endTime;
-    std::string resultName = "flow_monitor.xml";
     bool dumpTraffic = false;
     std::string resultsPath;
 
@@ -81,35 +59,11 @@ main(int argc, char* argv[])
     cmd.AddValue("edges", "Edge list as pairs of node IDs (format: 0,1;0,2;1,2;...)", edgesString);
     cmd.AddValue("hosts", "Host vector for each switch (format: 1,1,1,1,1)", hostVectorString);
     cmd.AddValue("switches", "Number of switches", numSwitches);
-    cmd.AddValue("destination-id", "Destination node ID", destinationId);
-    
-    cmd.AddValue("qlr-flows", "The number of qlr flows from each source", qlrFlowsForHost);
-    cmd.AddValue("qlr-start-time", "The time to start QLR flows", qlrFlowStartTime);
-    cmd.AddValue("qlr-data-size", "Size of the data sent by QLR flows", qlrFlowDataSize);
     cmd.AddValue("cc", "The TCP congestion control used for the experiment", congestionControl);
-    cmd.AddValue("background-flows", "Number of background flows per host", backgroundFlowsForHost);
-    cmd.AddValue("background-rate", "Rate of background flows", backgroundFlowRate);
-    cmd.AddValue("burst-flows", "The number of concurrent bursts", burstFlows);
-    cmd.AddValue("burst-min-start-time", "Minimum start time for bursts", burstMinStartTime);
-    cmd.AddValue("burst-max-start-time", "Maximum start time for bursts", burstMaxStartTime);
-    cmd.AddValue("burst-min-duration", "Minimum duration for bursts", burstMinDuration);
-    cmd.AddValue("burst-max-duration", "Maximum duration for bursts", burstMaxDuration);
-    cmd.AddValue("burst-min-interval", "Minimum interval between bursts", burstMinInterval);
-    cmd.AddValue("burst-max-interval", "Maximum interval between bursts", burstMaxInterval);
-    cmd.AddValue("burst-data-size", "Size of the data sent by bursty flows", burstDataSize);
-    cmd.AddValue("burst-rate", "The rate to set to the bursty flows", burstRate);
-
     cmd.AddValue("workload-file", "Path to the workload file", workloadFilePath);
-
-    cmd.AddValue("seed", "The seed to use for the experiment", seed);
-    cmd.AddValue("switch-bw",
-                 "The bandwidth to set on all inter-switch links",
-                 switchBandwidth);
-    cmd.AddValue("host-bw",
-                     "The bandwidth to set on all the host-switch links",
-                     hostBandwidth);
+    cmd.AddValue("switch-bw", "The bandwidth to set on all inter-switch links", switchBandwidth);
+    cmd.AddValue("host-bw", "The bandwidth to set on all the host-switch links", hostBandwidth);
     cmd.AddValue("end", "Simulation End Time", endTime);
-    cmd.AddValue("fm-name", "The name of the flow monitor result", resultName);
     cmd.AddValue("dump-traffic", "Dump traffic traces", dumpTraffic);
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
 
@@ -128,7 +82,6 @@ main(int argc, char* argv[])
             int node2 = std::stoi(node2Str);
             edges.push_back({node1, node2});
         }
-
     }
 
     hostVector.clear();
@@ -139,16 +92,16 @@ main(int argc, char* argv[])
         hostVector.push_back(std::stoi(hostCountStr));
     }
 
-
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
-        //LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
-        //LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
+        //LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
         LogComponentEnable("P4SwitchHelper", LOG_LEVEL_DEBUG);
-        //LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
-        // LogComponentEnable("utils", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
+        //  LogComponentEnable("utils", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("TcpOptionRfc793", LOG_LEVEL_DEBUG);
         LogComponentEnable("qlr-utils", LOG_LEVEL_INFO);
         LogComponentEnable("socket-utils", LOG_LEVEL_DEBUG);
         LogComponentEnable("QLRoutingExample", LOG_LEVEL_INFO);
@@ -159,32 +112,10 @@ main(int argc, char* argv[])
     NS_LOG_INFO("edges: " + edgesString);
     NS_LOG_INFO("hostVector: " + hostVectorString);
     NS_LOG_INFO("numSwitches: " + std::to_string(numSwitches));
-    NS_LOG_INFO("destinationId: " + std::to_string(destinationId));
-    
-    if (workloadFilePath.empty()) {
-        NS_LOG_INFO("qlrFlowsForHost: " + std::to_string(qlrFlowsForHost));
-        NS_LOG_INFO("qlrFlowStartTime: " + std::to_string(qlrFlowStartTime));
-        NS_LOG_INFO("qlrFlowDataSize: " + std::to_string(qlrFlowDataSize));
-        NS_LOG_INFO("congestionControl: " + congestionControl);
-        NS_LOG_INFO("backgroundFlowsForHost: " + std::to_string(backgroundFlowsForHost));
-        NS_LOG_INFO("backgroundFlowRate: " + backgroundFlowRate);
-        NS_LOG_INFO("burstFlows: " + std::to_string(burstFlows));
-        NS_LOG_INFO("burstMinStartTime: " + std::to_string(burstMinStartTime));
-        NS_LOG_INFO("burstMaxStartTime: " + std::to_string(burstMaxStartTime));
-        NS_LOG_INFO("burstMinDuration: " + std::to_string(burstMinDuration));
-        NS_LOG_INFO("burstMaxDuration: " + std::to_string(burstMaxDuration));
-        NS_LOG_INFO("burstMinInterval: " + std::to_string(burstMinInterval));
-        NS_LOG_INFO("burstMaxInterval: " + std::to_string(burstMaxInterval));
-        NS_LOG_INFO("burstDataSize: " + std::to_string(burstDataSize));
-        NS_LOG_INFO("burstRate: " + burstRate);
-    } else {
-        NS_LOG_INFO("workloadFilePath: " + workloadFilePath);
-    }
-    NS_LOG_INFO("seed: " + std::to_string(seed));
+    NS_LOG_INFO("workloadFilePath: " + workloadFilePath);
     NS_LOG_INFO("switchBandwidth: " + switchBandwidth);
     NS_LOG_INFO("hostBandwidth: " + hostBandwidth);
     NS_LOG_INFO("endTime: " + std::to_string(endTime));
-    NS_LOG_INFO("resultName: " + resultName);
     NS_LOG_INFO("dumpTraffic: " + std::string(dumpTraffic ? "true" : "false"));
     NS_LOG_INFO("resultsPath: " + resultsPath);
 
@@ -204,26 +135,34 @@ main(int argc, char* argv[])
 
     std::map<Ptr<Node>, Ptr<P4SwitchNetDevice>> p4SwitchMap;
 
-    std::pair<NodeContainer, NodeContainer> nodes =
-        createTopology(edges,
-                       hostVector,
-                       numSwitches,
-                       switchBandwidth,
-                       hostBandwidth,
-                       dumpTraffic,
-                       resultsPath,
-                       p4SwitchMap);
+    std::pair<NodeContainer, NodeContainer> nodes = createTopology(edges,
+                                                                   hostVector,
+                                                                   numSwitches,
+                                                                   switchBandwidth,
+                                                                   hostBandwidth,
+                                                                   dumpTraffic,
+                                                                   resultsPath,
+                                                                   p4SwitchMap);
 
     NodeContainer switches = nodes.first;
     NodeContainer hosts = nodes.second;
 
+    startThroughputPortTrace(getPath(resultsPath, "throughput/s1-1.tp"),
+                             switches.Get(0)->GetId(),
+                             1);
+
+    startThroughputPortTrace(getPath(resultsPath, "throughput/s1-2.tp"),
+                             switches.Get(0)->GetId(),
+                             2);
+
+    startThroughputPortTrace(getPath(resultsPath, "throughput/h1-0.tp"),
+                             hosts.Get(0)->GetId(),
+                             0);
+
     NS_LOG_INFO("Create Applications.");
     NS_LOG_INFO("Create Active Flow Applications.");
 
-    generateWorkloadFromFile(hosts,
-                     workloadFilePath,
-                     congestionControl,
-                     resultsPath);
+    generateWorkloadFromFile(hosts, workloadFilePath, congestionControl, resultsPath);
 
     FlowMonitorHelper flowHelper;
     Ptr<FlowMonitor> flowMon = flowHelper.Install(NodeContainer(switches, hosts));
@@ -289,7 +228,7 @@ main(int argc, char* argv[])
     else
         std::cout << "No UDP flows detected." << std::endl;
 
-    flowMon->SerializeToXmlFile(getPath(resultsPath, resultName), true, true);
+    flowMon->SerializeToXmlFile(getPath(resultsPath, "flow_monitor.xml"), true, true);
 
     Simulator::Destroy();
     NS_LOG_INFO("Done.");

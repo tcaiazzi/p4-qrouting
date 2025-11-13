@@ -10,16 +10,12 @@
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
 #include "ns3/csma-module.h"
-#include "ns3/error-model.h"
-#include "ns3/flow-monitor-helper.h"
-#include "ns3/flow-monitor-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/network-module.h"
 #include "ns3/p4-switch-module.h"
 
 #include <filesystem>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <map>
 #include <random>
@@ -50,23 +46,23 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
         std::string nodeName = p4Device->GetName();
         for (size_t p = 1; p < p4Device->GetNPorts(); ++p)
         {
-            uint64_t color = 0;
+            uint64_t color = 1;
             uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
             if (egressBytes <= colorSlice - 1)
             {
-                color = 0;
+                color = 1;
             }
             else if (egressBytes >= colorSlice && egressBytes <= ((colorSlice * 2) - 1))
             {
-                color = 1;
+                color = 2;
             }
             else if (egressBytes >= (colorSlice * 2) && egressBytes <= ((colorSlice * 3) - 1))
             {
-                color = 2;
+                color = 3;
             }
             else if (egressBytes >= (colorSlice * 3) && egressBytes <= ((colorSlice * 4) - 1))
             {
-                color = 3;
+                color = 4;
             }
 
             if (color != p4Device->m_mmu->colorEgress[p][0])
@@ -159,8 +155,9 @@ QLRDeparser::get_ns3_packet(std::unique_ptr<bm::Packet> bm_packet)
 
     Ptr<Packet> p = Create<Packet>(bm_buf + offset, len - offset);
     /* Headers are added in reverse order */
-    if (next_hdr == 6)
+    if (next_hdr == 6){
         p->AddHeader(tcp);
+    }
     else if (next_hdr == 17)
         p->AddHeader(udp);
 
@@ -255,12 +252,12 @@ createTopology(const std::vector<std::pair<int, int>> edges,
 
     P4SwitchHelper qlrHelper;
     qlrHelper.SetDeviceAttribute("PipelineJson",
-                                 StringValue("/ns3/ns-3.40/examples/qlrouting/qlr_build/qlr.json"));
+                                 StringValue("examples/qlrouting/qlr_build/qlr.json"));
     qlrHelper.SetDeviceAttribute("PacketDeparser", PointerValue(CreateObject<QLRDeparser>()));
 
     for (uint32_t i = 0; i < numNodes; i++)
     {
-        std::string commandsPath = "/ns3/ns-3.40/examples/qlrouting/resources/" +
+        std::string commandsPath = "examples/qlrouting/resources/" +
                                    std::to_string(numNodes) + "_nodes/commands/s" +
                                    std::to_string(i + 1) + ".txt";
         Ptr<Node> switchNode = switches.Get(i);
@@ -344,6 +341,7 @@ startUdpFlow(Ptr<Node> receiverHost,
              Ptr<Node> senderHost,
              uint16_t port,
              std::string rate,
+             uint32_t packetSize,
              float start_time,
              float end_time,
              float burstDataSize)
@@ -359,73 +357,10 @@ startUdpFlow(Ptr<Node> receiverHost,
                                           << burstDataSize);
 
     ApplicationContainer hostSenderApp =
-        createUdpApplication(dst_addr, port, senderHost, rate, burstDataSize);
+        createUdpApplication(dst_addr, port, senderHost, rate, packetSize, burstDataSize);
     hostSenderApp.Start(Seconds(start_time));
     if (end_time > 0)
         hostSenderApp.Stop(Seconds(end_time));
-}
-
-void
-startBackgroundTraffic(NodeContainer hosts,
-                       uint32_t addressIndex,
-                       uint16_t destinationPort,
-                       uint32_t backgroundFlowsForHost,
-                       std::string dataRate,
-                       float startTime,
-                       float endTime,
-                       uint32_t dataSize)
-{
-    for (uint16_t i = 0; i < hosts.GetN(); i++)
-    {
-        Ptr<Node> sourceHost = hosts.Get(i);
-        NS_LOG_DEBUG("Source Host: " << Names::FindName(sourceHost));
-        for (uint16_t j = 0; j < hosts.GetN(); j++)
-        {
-            if (i == j)
-                continue;
-            Ptr<Node> destinationHost = hosts.Get(j);
-
-            for (uint32_t k = 0; k < backgroundFlowsForHost; k++)
-            {
-                NS_LOG_DEBUG("Background UDP: " << Names::FindName(sourceHost) << " -> "
-                                                << Names::FindName(destinationHost) << " addrIdx="
-                                                << addressIndex << " port=" << destinationPort
-                                                << " rate=" << dataRate);
-                startUdpFlow(destinationHost,
-                             addressIndex,
-                             sourceHost,
-                             destinationPort,
-                             dataRate,
-                             startTime,
-                             endTime,
-                             dataSize);
-            }
-        }
-    }
-}
-
-void
-startBurstTraffic(Ptr<Node> sourceNode,
-                  Ptr<Node> destinationNode,
-                  uint16_t addressIndex,
-                  uint16_t destinationPort,
-                  std::string dataRate,
-                  float startTime,
-                  float endTime,
-                  uint16_t dataSize,
-                  uint16_t burstFlows)
-{
-    for (uint32_t i = 1; i <= burstFlows; i++)
-    {
-        startUdpFlow(destinationNode,
-                     addressIndex,
-                     sourceNode,
-                     destinationPort,
-                     dataRate,
-                     startTime,
-                     endTime,
-                     dataSize);
-    }
 }
 
 NodeContainer
@@ -505,6 +440,22 @@ addHosts(NodeContainer switches,
 }
 
 void
+logBulkSendThroughput(ApplicationContainer sinks, Ptr<OutputStreamWrapper> outFile)
+{
+    double time = Simulator::Now().GetSeconds();
+
+    Ptr<PacketSink> sink = DynamicCast<PacketSink>(sinks.Get(0));
+    if (sink && outFile)
+    {
+        uint64_t bytes = sink->GetTotalRx();
+        *outFile->GetStream() << time << " " << bytes << std::endl;
+        outFile->GetStream()->flush();
+    }
+
+    Simulator::Schedule(Seconds(1.0), &logBulkSendThroughput, sinks, outFile);
+}
+
+void
 generateWorkloadFromFile(NodeContainer hosts,
                          std::string workloadFilePath,
                          std::string congestionControl,
@@ -514,7 +465,7 @@ generateWorkloadFromFile(NodeContainer hosts,
 
     uint16_t qlrPort = 22222;
     uint16_t defaultPort = 20000;
-
+    AsciiTraceHelper ascii;
     for (uint16_t i = 0; i < hosts.GetN(); i++)
     {
         Ptr<Node> host = hosts.Get(i);
@@ -551,6 +502,7 @@ generateWorkloadFromFile(NodeContainer hosts,
                              senderHost,
                              wl.dstPort,
                              wl.dataRate,
+                             wl.packetSize,
                              wl.startTime,
                              wl.endTime,
                              wl.dataSize);
@@ -563,116 +515,3 @@ generateWorkloadFromFile(NodeContainer hosts,
     }
 }
 
-void
-generateWorkload(NodeContainer hosts,
-                 float endTime,
-                 uint32_t destinationId,
-                 uint32_t qlrFlowsForHost,
-                 float qlrFlowStartTime,
-                 uint32_t qlrFlowDataSize,
-                 std::string congestionControl,
-                 uint32_t backgroundFlowsForHost,
-                 std::string backgroundFlowRate,
-                 uint32_t burstFlows,
-                 float burstMinStartTime,
-                 float burstMaxStartTime,
-                 float burstMinDuration,
-                 float burstMaxDuration,
-                 float burstMinInterval,
-                 float burstMaxInterval,
-                 std::string burstRate,
-                 uint32_t burstDataSize,
-                 int seed,
-                 std::string resultsPath)
-{
-    std::mt19937 randomGen;
-
-    uint16_t qlrPort = 22222;
-    uint16_t defaultPort = 20000;
-
-    for (uint16_t i = 0; i < hosts.GetN(); i++)
-    {
-        Ptr<Node> host = hosts.Get(i);
-        ApplicationContainer hostReceiverApp = createSinkTcpApplication(qlrPort, host);
-        hostReceiverApp.Start(Seconds(0.0));
-        ApplicationContainer defaultHostReceiverApp = createSinkUdpApplication(defaultPort, host);
-        defaultHostReceiverApp.Start(Seconds(0.0));
-    }
-
-    Ptr<Node> hostReceiver = hosts.Get(destinationId);
-
-    for (uint16_t i = 0; i < hosts.GetN(); i++)
-    {
-        if (i == destinationId)
-            continue;
-        Ptr<Node> hostSender = hosts.Get(i);
-        for (uint32_t f = 0; f < qlrFlowsForHost; f++)
-        {
-            startTcpFlow(hostReceiver,
-                         0,
-                         hostSender,
-                         qlrPort,
-                         qlrFlowStartTime,
-                         qlrFlowDataSize,
-                         resultsPath,
-                         congestionControl);
-        }
-    }
-
-    startBackgroundTraffic(hosts,
-                           0,
-                           defaultPort,
-                           backgroundFlowsForHost,
-                           backgroundFlowRate,
-                           qlrFlowStartTime - 0.2f,
-                           endTime,
-                           0);
-
-    if (burstFlows > 0)
-    {
-        randomGen = std::mt19937(seed);
-        std::uniform_real_distribution startTimeDistribution =
-            std::uniform_real_distribution(burstMinStartTime, burstMaxStartTime);
-        std::uniform_real_distribution burstDurationDistribution =
-            std::uniform_real_distribution(burstMinDuration, burstMaxDuration);
-        std::uniform_real_distribution burstIntervalDistribution =
-            std::uniform_real_distribution(burstMinInterval, burstMaxInterval);
-
-        for (uint16_t i = 0; i < hosts.GetN(); i++)
-        {
-            Ptr<Node> sourceHost = hosts.Get(i);
-            float startTime = startTimeDistribution(randomGen);
-            float endTime = startTime + burstDurationDistribution(randomGen);
-            for (uint16_t j = 0; j < hosts.GetN(); j++)
-            {
-                if (i == j || j == destinationId)
-                    continue;
-
-                Ptr<Node> destinationHost = hosts.Get(j);
-
-                NS_LOG_DEBUG("Burst UDP: " << Names::FindName(sourceHost) << " -> "
-                                           << Names::FindName(destinationHost) << " addrIdx=" << 0
-                                           << " port=" << defaultPort << " rate " << burstRate
-                                           << " burstflows " << burstFlows);
-
-                float interval = burstIntervalDistribution(randomGen);
-
-                NS_LOG_INFO("Scheduling burst from "
-                            << Names::FindName(sourceHost) << " to "
-                            << Names::FindName(destinationHost) << " startTime: "
-                            << startTime + interval << " endTime: " << endTime + interval
-                            << " burstRate " << burstRate << " burstFlows " << burstFlows);
-
-                startBurstTraffic(destinationHost,
-                                  sourceHost,
-                                  0,
-                                  defaultPort,
-                                  burstRate,
-                                  startTime + interval,
-                                  endTime + interval,
-                                  burstDataSize,
-                                  burstFlows);
-            }
-        }
-    }
-}

@@ -40,7 +40,7 @@ std::vector<WorkloadFlow> WorkloadParser::parseFile(std::string filename) {
 
         std::istringstream ss(line);
         WorkloadFlow wl;
-        std::string srcStr, dstStr, startStr, endStr, protoStr, portStr, dataRateStr, dataSizeStr, flowsNumberStr;
+        std::string srcStr, dstStr, startStr, endStr, protoStr, portStr, dataRateStr, packetSizeStr, dataSizeStr, flowsNumberStr;
 
         // Parse comma-separated values. Expect up to 9 fields but tolerate missing trailing fields.
         if (!std::getline(ss, srcStr, ',')) continue;
@@ -50,6 +50,7 @@ std::vector<WorkloadFlow> WorkloadParser::parseFile(std::string filename) {
         if (!std::getline(ss, protoStr, ',')) continue;
         if (!std::getline(ss, portStr, ',')) continue;
         if (!std::getline(ss, dataRateStr, ',')) continue;
+        if (!std::getline(ss, packetSizeStr, ',')) continue;
         if (!std::getline(ss, dataSizeStr, ',')) dataSizeStr.clear(); // allow empty
         if (!std::getline(ss, flowsNumberStr)) flowsNumberStr.clear(); // optional final field
 
@@ -57,7 +58,7 @@ std::vector<WorkloadFlow> WorkloadParser::parseFile(std::string filename) {
         trim_inplace(srcStr); trim_inplace(dstStr);
         trim_inplace(startStr); trim_inplace(endStr);
         trim_inplace(protoStr); trim_inplace(portStr);
-        trim_inplace(dataRateStr); trim_inplace(dataSizeStr);
+        trim_inplace(dataRateStr); trim_inplace(packetSizeStr); trim_inplace(dataSizeStr);
         trim_inplace(flowsNumberStr);
 
         try {
@@ -101,6 +102,15 @@ std::vector<WorkloadFlow> WorkloadParser::parseFile(std::string filename) {
             // dataRate: keep as-is (may be "0" or "1Mbps")
             wl.dataRate = dataRateStr;
 
+            if (!packetSizeStr.empty()) {
+                unsigned long ps = parseUnsigned(packetSizeStr, "packetSize", line);
+                if (ps > std::numeric_limits<u_int32_t>::max()) throw std::runtime_error("packetSize out of range in line: " + line);
+                wl.packetSize = static_cast<u_int32_t>(ps);
+            } else {
+                wl.packetSize = 1400;
+            }
+
+
             // dataSize: numeric (allow zero)
             if (!dataSizeStr.empty()) {
                 unsigned long ds = parseUnsigned(dataSizeStr, "dataSize", line);
@@ -109,6 +119,7 @@ std::vector<WorkloadFlow> WorkloadParser::parseFile(std::string filename) {
             } else {
                 wl.dataSize = 0;
             }
+
 
             // flowsNumber: optional, default 1
             if (!flowsNumberStr.empty()) {

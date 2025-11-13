@@ -19,6 +19,7 @@ ApplicationContainer createUdpApplication(Ipv4Address addressToReach,
                                           uint16_t port,
                                           Ptr<Node> node,
                                           std::string dataRate,
+                                          uint32_t packetSize,
                                           uint32_t maxBytes);
 ApplicationContainer createSinkUdpApplication(uint16_t port, Ptr<Node> node);
 

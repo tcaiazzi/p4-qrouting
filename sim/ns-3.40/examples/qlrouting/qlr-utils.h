@@ -33,28 +33,10 @@ void startUdpFlow(Ptr<Node> receiverHost,
                   Ptr<Node> senderHost,
                   uint16_t port,
                   std::string rate,
+                  uint32_t packetSize,
                   float start_time,
                   float end_time,
                   float burstDataSize);
-
-void startBackgroundTraffic(NodeContainer hosts,
-                            uint32_t addressIndex,
-                            uint16_t destinationPort,
-                            uint32_t backgroundFlowsForHost,
-                            std::string dataRate,
-                            float startTime,
-                            float endTime,
-                            uint32_t dataSize);
-
-void startBurstTraffic(Ptr<Node> sourceNode,
-                       Ptr<Node> destinationNode,
-                       uint16_t addressIndex,
-                       uint16_t destinationPort,
-                       std::string dataRate,
-                       float startTime,
-                       float endTime,
-                       uint16_t dataSize,
-                       uint16_t burstFlows);
 
 std::pair<NodeContainer, NodeContainer> createTopology(
     const std::vector<std::pair<int, int>> edges,
@@ -76,27 +58,6 @@ void generateWorkloadFromFile(NodeContainer hosts,
                               std::string workloadFilePath,
                               std::string congestionControl,
                               std::string resultsPath);
-
-void generateWorkload(NodeContainer hosts,
-                      float endTime,
-                      uint32_t destinationId,
-                      uint32_t qlrFlowsForHost,
-                      float qlrFlowStartTime,
-                      uint32_t qlrFlowDataSize,
-                      std::string congestionControl,
-                      uint32_t backgroundFlowsForHost,
-                      std::string backgroundFlowRate,
-                      uint32_t burstFlows,
-                      float burstMinStartTime,
-                      float burstMaxStartTime,
-                      float burstMinDuration,
-                      float burstMaxDuration,
-                      float burstMinInterval,
-                      float burstMaxInterval,
-                      std::string burstRate,
-                      uint32_t burstDataSize,
-                      int seed,
-                      std::string resultsPath);
 
 Ptr<P4SwitchNetDevice> configureP4Switch(Ptr<Node> switchNode,
                                          std::string commandsPath,

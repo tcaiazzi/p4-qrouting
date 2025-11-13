@@ -11,25 +11,28 @@ default_port = 20000
 
 def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int) -> list[str]:
     cmd = []
-    row_slices = [64] * 8
+    row_slices = [127] * 8
     print("Generating commands for node:", start, "to goal:", goal)
     # print(f"Node {start} neighbors:", net[start])
 
+    print("Initial Slices:", row_slices)
     for e in node_dag.edges:
         # print(f"Processing edge: {e}")
         if start == e[0]:
             iface_num = net[start][e[1]]
-            row_slices[iface_num] = 0
+            row_slices[iface_num] = 1
 
+    print("Updated Slices after neighbors:", row_slices)
     # print("Row slices:", row_slices)
     for i, row_slice in enumerate(row_slices):
-        if row_slice < 64:
+        if row_slice < 6:
             cmd.append(f"table_add select_port_from_row_col set_nhop {goal + 1} {i} => {i + 1}")
 
     row_slices.reverse()
     packed_bytes = struct.pack(">" + ("B" * len(row_slices)), *row_slices)
+    print("Packed bytes for goal", goal, ":", packed_bytes)
 
-    cmd.append(f"register_write row{goal + 1} 0 {int.from_bytes(packed_bytes)}")
+    cmd.append(f"register_write row{goal + 1} 0 {int.from_bytes(packed_bytes, byteorder='big')}")
 
     return cmd
 
@@ -82,18 +85,23 @@ def generate_all_commands(network: dict, dags: dict, subnets):
 
         ports = list(network[node_name].values())
         for i, (node, subnet) in enumerate(filter(lambda x: x[0] != node_name, node_to_network.items())):
+            port_num =  network[node_name][nx.shortest_path(network_graph, source=node_name, target=node)[1]]
             if qlr_active:
                 commands.add(f"table_add select_row get_row_num {subnet} 6 => {node + 1}")
+                if node in network[node_name]:
+                    commands.add(f"table_add handle_update send_probe {subnet} 17 33333 0 => {port_num + 1} {node + 1}")
+                    commands.add(f"table_add handle_update process_probe {node_to_network[node_name]} 17 33333 1 =>")
             else:
-                commands.add(f"table_add select_row set_nhop {subnet} 6 => {ports[i % len(ports)] + 1}")
+                commands.add(f"table_add select_row set_nhop {subnet} 6 => {port_num + 1}")
 
-            commands.add(f"table_add select_row set_nhop {subnet} 17 => {ports[i % len(ports)] + 1}")
+            commands.add(f"table_add select_row set_nhop {subnet} 17 => {port_num + 1}")
 
         max_iface = max(network[node_name].values()) + 1
         commands.add(f"table_set_default select_row set_nhop 1")
 
         for iface in network[node_name].values():
             commands.add(f"table_add read_ig_qdepth get_ig_qdepth_and_idx {iface + 1} => {iface}")
+            commands.add(f"register_write ig_qdepth {iface} 1")
 
         commands_path = os.path.join(dst_path, f"s{node_name + 1}.txt")
         with open(commands_path, "w") as f:
@@ -194,6 +202,12 @@ if __name__ == "__main__":
     edges = parse_edges_from_string(args.edges)
     network = edges_to_network(edges)
     host_vector = parse_host_vector(args.host_vector)
+
+    network_graph = nx.Graph()
+    network_graph.add_edges_from(edges)
+
+    print("Parsed network graph edges:", network_graph.edges)
+    print("Parsed network graph nodes:", network_graph.nodes)
 
     print(f"Parsed network: {network}")
     print(f"Parsed host vector: {host_vector}")

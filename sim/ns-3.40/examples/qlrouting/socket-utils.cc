@@ -46,10 +46,11 @@ createUdpApplication(Ipv4Address addressToReach,
                      uint16_t port,
                      Ptr<Node> node,
                      std::string dataRate,
+                     uint32_t packetSize,
                      uint32_t maxBytes)
 {
     OnOffHelper source("ns3::UdpSocketFactory", Address(InetSocketAddress(addressToReach, port)));
-    source.SetConstantRate(DataRate(dataRate), 1400);
+    source.SetConstantRate(DataRate(dataRate), packetSize);
     source.SetAttribute("MaxBytes", UintegerValue(maxBytes));
 
     ApplicationContainer senderApp = source.Install(node);

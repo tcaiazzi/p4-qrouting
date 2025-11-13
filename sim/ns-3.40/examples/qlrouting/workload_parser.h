@@ -12,6 +12,7 @@ struct WorkloadFlow {
     u_int16_t protocol = 0;
     u_int16_t dstPort = 0;
     std::string dataRate;
+    u_int32_t packetSize = 1400;
     u_int32_t dataSize;
     u_int32_t flowsNumber = 1;
 };

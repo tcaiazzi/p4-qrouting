@@ -25,7 +25,7 @@
     } else {                                                                            \
         hdr.qlr_updates[j].setValid();                                                  \
         hdr.qlr_updates[j].dst_id = i;                                                  \
-        hdr.qlr_updates[j].value = 0;                                                   \
+        hdr.qlr_updates[j].value = 1;                                                   \
         col_num = min_index;                                                            \
     }
 
@@ -68,6 +68,36 @@ control IngressPipe(inout headers hdr,
         size = 1024;
         default_action = drop;
     }
+
+
+    bit<8> probe_type = 0;
+    action send_probe(bit<9> port, bit<8> num) {
+        standard_metadata.egress_spec = port;
+        hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+        row_num = num;
+        hdr.ethernet.src_addr[47:40] = 1;
+        probe_type = 1;
+    }
+
+    action process_probe() {
+        mark_to_drop(standard_metadata);
+        probe_type = 2;
+    }
+
+    table handle_update {
+        key = {
+            hdr.ipv4.dst_addr: lpm;
+            hdr.ipv4.protocol: exact;
+            meta.l4_lookup.dst_port: exact;
+            meta.qlearning_probe: exact;
+        }
+        actions = {
+            send_probe;
+            process_probe;
+        }
+        size = 2;
+    }
+
 
     bit<8> col_num = 0;
     table select_port_from_row_col {
@@ -115,14 +145,14 @@ control IngressPipe(inout headers hdr,
     #include "lut/qlr_pkt_updates.p4"
 
     /* Helper to compute the max value */
-    bit<8> min_value = 0;
+    bit<8> min_value = 1;
     bit<8> min_index = 0;
     action min8(bit<8> a, bit<8> b, bit<8> index) {
-        if (a < b) {
-            min_value = a;
-        } else {
+        if (b < a) {
             min_value = b;
             min_index = index;
+        } else {
+            min_value = a;
         }
 
         log_msg("min8: a={} b={} curr_index={} min_value={} min_index={}", {a, b, index, min_value, min_index});
@@ -130,37 +160,38 @@ control IngressPipe(inout headers hdr,
 
     apply {
         bit<8> do_qlr = 2;
+        /* Read ingress port qdepth and get the ingress port index */
+        read_ig_qdepth.apply();
 
-        switch (select_row.apply().action_run) {
-            get_row_num: {
-                do_qlr = 1;
-            }
-            set_nhop: {
-                do_qlr = 0;
+        /* Handle QLR packet or probe */
+        if (!handle_update.apply().hit) {
+            switch (select_row.apply().action_run) {
+                get_row_num: {
+                    do_qlr = 1;
+                }
+                set_nhop: {
+                    do_qlr = 0;
+                }
             }
         }
 
-        if (do_qlr != 2) {
-            /* Read ingress port qdepth and get the ingress port index */
-            read_ig_qdepth.apply();
-
+        if (do_qlr != 2 || probe_type == 2) {
             /* Update rows using the pkt information */
             qmatrix_update.apply();
         }
 
-        if (do_qlr == 1) {
+        if (do_qlr == 1 || probe_type == 1) {
             MIN_VALUE(1, 0)
             MIN_VALUE(2, 1)
             MIN_VALUE(3, 2)
             MIN_VALUE(4, 3)
             MIN_VALUE(5, 4)
+        }
 
+        if (do_qlr == 1) {
             log_msg("selected destination: {} - selected col: {}", {row_num, col_num});
             select_port_from_row_col.apply();
             log_msg("selected port: {}", {standard_metadata.egress_spec});
-
-            /* Activate update headers (table is populated from the DAGs) */
-            qlr_pkt_updates.apply();
         } else if (do_qlr == 0) {
             hdr.ethernet.dst_addr[47:40] = hdr.qlr.last_byte;
             
@@ -170,6 +201,11 @@ control IngressPipe(inout headers hdr,
             hdr.qlr_updates[2].setInvalid();
             hdr.qlr_updates[3].setInvalid();
             hdr.qlr_updates[4].setInvalid();
+        }
+
+        if (do_qlr == 1 || probe_type == 1) {
+            /* Activate update headers (table is populated from the DAGs) */
+            qlr_pkt_updates.apply();
         }
     }
 }

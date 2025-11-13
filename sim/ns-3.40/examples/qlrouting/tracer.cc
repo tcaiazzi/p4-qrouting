@@ -106,6 +106,19 @@ tracePktTxNetDevice(std::string context, Ptr<const Packet> p)
     uint64_t lastTs = Simulator::Now().GetNanoSeconds();
     uint32_t pktSize = p->GetSize() * 8;
 
+    Ptr<Packet> pCopy = p->Copy();
+    EthernetHeader ethHdr;
+    pCopy->RemoveHeader(ethHdr);
+    Ipv4Header ipHdr;
+    uint8_t proto = 0;
+    if (pCopy->PeekHeader(ipHdr)) // returns true/false or just fills header (call is valid)
+    {
+        proto = ipHdr.GetProtocol();
+    }
+
+    if (proto != 6)
+        return;
+
     auto ctxIt = ctx2tpInfo.find(context);
     if (ctxIt == ctx2tpInfo.end())
     {
@@ -136,6 +149,8 @@ startThroughputPortTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId
 {
     std::string nsString = "/NodeList/" + std::to_string(nodeId) + "/DeviceList/" +
                            std::to_string(ifaceId) + "/$ns3::CsmaNetDevice/MacTx";
+
+    NS_LOG_DEBUG("Connecting to " << nsString << " for throughput tracking"); 
 
     auto it = tpStream.find(nsString);
     if (it == tpStream.end())

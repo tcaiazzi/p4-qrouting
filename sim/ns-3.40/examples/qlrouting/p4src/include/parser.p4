@@ -15,6 +15,7 @@ parser PktParser(packet_in packet,
     state parse_ethernet {
         packet.extract(hdr.ethernet);
         meta.qlearning_update = hdr.ethernet.dst_addr[47:40];
+        meta.qlearning_probe = hdr.ethernet.src_addr[47:40];
         transition select(hdr.ethernet.ether_type) {
             ETHERTYPE_IPV4: parse_ipv4;
             default: accept;

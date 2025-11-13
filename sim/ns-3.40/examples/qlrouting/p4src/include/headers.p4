@@ -42,7 +42,7 @@ header tcp_h {
 }
 
 header tcp_options_h {
-    varbit<256> options;
+    varbit<320> options;
 }
 
 header udp_h {
@@ -65,6 +65,7 @@ header qlr_update_h {
 struct metadata {
     l4_lookup_t l4_lookup;
     bit<8> qlearning_update;
+    bit<8> qlearning_probe;
 }
 
 struct headers {
