@@ -35,6 +35,8 @@ def generate_qmatrix_updates(path, node_list, perms):
                     action_body += f"    {row_slice} = {row_slice} + (ig_qdepth + hdr.qlr_updates[{idx}].value - {row_slice});\n"
                     action_body += f"    log_msg(\"updating row{i}_value - after: {{}}\", {{{row_slice}}});\n"
                     action_body += f"    row{i}.write(0, row{i}_value);\n"
+                    action_body += f"    log_msg(\"new row{i}_value: {{}}\", {{row{i}_value}});\n"
+
 
                     const_entry.append(f"true, {i}")
 

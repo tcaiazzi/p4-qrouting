@@ -17,7 +17,7 @@
     min8(min_value, row##i##_value[47:40], 5);                                          \
     min8(min_value, row##i##_value[55:48], 6);                                          \
     min8(min_value, row##i##_value[63:56], 7);                                          \
-    log_msg("row {} max: {} - min_index: {}", {(bit<8>) ##i##, min_value, min_index});  \
+    log_msg("row {} min: {} - min_index: {}", {(bit<8>) ##i##, min_value, min_index});  \
     if (row_num != i) {                                                                 \
         hdr.qlr_updates[j].setValid();                                                  \
         hdr.qlr_updates[j].dst_id = i;                                                  \
@@ -25,7 +25,7 @@
     } else {                                                                            \
         hdr.qlr_updates[j].setValid();                                                  \
         hdr.qlr_updates[j].dst_id = i;                                                  \
-        hdr.qlr_updates[j].value = 1;                                                   \
+        hdr.qlr_updates[j].value = 0;                                                   \
         col_num = min_index;                                                            \
     }
 
@@ -144,7 +144,7 @@ control IngressPipe(inout headers hdr,
     /* Include the qlr_pkt_updates actions and table */
     #include "lut/qlr_pkt_updates.p4"
 
-    /* Helper to compute the max value */
+    /* Helper to compute the min value */
     bit<8> min_value = 1;
     bit<8> min_index = 0;
     action min8(bit<8> a, bit<8> b, bit<8> index) {
@@ -175,18 +175,24 @@ control IngressPipe(inout headers hdr,
             }
         }
 
-        if (do_qlr != 2 || probe_type == 2) {
+        if (meta.qlearning_update == 1 || probe_type == 2) {
             /* Update rows using the pkt information */
             qmatrix_update.apply();
         }
-
         if (do_qlr == 1 || probe_type == 1) {
+            row1.read(row1_value, 0);
+            row2.read(row2_value, 0);
+            row3.read(row3_value, 0);
+            row4.read(row4_value, 0);
+            row5.read(row5_value, 0);
             MIN_VALUE(1, 0)
             MIN_VALUE(2, 1)
             MIN_VALUE(3, 2)
             MIN_VALUE(4, 3)
             MIN_VALUE(5, 4)
         }
+
+        
 
         if (do_qlr == 1) {
             log_msg("selected destination: {} - selected col: {}", {row_num, col_num});

@@ -11,7 +11,7 @@ default_port = 20000
 
 def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int) -> list[str]:
     cmd = []
-    row_slices = [127] * 8
+    row_slices = [32] * 8
     print("Generating commands for node:", start, "to goal:", goal)
     # print(f"Node {start} neighbors:", net[start])
 
