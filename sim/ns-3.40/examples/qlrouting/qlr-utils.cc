@@ -240,7 +240,7 @@ createTopology(const std::vector<std::pair<int, int>> edges,
 
     CsmaHelper csma;
     csma.SetChannelAttribute("DataRate", StringValue(switchBandwidth));
-    csma.SetChannelAttribute("Delay", TimeValue(MilliSeconds(1)));
+    csma.SetChannelAttribute("Delay", TimeValue(MicroSeconds(10)));
     csma.SetDeviceAttribute("Mtu", UintegerValue(1500));
 
     for (const auto& edge : edges)
@@ -378,6 +378,7 @@ addHosts(NodeContainer switches,
 
     CsmaHelper csma_host;
     csma_host.SetChannelAttribute("DataRate", StringValue(hostBandwidth));
+    csma_host.SetChannelAttribute("Delay", TimeValue(MicroSeconds(10)));
     csma_host.SetDeviceAttribute("Mtu", UintegerValue(1500));
 
     for (uint32_t i = 0; i < hostsVector.size(); i++)
