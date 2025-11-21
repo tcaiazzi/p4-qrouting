@@ -240,6 +240,7 @@ createTopology(const std::vector<std::pair<int, int>> edges,
 
     CsmaHelper csma;
     csma.SetChannelAttribute("DataRate", StringValue(switchBandwidth));
+    csma.SetChannelAttribute("Delay", TimeValue(MilliSeconds(1)));
     csma.SetDeviceAttribute("Mtu", UintegerValue(1500));
 
     for (const auto& edge : edges)

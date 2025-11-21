@@ -120,12 +120,16 @@ main(int argc, char* argv[])
     NS_LOG_INFO("resultsPath: " + resultsPath);
 
     NS_LOG_INFO("Configuring Congestion Control.");
+
+    std::string queueDisc = "FifoQueueDisc";
+    queueDisc = std::string("ns3::") + queueDisc;
+    
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
     Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(2 << 17));
     Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(2 << 17));
-    Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
-    Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
-    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
+    Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(100));
+    // Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
+    // Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
 
     std::filesystem::create_directories(resultsPath);
     std::filesystem::create_directories(getPath(resultsPath, "cwnd"));

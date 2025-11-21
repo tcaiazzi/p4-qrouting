@@ -1,5 +1,6 @@
 start: image clean
 	docker run -v "$$(pwd)/..":/ns3/assets -v "$$(pwd)/ns-3.40":/ns3/ns-3.40 -d -ti --name ns3bmv2 ns3bmv2
+	docker exec ns3bmv2 /bin/bash -c 'pip install -r /ns3/ns-3.40/examples/qlrouting/requirements.txt --break-system-packages'
 # 	docker exec ns3bmv2 /bin/bash -c 'cp -r /ns3/assets/p4src /ns3/ns-3.40/examples/qlrouting'
 # 	docker exec ns3bmv2 /bin/bash -c 'cd /ns3/ns-3.40/examples/qlrouting/p4src && p4c -o ../qlr_build ./qlr.p4'
 
