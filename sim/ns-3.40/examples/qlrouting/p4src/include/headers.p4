@@ -52,10 +52,6 @@ header udp_h {
     bit<16> checksum;
 }
 
-header qlr_h {
-    bit<8> last_byte;
-}
-
 header qlr_update_h {
     bit<8> dst_id;
     bit<8> value;
@@ -74,7 +70,6 @@ struct headers {
     tcp_h tcp;
     tcp_options_h tcp_options;
     udp_h udp;
-    qlr_h qlr;
     qlr_update_h[NODES_NUM] qlr_updates;
 }
 

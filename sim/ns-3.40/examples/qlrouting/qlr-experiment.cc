@@ -164,8 +164,6 @@ main(int argc, char* argv[])
                              0);
 
     NS_LOG_INFO("Create Applications.");
-    NS_LOG_INFO("Create Active Flow Applications.");
-
     generateWorkloadFromFile(hosts, workloadFilePath, congestionControl, resultsPath);
 
     FlowMonitorHelper flowHelper;

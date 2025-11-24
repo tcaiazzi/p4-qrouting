@@ -9,7 +9,7 @@
 
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
-#include "ns3/csma-module.h"
+#include "ns3/point-to-point-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/network-module.h"
 #include "ns3/p4-switch-module.h"
@@ -238,15 +238,15 @@ createTopology(const std::vector<std::pair<int, int>> edges,
 
     NodeContainer hosts = addHosts(switches, hostsVector, hostBandwidth, dumpTraffic, resultsPath);
 
-    CsmaHelper csma;
-    csma.SetChannelAttribute("DataRate", StringValue(switchBandwidth));
-    csma.SetChannelAttribute("Delay", TimeValue(MicroSeconds(10)));
-    csma.SetDeviceAttribute("Mtu", UintegerValue(1500));
+    PointToPointHelper p2p;
+    p2p.SetDeviceAttribute("DataRate", StringValue(switchBandwidth));
+    p2p.SetDeviceAttribute("Mtu", UintegerValue(1500));
+    p2p.SetChannelAttribute("Delay", TimeValue(MicroSeconds(10)));
 
     for (const auto& edge : edges)
     {
         NetDeviceContainer link =
-            csma.Install(NodeContainer(switches.Get(edge.first), switches.Get(edge.second)));
+            p2p.Install(NodeContainer(switches.Get(edge.first), switches.Get(edge.second)));
         switchInterfaces[edge.first].Add(link.Get(0));
         switchInterfaces[edge.second].Add(link.Get(1));
     }
@@ -272,7 +272,7 @@ createTopology(const std::vector<std::pair<int, int>> edges,
     {
         std::string tracesPath = getPath(resultsPath, "traces/dump");
         std::filesystem::create_directories(tracesPath);
-        csma.EnablePcapAll(tracesPath, true);
+        p2p.EnablePcapAll(tracesPath, true);
     }
 
     return {switches, hosts};
@@ -376,10 +376,10 @@ addHosts(NodeContainer switches,
 
     std::map<uint32_t, NetDeviceContainer> hostInterfaces = {};
 
-    CsmaHelper csma_host;
-    csma_host.SetChannelAttribute("DataRate", StringValue(hostBandwidth));
-    csma_host.SetChannelAttribute("Delay", TimeValue(MicroSeconds(10)));
-    csma_host.SetDeviceAttribute("Mtu", UintegerValue(1500));
+    PointToPointHelper p2p_host;
+    p2p_host.SetDeviceAttribute("DataRate", StringValue(hostBandwidth));
+    p2p_host.SetDeviceAttribute("Mtu", UintegerValue(1500));
+    p2p_host.SetChannelAttribute("Delay", TimeValue(MicroSeconds(10)));
 
     for (uint32_t i = 0; i < hostsVector.size(); i++)
     {
@@ -390,7 +390,7 @@ addHosts(NodeContainer switches,
 
             Ptr<Node> switchNode = switches.Get(i);
 
-            NetDeviceContainer link = csma_host.Install(NodeContainer(host, switchNode));
+            NetDeviceContainer link = p2p_host.Install(NodeContainer(host, switchNode));
             hostInterfaces[i].Add(link.Get(0));
             // switchInterfaces[i].Add(link.Get(1));
         }
@@ -424,18 +424,17 @@ addHosts(NodeContainer switches,
                 continue;
 
             Ptr<Ipv4Interface> hostIpv4Interface = getIpv4Interface(hostInterfaces[i].Get(0));
-            Ptr<Ipv4Interface> destinationIpv4Interface =
-                getIpv4Interface(hostInterfaces[j].Get(0));
-            addArpEntriesFromInterfaceAddresses(hostIpv4Interface, destinationIpv4Interface);
+            Ptr<Ipv4Interface> destinationIpv4Interface = getIpv4Interface(hostInterfaces[j].Get(0));
+            addRoutesFromInterfaceAddresses(hostIpv4Interface, destinationIpv4Interface);
         }
     }
 
     if (dumpTraffic)
     {
-        std::string tracesPath = getPath(resultsPath, "traces/dump");
+        std::string tracesPath = getPath(resultsPath, "traces");
         NS_LOG_INFO("Dumping host traffic in " << tracesPath);
         std::filesystem::create_directories(tracesPath);
-        csma_host.EnablePcapAll(tracesPath, true);
+        p2p_host.EnablePcapAll(tracesPath + "/dump", true);
     }
 
     return hosts;

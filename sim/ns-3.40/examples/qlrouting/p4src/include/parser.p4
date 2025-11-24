@@ -14,8 +14,6 @@ parser PktParser(packet_in packet,
 
     state parse_ethernet {
         packet.extract(hdr.ethernet);
-        meta.qlearning_update = hdr.ethernet.dst_addr[47:40];
-        meta.qlearning_probe = hdr.ethernet.src_addr[47:40];
         transition select(hdr.ethernet.ether_type) {
             ETHERTYPE_IPV4: parse_ipv4;
             default: accept;
@@ -24,6 +22,8 @@ parser PktParser(packet_in packet,
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
+        meta.qlearning_update = (bit<8>) hdr.ipv4.ecn[0:0];
+        meta.qlearning_probe = (bit<8>) hdr.ipv4.ecn[1:1];
         transition select(hdr.ipv4.protocol) {
             PROTO_TCP: parse_tcp;
             PROTO_UDP: parse_udp;
@@ -37,7 +37,7 @@ parser PktParser(packet_in packet,
         bit<7> tcp_hdr_bytes_left = 4 * (bit<7>) (hdr.tcp.data_offset - 5);
         packet.extract(hdr.tcp_options, (bit<32>) (8 * (bit<32>) tcp_hdr_bytes_left));
         transition select(meta.qlearning_update) {
-            1: parse_qlr;
+            1: parse_qlr_update;
             default: accept;
         }
     }
@@ -46,14 +46,9 @@ parser PktParser(packet_in packet,
         packet.extract(hdr.udp);
         meta.l4_lookup = {hdr.udp.src_port, hdr.udp.dst_port};
         transition select(meta.qlearning_update) {
-            1: parse_qlr;
+            1: parse_qlr_update;
             default: accept;
         }
-    }
-
-    state parse_qlr {
-        packet.extract(hdr.qlr);
-        transition parse_qlr_update;
     }
 
     state parse_qlr_update {
@@ -67,13 +62,7 @@ parser PktParser(packet_in packet,
 
 control PktDeparser(packet_out packet, in headers hdr) {
     apply {
-        packet.emit(hdr.ethernet);
-        packet.emit(hdr.ipv4);
-        packet.emit(hdr.tcp);
-        packet.emit(hdr.tcp_options);
-        packet.emit(hdr.udp);
-        packet.emit(hdr.qlr);
-        packet.emit(hdr.qlr_updates);
+        packet.emit(hdr);
     }
 }
 

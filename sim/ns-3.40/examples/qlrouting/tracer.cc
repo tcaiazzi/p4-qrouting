@@ -15,7 +15,7 @@
  */
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
-#include "ns3/csma-module.h"
+#include "ns3/point-to-point-module.h"
 #include "ns3/error-model.h"
 #include "ns3/flow-monitor-helper.h"
 #include "ns3/flow-monitor-module.h"
@@ -148,7 +148,7 @@ void
 startThroughputPortTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
 {
     std::string nsString = "/NodeList/" + std::to_string(nodeId) + "/DeviceList/" +
-                           std::to_string(ifaceId) + "/$ns3::CsmaNetDevice/MacTx";
+                           std::to_string(ifaceId) + "/$ns3::PointToPointNetDevice/MacTx";
 
     NS_LOG_DEBUG("Connecting to " << nsString << " for throughput tracking"); 
 

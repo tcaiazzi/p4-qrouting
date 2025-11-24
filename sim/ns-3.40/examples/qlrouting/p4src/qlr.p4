@@ -75,7 +75,7 @@ control IngressPipe(inout headers hdr,
         standard_metadata.egress_spec = port;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
         row_num = num;
-        hdr.ethernet.src_addr[47:40] = 1;
+        hdr.ipv4.ecn[1:1] = 0x1;
         probe_type = 1;
     }
 
@@ -199,9 +199,8 @@ control IngressPipe(inout headers hdr,
             select_port_from_row_col.apply();
             log_msg("selected port: {}", {standard_metadata.egress_spec});
         } else if (do_qlr == 0) {
-            hdr.ethernet.dst_addr[47:40] = hdr.qlr.last_byte;
+            hdr.ipv4.ecn = 0x0;
             
-            hdr.qlr.setInvalid();
             hdr.qlr_updates[0].setInvalid();
             hdr.qlr_updates[1].setInvalid();
             hdr.qlr_updates[2].setInvalid();

@@ -19,12 +19,13 @@
 
 #include "ns3/boolean.h"
 #include "ns3/channel.h"
-#include "ns3/csma-net-device.h"
 #include "ns3/ethernet-header.h"
 #include "ns3/log.h"
 #include "ns3/names.h"
 #include "ns3/node.h"
 #include "ns3/packet.h"
+#include "ns3/point-to-point-net-device.h"
+#include "ns3/ppp-header.h"
 #include "ns3/queue.h"
 #include "ns3/simulator.h"
 #include "ns3/string.h"
@@ -156,7 +157,7 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
     NS_LOG_INFO(node_name << " | ReceiveFromDevice port " << port_n
                           << " sending through P4 pipeline");
 
-    // Re-append Ethernet header, removed by CsmaNetDevice
+    // Append a Ethernet header
     Ptr<Packet> full_packet = packet->Copy();
 
     EthernetHeader eth_hdr_in;
@@ -331,7 +332,7 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
                               << ") qIndex=" << qIndex
                               << ", qdepth=" << m_mmu->GetEgressBytes(p, qIndex));
 
-        // Remove the Ethernet header for the SendFrom
+        // Remove the Ethernet header for the Send
         EthernetHeader eth_hdr_out;
         pkt->RemoveHeader(eth_hdr_out);
 
@@ -341,22 +342,11 @@ P4SwitchNetDevice::DequeueRR(uint32_t p)
             NS_LOG_ERROR(node_name << " | Port " << p + 1 << " not found, dropping packet");
             return;
         }
-        port->SendFrom(pkt,
-                       eth_hdr_out.GetSource(),
-                       eth_hdr_out.GetDestination(),
-                       eth_hdr_out.GetLengthType());
+
+        portBusy[p] = true;
+
+        port->Send(pkt, eth_hdr_out.GetDestination(), eth_hdr_out.GetLengthType());
     }
-}
-
-void
-P4SwitchNetDevice::DequeueCallback(uint32_t port_idx, Ptr<const Packet> packet)
-{
-    NS_LOG_DEBUG(Names::FindName(m_node)
-                 << " | Packet dequeued at " << Simulator::Now().GetSeconds()
-                 << ", size=" << packet->GetSize() << " port_idx=" << port_idx);
-
-    // When the packet is dequeued, the port gets busy
-    portBusy[port_idx] = true;
 }
 
 void
@@ -368,8 +358,8 @@ P4SwitchNetDevice::TxEndCallback(uint32_t port_idx, Ptr<const Packet> packet)
 
     // Port is not busy anymore
     portBusy[port_idx] = false;
-    // We can run the RR again, if any packet is enqueued
-    DequeueRR(port_idx);
+    // We can run the RR again, if any packet is enqueued, delay of 1ns to exit the PPP callback
+    Simulator::Schedule(NanoSeconds(1), &P4SwitchNetDevice::DequeueRR, this, port_idx);
 }
 
 void
@@ -415,15 +405,11 @@ P4SwitchNetDevice::AddPort(Ptr<NetDevice> port)
     NS_LOG_FUNCTION_NOARGS();
     NS_ASSERT(port != this);
 
-    // We only support CSMA devices
-    Ptr<CsmaNetDevice> port_csma = port->GetObject<CsmaNetDevice>();
-    if (!port_csma)
+    // We only support PointToPoint devices
+    Ptr<PointToPointNetDevice> port_p2p = port->GetObject<PointToPointNetDevice>();
+    if (!port_p2p)
     {
-        NS_FATAL_ERROR("Device is not CSMA: cannot be added to P4 switch.");
-    }
-    if (!port->SupportsSendFrom())
-    {
-        NS_FATAL_ERROR("Device does not support SendFrom: cannot be added to switch.");
+        NS_FATAL_ERROR("Device is not PointToPoint: cannot be added to P4 switch.");
     }
     if (m_address == Mac48Address())
     {
@@ -439,15 +425,11 @@ P4SwitchNetDevice::AddPort(Ptr<NetDevice> port)
     m_channel->AddChannel(port->GetChannel());
 
     uint32_t port_idx = GetPortN(port) - 1;
-    Ptr<Queue<Packet>> queue = port_csma->GetQueue();
-    queue->TraceConnectWithoutContext(
-        "Dequeue",
-        MakeCallback(&P4SwitchNetDevice::DequeueCallback, this, port_idx));
 
-    port_csma->TraceConnectWithoutContext(
+    port_p2p->TraceConnectWithoutContext(
         "PhyTxEnd",
         MakeCallback(&P4SwitchNetDevice::TxEndCallback, this, port_idx));
-    port_csma->TraceConnectWithoutContext(
+    port_p2p->TraceConnectWithoutContext(
         "PhyTxDrop",
         MakeCallback(&P4SwitchNetDevice::TxEndCallback, this, port_idx));
 }
