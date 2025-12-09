@@ -107,8 +107,8 @@ tracePktTxNetDevice(std::string context, Ptr<const Packet> p)
     uint32_t pktSize = p->GetSize() * 8;
 
     Ptr<Packet> pCopy = p->Copy();
-    EthernetHeader ethHdr;
-    pCopy->RemoveHeader(ethHdr);
+    PppHeader pppHdr;
+    pCopy->RemoveHeader(pppHdr);
     Ipv4Header ipHdr;
     uint8_t proto = 0;
     if (pCopy->PeekHeader(ipHdr)) // returns true/false or just fills header (call is valid)
