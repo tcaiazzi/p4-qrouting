@@ -466,6 +466,7 @@ generateWorkloadFromFile(NodeContainer hosts,
 
     uint16_t qlrPort = 22222;
     uint16_t defaultPort = 20000;
+    uint16_t probe_port = 33333;
     AsciiTraceHelper ascii;
     for (uint16_t i = 0; i < hosts.GetN(); i++)
     {
@@ -474,6 +475,8 @@ generateWorkloadFromFile(NodeContainer hosts,
         hostReceiverApp.Start(Seconds(0.0));
         ApplicationContainer defaultHostReceiverApp = createSinkUdpApplication(defaultPort, host);
         defaultHostReceiverApp.Start(Seconds(0.0));
+        ApplicationContainer probeHostReceiverApp = createSinkUdpApplication(probe_port, host);
+        probeHostReceiverApp.Start(Seconds(0.0));
     }
 
     for (const auto& wl : workloads)
