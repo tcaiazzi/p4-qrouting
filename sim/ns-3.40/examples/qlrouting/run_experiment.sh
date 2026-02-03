@@ -39,6 +39,6 @@ cd p4src && p4c -o ../qlr_build ./qlr.p4 && cd ..
 
 sleep 1
 
-../../ns3 run qlr-experiment -- $experiment_params --results-path="examples/qlrouting/$RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}/"  |& tee $RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}/run.log
+../../ns3 run qlr-experiment -- $experiment_params --results-path="examples/qlrouting/$RESULTS_PATH/qlr_${QLR_ACTIVE}/${QLR_UPDATE_INTERVAL}/"  |& tee $RESULTS_PATH/qlr_${QLR_ACTIVE}/${QLR_UPDATE_INTERVAL}/run.log
 
 chmod -R 777 results
