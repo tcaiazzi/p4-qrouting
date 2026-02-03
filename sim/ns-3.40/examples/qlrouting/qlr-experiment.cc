@@ -48,6 +48,7 @@ main(int argc, char* argv[])
     std::string workloadFilePath;
     std::string switchBandwidth;
     std::string hostBandwidth;
+    std::string colorUpdateInterval = "200ms";
 
     float endTime;
     bool dumpTraffic = false;
@@ -66,6 +67,7 @@ main(int argc, char* argv[])
     cmd.AddValue("end", "Simulation End Time", endTime);
     cmd.AddValue("dump-traffic", "Dump traffic traces", dumpTraffic);
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
+    cmd.AddValue("color-update-interval", "The path where to save results", colorUpdateInterval);
 
     cmd.Parse(argc, argv);
 
@@ -118,8 +120,10 @@ main(int argc, char* argv[])
     NS_LOG_INFO("endTime: " + std::to_string(endTime));
     NS_LOG_INFO("dumpTraffic: " + std::string(dumpTraffic ? "true" : "false"));
     NS_LOG_INFO("resultsPath: " + resultsPath);
+    NS_LOG_INFO("colorUpdateInterval: " + colorUpdateInterval);
 
     NS_LOG_INFO("Configuring Congestion Control.");
+   
 
     std::string queueDisc = "FifoQueueDisc";
     queueDisc = std::string("ns3::") + queueDisc;
@@ -146,7 +150,8 @@ main(int argc, char* argv[])
                                                                    hostBandwidth,
                                                                    dumpTraffic,
                                                                    resultsPath,
-                                                                   p4SwitchMap);
+                                                                   p4SwitchMap,
+                                                                   colorUpdateInterval);
 
     NodeContainer switches = nodes.first;
     NodeContainer hosts = nodes.second;

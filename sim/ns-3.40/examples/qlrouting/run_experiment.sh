@@ -19,8 +19,9 @@ END="${END:-20}"
 DUMP_TRAFFIC="${DUMP_TRAFFIC:---dump-traffic}"
 CONGESTION_CONTROL="${CONGESTION_CONTROL:-TcpLinuxReno}"
 EXPERIMENT_NAME="${EXPERIMENT_NAME:qlr-experiment}"
+QLR_UPDATE_INTERVAL="${QLR_UPDATE_INTERVAL:200ns}"
 
-experiment_params="--host-bw=$HOST_BW --switch-bw=$SWITCH_BW --edges=$EDGES --hosts=$HOSTS --switches=$SWITCHES --workload-file=$WORKLOAD_FILE --end=$END $DUMP_TRAFFIC --cc=$CONGESTION_CONTROL"
+experiment_params="--host-bw=$HOST_BW --switch-bw=$SWITCH_BW --edges=$EDGES --hosts=$HOSTS --switches=$SWITCHES --workload-file=$WORKLOAD_FILE --end=$END  --cc=$CONGESTION_CONTROL --color-update-interval=$QLR_UPDATE_INTERVAL"
 
 
 echo "$experiment_params"

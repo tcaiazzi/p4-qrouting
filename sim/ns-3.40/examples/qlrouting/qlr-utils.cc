@@ -34,8 +34,24 @@ computeQueueBufferSlice(Ptr<P4SwitchNetDevice> p4Device)
         p4Device->m_mmu->DynamicThreshold(0, 0, "egress");
 }
 
+ns3::Time ParseTimeString(const std::string& timeStr)
+{
+    size_t pos = 0;
+    while (pos < timeStr.length() && std::isdigit(timeStr[pos])) pos++;
+    
+    double value = std::stod(timeStr.substr(0, pos));
+    std::string unit = timeStr.substr(pos);
+    
+    if (unit == "ms") return ns3::MilliSeconds(value);
+    if (unit == "us") return ns3::MicroSeconds(value);
+    if (unit == "ns") return ns3::NanoSeconds(value);
+    if (unit == "s") return ns3::Seconds(value);
+    
+    return ns3::MilliSeconds(value);
+}
+
 void
-updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
+updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
 {
     uint64_t totalBufferSlice = queueBufferSlice[p4Device->GetNode()->GetId()];
     uint64_t colorSlice = (uint64_t)(totalBufferSlice / 4.0f);
@@ -75,8 +91,10 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device)
         }
     }
 
-    Simulator::Schedule(NanoSeconds(200), &updateQdepth, p4Device);
+    Simulator::Schedule(ParseTimeString(colorUpdateInterval), &updateQdepth, p4Device, colorUpdateInterval);
 }
+
+
 
 void
 traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdepthFile)
@@ -170,7 +188,7 @@ QLRDeparser::get_ns3_packet(std::unique_ptr<bm::Packet> bm_packet)
 }
 
 Ptr<P4SwitchNetDevice>
-configureP4Switch(Ptr<Node> switchNode, std::string commandsPath, P4SwitchHelper switchHelper)
+configureP4Switch(Ptr<Node> switchNode, std::string commandsPath, P4SwitchHelper switchHelper, std::string colorUpdateInterval)
 {
     NS_LOG_INFO("Configuring P4 Switch " << Names::FindName(switchNode) << " with commands from "
                                          << commandsPath);
@@ -185,7 +203,8 @@ configureP4Switch(Ptr<Node> switchNode, std::string commandsPath, P4SwitchHelper
     p4Switch->m_mmu->node_id = p4Switch->GetNode()->GetId();
     computeQueueBufferSlice(p4Switch);
 
-    Simulator::Schedule(MicroSeconds(0), &updateQdepth, p4Switch);
+    NS_LOG_INFO("Scheduling Qdepth updates for " << Names::FindName(switchNode) << " every " << colorUpdateInterval);
+    Simulator::Schedule(MicroSeconds(0), &updateQdepth, p4Switch, colorUpdateInterval);
 
     return p4Switch;
 }
@@ -198,7 +217,8 @@ createTopology(const std::vector<std::pair<int, int>> edges,
                std::string hostBandwidth,
                bool dumpTraffic,
                std::string resultsPath,
-               std::map<Ptr<Node>, Ptr<P4SwitchNetDevice>>& p4SwitchMap)
+               std::map<Ptr<Node>, Ptr<P4SwitchNetDevice>>& p4SwitchMap,
+               std::string colorUpdateInterval)
 {
     NS_LOG_INFO("Creating topology with parameters:");
     NS_LOG_INFO("Number of nodes: " << numNodes);
@@ -263,7 +283,7 @@ createTopology(const std::vector<std::pair<int, int>> edges,
                                    std::to_string(i + 1) + ".txt";
         Ptr<Node> switchNode = switches.Get(i);
 
-        Ptr<P4SwitchNetDevice> p4Switch = configureP4Switch(switchNode, commandsPath, qlrHelper);
+        Ptr<P4SwitchNetDevice> p4Switch = configureP4Switch(switchNode, commandsPath, qlrHelper, colorUpdateInterval);
         traceQdepth(p4Switch,
                     getPath(resultsPath, "qdepth/" + Names::FindName(switchNode) + ".txt"));
     }

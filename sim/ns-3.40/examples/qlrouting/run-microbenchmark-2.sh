@@ -6,8 +6,7 @@ CONGESTION_CONTROL="${CONGESTION_CONTROL:-TcpLinuxReno}"
 EXPERIMENT_NAME="microbenchmark_2"
 
 for WORKLOAD_FILE in \
-    "examples/qlrouting/resources/5_nodes/workloads/wl1.csv" #\
-    # "examples/qlrouting/resources/5_nodes/workloads/wl3.csv" 
+    "examples/qlrouting/resources/5_nodes/workloads/wl5.csv"
 do
 WORKLOAD_NAME="$(basename "$WORKLOAD_FILE")"
 WORKLOAD_BASE="${WORKLOAD_NAME%.*}"
