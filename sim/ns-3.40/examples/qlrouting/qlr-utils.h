@@ -1,4 +1,6 @@
-#pragma once
+#ifndef QLR_UTILS_H
+#define QLR_UTILS_H
+
 #include "ns3/core-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/network-module.h"
@@ -47,7 +49,10 @@ std::pair<NodeContainer, NodeContainer> createTopology(
     bool dumpTraffic,
     std::string resultsPath,
     std::map<Ptr<Node>, Ptr<P4SwitchNetDevice>>& p4SwitchMap,
-    std::string colorUpdateInterval);
+    std::string mode,
+    std::string colorUpdateInterval,
+    std::string p4programPath,
+    std::string p4baseCommandPath);
 
 NodeContainer addHosts(NodeContainer switches,
                        const std::vector<int> hostsVector,
@@ -63,7 +68,8 @@ void generateWorkloadFromFile(NodeContainer hosts,
 Ptr<P4SwitchNetDevice> configureP4Switch(Ptr<Node> switchNode,
                                          std::string commandsPath,
                                          P4SwitchHelper switchHelper,
-                                         std::string colorUpdateInterval);
+                                         std::string colorUpdateInterval,
+                                         std::string mode);
 
 class QLRDeparser : public P4PacketDeparser
 {
@@ -76,3 +82,5 @@ struct TopologyResult
     ns3::NodeContainer switches;
     std::map<uint32_t, ns3::NetDeviceContainer> switchInterfaces;
 };
+
+#endif

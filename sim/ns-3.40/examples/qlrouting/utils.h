@@ -1,4 +1,6 @@
-#pragma once
+#ifndef UTILS_H
+#define UTILS_H
+
 #include "ns3/network-module.h"
 #include "ns3/internet-module.h"
 #include <string>
@@ -14,3 +16,5 @@ void addIpv4Address(Ptr<Node> host5, NetDeviceContainer host5Interfaces, std::st
 std::string loadCommands(std::string path);
 void printSimulationTime();
 NetDeviceContainer getAllDevices (Ptr<Node> node);
+
+#endif

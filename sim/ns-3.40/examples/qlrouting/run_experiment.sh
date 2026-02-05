@@ -3,8 +3,9 @@
 set -ex
 
 export PATH="$PATH:$(pwd)/../../src/p4-switch/helper"
-# Default parameters (can be overridden by environment or CLI)
 
+# Default parameters (can be overridden by environment or CLI)
+MODE="${MODE:-qlr}"
 QLR_ACTIVE="${QLR_ACTIVE:-1}"
 HOST_BW="${HOST_BW:-100Gbps}"
 SWITCH_BW="${SWITCH_BW:-100Mbps}"
@@ -18,27 +19,38 @@ WORKLOAD_BASE="${WORKLOAD_NAME%.*}"
 END="${END:-20}"
 DUMP_TRAFFIC="${DUMP_TRAFFIC:---dump-traffic}"
 CONGESTION_CONTROL="${CONGESTION_CONTROL:-TcpLinuxReno}"
-EXPERIMENT_NAME="${EXPERIMENT_NAME:qlr-experiment}"
-QLR_UPDATE_INTERVAL="${QLR_UPDATE_INTERVAL:200ns}"
+EXPERIMENT_NAME="${EXPERIMENT_NAME:-qlr-experiment}"
+QLR_UPDATE_INTERVAL="${QLR_UPDATE_INTERVAL:-200ns}"
+P4_PROGRAM="${P4_PROGRAM:-examples/qlrouting/qlr_build/qlr.json}"
+P4_COMMANDS="${P4_COMMANDS}"
 
-experiment_params="--host-bw=$HOST_BW --switch-bw=$SWITCH_BW --edges=$EDGES --hosts=$HOSTS --switches=$SWITCHES --workload-file=$WORKLOAD_FILE --end=$END  --cc=$CONGESTION_CONTROL --color-update-interval=$QLR_UPDATE_INTERVAL"
-
-
-echo "$experiment_params"
+experiment_params="--host-bw=$HOST_BW --switch-bw=$SWITCH_BW --edges=$EDGES --hosts=$HOSTS --switches=$SWITCHES --workload-file=$WORKLOAD_FILE --end=$END  --cc=$CONGESTION_CONTROL --color-update-interval=$QLR_UPDATE_INTERVAL --mode=$MODE --p4-program=$P4_PROGRAM"
+[[ -n "$P4_COMMANDS" ]] && experiment_params+=" --p4-command=$P4_COMMANDS"
 
 RESULTS_DIR="${EXPERIMENT_NAME}_${CONGESTION_CONTROL}_${WORKLOAD_BASE}"
 RESULTS_PATH="results/$RESULTS_DIR"
 
 i=0
-mkdir -p $RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}
+result_path=""
+if [ "$MODE" = "qlr" ]; then
+    result_path="$RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}/${QLR_UPDATE_INTERVAL}/"
+    mkdir -p $result_path
 
-python3 generate_tables.py 5
-python3 generate_p4_commands.py "resources/${SWITCHES}_nodes/commands" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
+    python3 generate_tables.py 5
+    python3 generate_p4_commands.py "resources/${SWITCHES}_nodes/commands" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
 
-cd p4src && p4c -o ../qlr_build ./qlr.p4 && cd ..
+    cd p4src && p4c -o ../qlr_build ./qlr.p4 && cd ..
+elif [ "$MODE" = "central" ]; then
+    result_path="$RESULTS_PATH/central/${i}"
+    mkdir -p $result_path
+
+    experiment_params+=" --dags=$DAGS"
+
+    cd p4src && p4c -o ../fwd_build ./fwd.p4 && cd ..
+fi
 
 sleep 1
 
-../../ns3 run qlr-experiment -- $experiment_params --results-path="examples/qlrouting/$RESULTS_PATH/qlr_${QLR_ACTIVE}/${QLR_UPDATE_INTERVAL}/"  |& tee $RESULTS_PATH/qlr_${QLR_ACTIVE}/${QLR_UPDATE_INTERVAL}/run.log
+../../ns3 run qlr-experiment -- $experiment_params --results-path="examples/qlrouting/$result_path"  |& tee $result_path/run.log
 
 chmod -R 777 results

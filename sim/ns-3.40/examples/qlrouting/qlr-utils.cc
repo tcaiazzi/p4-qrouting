@@ -1,5 +1,3 @@
-#pragma once
-
 #include "qlr-utils.h"
 
 #include "socket-utils.h"
@@ -9,10 +7,10 @@
 
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
-#include "ns3/point-to-point-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/network-module.h"
 #include "ns3/p4-switch-module.h"
+#include "ns3/point-to-point-module.h"
 
 #include <filesystem>
 #include <fstream>
@@ -34,19 +32,25 @@ computeQueueBufferSlice(Ptr<P4SwitchNetDevice> p4Device)
         p4Device->m_mmu->DynamicThreshold(0, 0, "egress");
 }
 
-ns3::Time ParseTimeString(const std::string& timeStr)
+ns3::Time
+ParseTimeString(const std::string& timeStr)
 {
     size_t pos = 0;
-    while (pos < timeStr.length() && std::isdigit(timeStr[pos])) pos++;
-    
+    while (pos < timeStr.length() && std::isdigit(timeStr[pos]))
+        pos++;
+
     double value = std::stod(timeStr.substr(0, pos));
     std::string unit = timeStr.substr(pos);
-    
-    if (unit == "ms") return ns3::MilliSeconds(value);
-    if (unit == "us") return ns3::MicroSeconds(value);
-    if (unit == "ns") return ns3::NanoSeconds(value);
-    if (unit == "s") return ns3::Seconds(value);
-    
+
+    if (unit == "ms")
+        return ns3::MilliSeconds(value);
+    if (unit == "us")
+        return ns3::MicroSeconds(value);
+    if (unit == "ns")
+        return ns3::NanoSeconds(value);
+    if (unit == "s")
+        return ns3::Seconds(value);
+
     return ns3::MilliSeconds(value);
 }
 
@@ -91,10 +95,11 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
         }
     }
 
-    Simulator::Schedule(ParseTimeString(colorUpdateInterval), &updateQdepth, p4Device, colorUpdateInterval);
+    Simulator::Schedule(ParseTimeString(colorUpdateInterval),
+                        &updateQdepth,
+                        p4Device,
+                        colorUpdateInterval);
 }
-
-
 
 void
 traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdepthFile)
@@ -173,7 +178,8 @@ QLRDeparser::get_ns3_packet(std::unique_ptr<bm::Packet> bm_packet)
 
     Ptr<Packet> p = Create<Packet>(bm_buf + offset, len - offset);
     /* Headers are added in reverse order */
-    if (next_hdr == 6){
+    if (next_hdr == 6)
+    {
         p->AddHeader(tcp);
     }
     else if (next_hdr == 17)
@@ -188,11 +194,20 @@ QLRDeparser::get_ns3_packet(std::unique_ptr<bm::Packet> bm_packet)
 }
 
 Ptr<P4SwitchNetDevice>
-configureP4Switch(Ptr<Node> switchNode, std::string commandsPath, P4SwitchHelper switchHelper, std::string colorUpdateInterval)
+configureP4Switch(Ptr<Node> switchNode,
+                  std::string commandsPath,
+                  P4SwitchHelper switchHelper,
+                  std::string colorUpdateInterval,
+                  std::string mode)
 {
-    NS_LOG_INFO("Configuring P4 Switch " << Names::FindName(switchNode) << " with commands from "
-                                         << commandsPath);
-    switchHelper.SetDeviceAttribute("PipelineCommands", StringValue(loadCommands(commandsPath)));
+    if (!commandsPath.empty())
+    {
+        NS_LOG_INFO("Configuring P4 Switch " << Names::FindName(switchNode)
+                                             << " with commands from " << commandsPath);
+        switchHelper.SetDeviceAttribute("PipelineCommands",
+                                        StringValue(loadCommands(commandsPath)));
+    }
+
     NetDeviceContainer p4DevContainer = switchHelper.Install(switchNode, getAllDevices(switchNode));
     Ptr<P4SwitchNetDevice> p4Switch = DynamicCast<P4SwitchNetDevice>(p4DevContainer.Get(0));
     p4Switch->m_mmu->SetAlphaIngress(1.0 / 8);
@@ -203,8 +218,12 @@ configureP4Switch(Ptr<Node> switchNode, std::string commandsPath, P4SwitchHelper
     p4Switch->m_mmu->node_id = p4Switch->GetNode()->GetId();
     computeQueueBufferSlice(p4Switch);
 
-    NS_LOG_INFO("Scheduling Qdepth updates for " << Names::FindName(switchNode) << " every " << colorUpdateInterval);
-    Simulator::Schedule(MicroSeconds(0), &updateQdepth, p4Switch, colorUpdateInterval);
+    if (mode == "qlr")
+    {
+        NS_LOG_INFO("Scheduling Qdepth updates for " << Names::FindName(switchNode) << " every "
+                                                     << colorUpdateInterval);
+        Simulator::Schedule(MicroSeconds(0), &updateQdepth, p4Switch, colorUpdateInterval);
+    }
 
     return p4Switch;
 }
@@ -218,7 +237,10 @@ createTopology(const std::vector<std::pair<int, int>> edges,
                bool dumpTraffic,
                std::string resultsPath,
                std::map<Ptr<Node>, Ptr<P4SwitchNetDevice>>& p4SwitchMap,
-               std::string colorUpdateInterval)
+               std::string colorUpdateInterval,
+               std::string mode,
+               std::string p4programPath,
+               std::string p4baseCommandPath)
 {
     NS_LOG_INFO("Creating topology with parameters:");
     NS_LOG_INFO("Number of nodes: " << numNodes);
@@ -272,18 +294,24 @@ createTopology(const std::vector<std::pair<int, int>> edges,
     }
 
     P4SwitchHelper qlrHelper;
-    qlrHelper.SetDeviceAttribute("PipelineJson",
-                                 StringValue("examples/qlrouting/qlr_build/qlr.json"));
+    qlrHelper.SetDeviceAttribute("PipelineJson", StringValue(p4programPath));
     qlrHelper.SetDeviceAttribute("PacketDeparser", PointerValue(CreateObject<QLRDeparser>()));
 
     for (uint32_t i = 0; i < numNodes; i++)
     {
-        std::string commandsPath = "examples/qlrouting/resources/" +
-                                   std::to_string(numNodes) + "_nodes/commands/s" +
-                                   std::to_string(i + 1) + ".txt";
+        std::string commandsPath = "";
+        if (!p4baseCommandPath.empty())
+        {
+            commandsPath = p4baseCommandPath + std::to_string(numNodes) +
+                                       "_nodes/commands/s" + std::to_string(i + 1) + ".txt";
+        }
         Ptr<Node> switchNode = switches.Get(i);
 
-        Ptr<P4SwitchNetDevice> p4Switch = configureP4Switch(switchNode, commandsPath, qlrHelper, colorUpdateInterval);
+        Ptr<P4SwitchNetDevice> p4Switch =
+            configureP4Switch(switchNode, commandsPath, qlrHelper, colorUpdateInterval, mode);
+
+        p4SwitchMap[switchNode] = p4Switch;
+
         traceQdepth(p4Switch,
                     getPath(resultsPath, "qdepth/" + Names::FindName(switchNode) + ".txt"));
     }
@@ -371,11 +399,11 @@ startUdpFlow(Ptr<Node> receiverHost,
 
     Ipv4Address dst_addr = receiverHostIpv4->GetAddress(1, addressIndex).GetAddress();
 
-    NS_LOG_INFO("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr
-                                          << " on port " << std::to_string(port) << " rate " << rate
-                                          << " start " << std::to_string(start_time) << " end "
-                                          << std::to_string(end_time) << " dataSize "
-                                          << burstDataSize);
+    // NS_LOG_INFO("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr
+    //                                       << " on port " << std::to_string(port) << " rate " << rate
+    //                                       << " start " << std::to_string(start_time) << " end "
+    //                                       << std::to_string(end_time) << " dataSize "
+    //                                       << burstDataSize);
 
     ApplicationContainer hostSenderApp =
         createUdpApplication(dst_addr, port, senderHost, rate, packetSize, burstDataSize);
@@ -444,7 +472,8 @@ addHosts(NodeContainer switches,
                 continue;
 
             Ptr<Ipv4Interface> hostIpv4Interface = getIpv4Interface(hostInterfaces[i].Get(0));
-            Ptr<Ipv4Interface> destinationIpv4Interface = getIpv4Interface(hostInterfaces[j].Get(0));
+            Ptr<Ipv4Interface> destinationIpv4Interface =
+                getIpv4Interface(hostInterfaces[j].Get(0));
             addRoutesFromInterfaceAddresses(hostIpv4Interface, destinationIpv4Interface);
         }
     }
@@ -538,4 +567,3 @@ generateWorkloadFromFile(NodeContainer hosts,
         }
     }
 }
-

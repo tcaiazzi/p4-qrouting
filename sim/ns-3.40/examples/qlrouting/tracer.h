@@ -1,4 +1,6 @@
-#pragma once
+#ifndef TRACER_H
+#define TRACER_H
+
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/internet-module.h"
@@ -31,3 +33,5 @@ void startThroughputPortTrace(std::string fileName, uint32_t nodeId, uint32_t if
 void startThroughputTrace(Ptr<Node> node, float startTime, std::string resultsPath);
 void tcpRx(std::string context, const Ptr<const Packet> p, const TcpHeader& hdr, const Ptr<const TcpSocketBase> skt);
 void startTcpRtx(Ptr<Node> node, std::string fileName, uint32_t socketId);
+
+#endif

@@ -83,7 +83,11 @@ P4SwitchNetDevice::GetTypeId()
                           "Switch MMU instance",
                           PointerValue(nullptr),
                           MakePointerAccessor(&P4SwitchNetDevice::m_mmu),
-                          MakePointerChecker<SwitchMmu>());
+                          MakePointerChecker<SwitchMmu>())
+            .AddTraceSource("PipelineInit",
+                            "Callback when the pipeline is initialized",
+                            MakeTraceSourceAccessor(&P4SwitchNetDevice::m_pipelineInit),
+                            "ns3::TracedCallback");
 
     return tid;
 }
@@ -148,6 +152,7 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
     if (m_p4_pipeline == nullptr)
     {
         InitPipeline();
+        m_pipelineInit(this);
     }
 
     std::string node_name = Names::FindName(m_node);

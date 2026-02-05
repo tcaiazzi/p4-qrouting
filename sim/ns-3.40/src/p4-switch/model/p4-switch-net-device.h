@@ -163,6 +163,8 @@ class P4SwitchNetDevice : public NetDevice
     DropTailQueue<Packet> eg_queues[pCnt][qCnt];
     uint32_t qIndexLast[pCnt];
     bool portBusy[pCnt];
+
+    TracedCallback<Ptr<P4SwitchNetDevice>> m_pipelineInit;
 };
 } // namespace ns3
 

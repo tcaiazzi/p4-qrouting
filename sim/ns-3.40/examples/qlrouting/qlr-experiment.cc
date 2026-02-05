@@ -13,6 +13,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
+#include "qlr-controller.h"
 #include "qlr-utils.h"
 #include "socket-utils.h"
 #include "tracer.h"
@@ -42,6 +43,7 @@ main(int argc, char* argv[])
         {{0, 1}, {0, 2}, {1, 2}, {1, 3}, {2, 3}, {2, 4}, {3, 4}};
     std::string edgesString = "0,1;0,2;1,2;1,3;2,3;2,4;3,4";
     std::vector<int> hostVector = {1, 1, 1, 1, 1};
+    std::string dags = "";
     std::string hostVectorString = "1,1,1,1,1";
     uint32_t numSwitches = 5;
     std::string congestionControl;
@@ -49,6 +51,9 @@ main(int argc, char* argv[])
     std::string switchBandwidth;
     std::string hostBandwidth;
     std::string colorUpdateInterval = "200ms";
+    std::string p4program = "examples/qlrouting/qlr_build/qlr.json";
+    std::string p4baseCommand = "";
+    std::string mode = "qlr";
 
     float endTime;
     bool dumpTraffic = false;
@@ -60,6 +65,7 @@ main(int argc, char* argv[])
     cmd.AddValue("edges", "Edge list as pairs of node IDs (format: 0,1;0,2;1,2;...)", edgesString);
     cmd.AddValue("hosts", "Host vector for each switch (format: 1,1,1,1,1)", hostVectorString);
     cmd.AddValue("switches", "Number of switches", numSwitches);
+    cmd.AddValue("dags", "Per-destination DAGs", dags);
     cmd.AddValue("cc", "The TCP congestion control used for the experiment", congestionControl);
     cmd.AddValue("workload-file", "Path to the workload file", workloadFilePath);
     cmd.AddValue("switch-bw", "The bandwidth to set on all inter-switch links", switchBandwidth);
@@ -68,6 +74,11 @@ main(int argc, char* argv[])
     cmd.AddValue("dump-traffic", "Dump traffic traces", dumpTraffic);
     cmd.AddValue("results-path", "The path where to save results", resultsPath);
     cmd.AddValue("color-update-interval", "The path where to save results", colorUpdateInterval);
+    cmd.AddValue("p4-program", "The path of the P4 program to load", p4program);
+    cmd.AddValue("p4-command",
+                 "The base path for commands to install in each P4 switch",
+                 p4baseCommand);
+    cmd.AddValue("mode", "Mode of operation: either qlr or central", mode);
 
     cmd.Parse(argc, argv);
 
@@ -97,7 +108,7 @@ main(int argc, char* argv[])
     // if (verbose)
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
-        //LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
+        // LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
         // LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
         // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
         LogComponentEnable("P4SwitchHelper", LOG_LEVEL_DEBUG);
@@ -121,13 +132,14 @@ main(int argc, char* argv[])
     NS_LOG_INFO("dumpTraffic: " + std::string(dumpTraffic ? "true" : "false"));
     NS_LOG_INFO("resultsPath: " + resultsPath);
     NS_LOG_INFO("colorUpdateInterval: " + colorUpdateInterval);
+    NS_LOG_INFO("p4program: " + p4program);
+    NS_LOG_INFO("p4baseCommand: " + p4baseCommand);
+    NS_LOG_INFO("mode: " + mode);
 
     NS_LOG_INFO("Configuring Congestion Control.");
-   
-
     std::string queueDisc = "FifoQueueDisc";
     queueDisc = std::string("ns3::") + queueDisc;
-    
+
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
     Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(2 << 17));
     Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(2 << 17));
@@ -151,10 +163,25 @@ main(int argc, char* argv[])
                                                                    dumpTraffic,
                                                                    resultsPath,
                                                                    p4SwitchMap,
-                                                                   colorUpdateInterval);
+                                                                   colorUpdateInterval,
+                                                                   mode,
+                                                                   p4program,
+                                                                   p4baseCommand);
 
     NodeContainer switches = nodes.first;
     NodeContainer hosts = nodes.second;
+
+    Ptr<QlrController> ctrl = CreateObject<QlrController>();
+    if (mode == "central")
+    {
+        ctrl->Init(switches, hosts, p4SwitchMap);
+        ctrl->RegisterDestinations(/*interfaceIndex=*/1, /*addressIndex=*/0);
+        ctrl->BuildAdjacency(edges);
+        ctrl->BuildDAGs(dags);
+        ctrl->SetControlPeriod(MilliSeconds(2));
+        ctrl->SetInstallPeriod(MilliSeconds(7));
+        ctrl->Start();
+    }
 
     startThroughputPortTrace(getPath(resultsPath, "throughput/s1-1.tp"),
                              switches.Get(0)->GetId(),
@@ -164,9 +191,7 @@ main(int argc, char* argv[])
                              switches.Get(0)->GetId(),
                              2);
 
-    startThroughputPortTrace(getPath(resultsPath, "throughput/h1-0.tp"),
-                             hosts.Get(0)->GetId(),
-                             0);
+    startThroughputPortTrace(getPath(resultsPath, "throughput/h1-0.tp"), hosts.Get(0)->GetId(), 0);
 
     NS_LOG_INFO("Create Applications.");
     generateWorkloadFromFile(hosts, workloadFilePath, congestionControl, resultsPath);
@@ -223,7 +248,7 @@ main(int argc, char* argv[])
         }
     }
 
-    if (verbose && tcpCount > 0)
+    if (tcpCount > 0)
         std::cout << "Average TCP Throughput: " << (tcpThroughputSum / tcpCount) << " Mbit/s"
                   << std::endl;
     else
@@ -237,6 +262,7 @@ main(int argc, char* argv[])
 
     flowMon->SerializeToXmlFile(getPath(resultsPath, "flow_monitor.xml"), true, true);
 
+    ctrl->Stop();
     Simulator::Destroy();
     NS_LOG_INFO("Done.");
 }

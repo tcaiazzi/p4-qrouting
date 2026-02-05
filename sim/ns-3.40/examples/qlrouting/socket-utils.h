@@ -1,4 +1,6 @@
-#pragma once
+#ifndef SOCKET_UTILS_H
+#define SOCKET_UTILS_H
+
 #include "ns3/core-module.h"
 #include "ns3/internet-module.h"
 #include "ns3/network-module.h"
@@ -27,3 +29,5 @@ uint32_t GetSocketCount(Ptr<Node> node);
 void PrintTcpSocketsOfNode(uint32_t nodeId);
 
 void PrintTcpSocketsOfNodes(NodeContainer nodes);
+
+#endif

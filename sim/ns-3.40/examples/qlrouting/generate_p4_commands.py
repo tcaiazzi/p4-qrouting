@@ -1,3 +1,4 @@
+import argparse
 import ipaddress
 import os
 import sys
@@ -106,13 +107,6 @@ def generate_all_commands(network: dict, dags: dict, subnets):
         commands_path = os.path.join(dst_path, f"s{node_name + 1}.txt")
         with open(commands_path, "w") as f:
             f.write("\n".join(sorted(list(commands))))
-
-
-import argparse
-import ipaddress
-import os
-import sys
-import networkx as nx
 
 def parse_edges_from_string(edges_str):
     """
