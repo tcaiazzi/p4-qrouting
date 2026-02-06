@@ -179,7 +179,7 @@ main(int argc, char* argv[])
         ctrl->BuildAdjacency(edges);
         ctrl->BuildDAGs(dags);
         ctrl->SetControlPeriod(MilliSeconds(2));
-        ctrl->SetInstallPeriod(MilliSeconds(7));
+        ctrl->SetInstallPeriod(MilliSeconds(20));
         ctrl->Start();
     }
 

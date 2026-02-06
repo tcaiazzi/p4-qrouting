@@ -32,7 +32,7 @@ class QlrController : public Object
         for (const auto& item : p4SwitchMap)
         {
             item.second->TraceConnectWithoutContext("PipelineInit",
-                                                    MakeCallback(&QlrController::SwitchTick, this));
+                                                    MakeCallback(&QlrController::SwitchInit, this));
         }
 
         m_nodeToSwIndex.clear();
@@ -130,8 +130,6 @@ class QlrController : public Object
 
                 m_dagNextHops[dstKey][u].push_back(v);
             }
-
-            NS_LOG_UNCOND("Loaded DAG for " << dstKey);
         }
     }
 
@@ -168,7 +166,7 @@ class QlrController : public Object
         m_installPeriod = period;
     }
 
-  protected:
+  private:
     std::unordered_map<uint32_t, std::vector<uint64_t>> GetQLengths()
     {
         std::unordered_map<uint32_t, std::vector<uint64_t>> out;
@@ -209,11 +207,11 @@ class QlrController : public Object
                 uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
                 if (egressBytes <= colorSlice - 1)
                 {
-                    color = 4;
+                    color = 10;
                 }
                 else if (egressBytes >= colorSlice && egressBytes <= ((colorSlice * 2) - 1))
                 {
-                    color = 3;
+                    color = 5;
                 }
                 else if (egressBytes >= (colorSlice * 2) && egressBytes <= ((colorSlice * 3) - 1))
                 {
@@ -221,7 +219,7 @@ class QlrController : public Object
                 }
                 else if (egressBytes >= (colorSlice * 3) && egressBytes <= ((colorSlice * 4) - 1))
                 {
-                    color = 1;
+                    color = 0;
                 }
                 qlens.push_back(color);
             }
@@ -259,7 +257,7 @@ class QlrController : public Object
 
             if (Q[sw].size() != numA)
             {
-                Q[sw].assign(numA, 0.0);
+                Q[sw].assign(numA, 10.0);
             }
         }
     }
@@ -269,7 +267,7 @@ class QlrController : public Object
     {
         double mx = 0.0;
         for (double v : row)
-            mx = std::min(mx, v);
+            mx = std::max(mx, v);
         return mx;
     }
 
@@ -280,7 +278,7 @@ class QlrController : public Object
         uint32_t bestA = 0;
         for (uint32_t a = 1; a < row.size(); ++a)
         {
-            if (row[a] < bestV)
+            if (row[a] > bestV)
             {
                 bestV = row[a];
                 bestA = a;
@@ -289,14 +287,6 @@ class QlrController : public Object
 
         /* Return max, we stick with one to avoid path oscillations */
         return bestA;
-    }
-
-    uint32_t ChooseAction(const std::vector<double>& row)
-    {
-        if (row.size() == 1)
-            return 0;
-
-        return ArgMax(row);
     }
 
     /* Reward is -qlen */
@@ -317,9 +307,22 @@ class QlrController : public Object
         return static_cast<double>(qlen);
     }
 
-    void InstallP4Rules(uint32_t sw,
-                        const std::unordered_map<std::string, uint32_t>& dests,
-                        bool first = false)
+    bool NeighborToPort(uint32_t sw, uint32_t nextSw, uint32_t* port) const
+    {
+        const auto& neighs = m_adj[sw];
+        for (size_t idx = 0; idx < neighs.size(); ++idx)
+        {
+            if (neighs[idx] == nextSw)
+            {
+                *port = static_cast<uint32_t>(idx);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void InstallP4Rules(uint32_t sw, const std::unordered_map<std::string, uint32_t>& dests)
     {
         Ptr<Node> swObj = m_switches.Get(sw);
         auto p4DevIt = m_p4SwitchMap.find(swObj);
@@ -338,6 +341,7 @@ class QlrController : public Object
 
         for (const auto& ip2port : dests)
         {
+            /* TCP */
             /* Build key for the table */
             std::vector<bm::MatchKeyParam> key;
             key.emplace_back(bm::MatchKeyParam::Type::LPM, ip2port.first, 32);
@@ -357,11 +361,7 @@ class QlrController : public Object
                                 data,
                                 &handle);
 
-            if (first)
-            {
-                m_updIpToPort[ip2port.first] = ip2port.second;
-            }
-
+            /* UDP */
             /* Build key for the table */
             std::vector<bm::MatchKeyParam> key1;
             key1.emplace_back(bm::MatchKeyParam::Type::LPM, ip2port.first, 32);
@@ -370,7 +370,7 @@ class QlrController : public Object
 
             /* Build action data */
             bm::ActionData data1;
-            data1.push_back_action_data(m_updIpToPort[ip2port.first]);
+            data1.push_back_action_data(m_updIpToPort[sw][ip2port.first]);
 
             /* Insert the rule */
             bm::entry_handle_t handle1;
@@ -386,9 +386,7 @@ class QlrController : public Object
     }
 
     /* QLearning Logic */
-    void DoQLearning(uint32_t sw,
-                     const std::unordered_map<uint32_t, std::vector<uint64_t>>& qlens,
-                     bool first = false)
+    void DoQLearning(uint32_t sw, const std::unordered_map<uint32_t, std::vector<uint64_t>>& qlens)
     {
         std::unordered_map<std::string, uint32_t> swRules;
 
@@ -419,26 +417,12 @@ class QlrController : public Object
             if (sw >= Q.size() || Q[sw].size() != actions.size())
                 continue;
 
-            uint32_t a = ChooseAction(Q[sw]);
-            if (a >= actions.size())
-                a = 0;
-
+            uint32_t a = ArgMax(Q[sw]);
             uint32_t nextSw = actions[a];
 
             /* Get the port idx */
-            const std::vector<uint32_t>& swNeighs = m_adj[sw];
-            bool found = false;
-            size_t idx = 0;
-            for (auto item : swNeighs)
-            {
-                if (item == nextSw)
-                {
-                    found = true;
-                    break;
-                }
-                idx += 1;
-            }
-
+            uint32_t idx;
+            bool found = NeighborToPort(sw, nextSw, &idx);
             double r = (found) ? RewardForChoice(sw, idx, qlens) : 0.0;
             double nextMax = 0.0;
             if (nextSw < nSwitches && nextSw < Q.size() && !Q[nextSw].empty())
@@ -446,19 +430,16 @@ class QlrController : public Object
                 nextMax = MaxRow(Q[nextSw]);
             }
 
-            Q[sw][a] =
-                (1.0 - m_alpha) * Q[sw][a] + m_LearningRate * (r + m_DiscountFactor * nextMax);
+            Q[sw][a] = (1 - m_alpha) * Q[sw][a] + m_LearningRate * (r + m_DiscountFactor * nextMax - Q[sw][a]);
 
             if (!found)
             {
                 continue;
             }
 
-            
             /* Adj indexing starts at 0 but ports in bmv2 start and 1 + port=1 is host */
             idx += 2;
             swRules[k] = idx;
-
         }
 
         /* Add own rule */
@@ -471,19 +452,8 @@ class QlrController : public Object
             swRules[k] = 1;
         }
 
-        if (!first)
-        {
-            m_nextInstallPeriod[sw] = Simulator::Schedule(m_installPeriod,
-                                                         &QlrController::InstallP4Rules,
-                                                         this,
-                                                         sw,
-                                                         swRules,
-                                                         first);
-        }
-        else
-        {
-            InstallP4Rules(sw, swRules, first);
-        }
+        m_nextInstallPeriod[sw] =
+            Simulator::Schedule(m_installPeriod, &QlrController::InstallP4Rules, this, sw, swRules);
     }
 
     void DoControlLogic(const std::unordered_map<uint32_t, std::vector<uint64_t>>& qlens)
@@ -495,7 +465,83 @@ class QlrController : public Object
         }
     }
 
-  private:
+    std::vector<int> BfsParentTowardRoot(uint32_t root) const
+    {
+        uint32_t n = m_switches.GetN();
+        std::vector<int> parent(n, -1);
+
+        std::queue<uint32_t> q;
+        parent[root] = static_cast<int>(root);
+        q.push(root);
+
+        while (!q.empty())
+        {
+            uint32_t u = q.front();
+            q.pop();
+
+            for (uint32_t v : m_adj[u])
+            {
+                if (parent[v] == -1)
+                {
+                    parent[v] = static_cast<int>(u);
+                    q.push(v);
+                }
+            }
+        }
+
+        return parent;
+    }
+
+    std::unordered_map<std::string, uint32_t> BuildBfsRulesForSwitch(uint32_t sw)
+    {
+        std::unordered_map<std::string, uint32_t> swRules;
+
+        uint32_t n = m_switches.GetN();
+        if (m_hosts.GetN() != n)
+        {
+            NS_FATAL_ERROR("hostsVector size must equal number of switches");
+        }
+
+        for (uint32_t dstIdx = 0; dstIdx < n; ++dstIdx)
+        {
+            std::string dstKey = m_hostPrefix + std::to_string(dstIdx);
+
+            auto itAddr = m_destinations.find(dstKey);
+            if (itAddr == m_destinations.end())
+                continue;
+
+            uint8_t buf[4];
+            itAddr->second.Serialize(buf);
+            std::string ipKey(reinterpret_cast<char*>(buf), 4);
+
+            uint32_t root = dstIdx;
+            if (sw == root)
+            {
+                swRules[ipKey] = 1;
+                continue;
+            }
+
+            auto parent = BfsParentTowardRoot(root);
+            int p = parent[sw];
+            if (p < 0)
+            {
+                continue;
+            }
+
+            uint32_t nextSw = static_cast<uint32_t>(p);
+            uint32_t outPort;
+            bool found = NeighborToPort(sw, nextSw, &outPort);
+            if (!found)
+            {
+                continue;
+            }
+
+            swRules[ipKey] = outPort + 2;
+        }
+
+        return swRules;
+    }
+
     void Tick()
     {
         if (m_running)
@@ -508,7 +554,7 @@ class QlrController : public Object
         m_nextControlPeriod = Simulator::Schedule(m_controlPeriod, &QlrController::Tick, this);
     }
 
-    void SwitchTick(Ptr<P4SwitchNetDevice> sw)
+    void SwitchInit(Ptr<P4SwitchNetDevice> sw)
     {
         Ptr<Node> n = sw->GetNode();
         auto idxIt = m_nodeToSwIndex.find(n);
@@ -517,8 +563,10 @@ class QlrController : public Object
             return;
         }
 
-        auto qlens = GetQLengths();
-        DoQLearning(idxIt->second, qlens, true);
+        /* Do BFS when the switch boots */
+        auto swRules = BuildBfsRulesForSwitch(idxIt->second);
+        m_updIpToPort[idxIt->second] = std::move(swRules);
+        InstallP4Rules(idxIt->second, m_updIpToPort[idxIt->second]);
     }
 
   private:
@@ -528,8 +576,8 @@ class QlrController : public Object
 
     /* QLearning hyperparameters */
     double m_alpha = 0.1;
-    double m_LearningRate = 0.9;
-    double m_DiscountFactor = 0.2;
+    double m_LearningRate = 0.5;
+    double m_DiscountFactor = 0.3;
 
     bool m_running = false;
     Time m_controlPeriod = MilliSeconds(50);
@@ -549,7 +597,7 @@ class QlrController : public Object
 
     std::unordered_map<std::string, std::vector<std::vector<double>>> m_Q;
 
-    std::unordered_map<std::string, uint32_t> m_updIpToPort;
+    std::unordered_map<uint32_t, std::unordered_map<std::string, uint32_t>> m_updIpToPort;
 };
 
 #endif
