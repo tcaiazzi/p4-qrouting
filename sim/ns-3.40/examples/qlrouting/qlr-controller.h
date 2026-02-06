@@ -94,13 +94,11 @@ class QlrController : public Object
         std::stringstream ss(dags);
         std::string dagPart;
 
-        // split by ';'  (each DAG)
         while (std::getline(ss, dagPart, ';'))
         {
             if (dagPart.empty())
                 continue;
 
-            // split "dst:edges"
             auto colonPos = dagPart.find(':');
             if (colonPos == std::string::npos)
                 continue;
@@ -114,13 +112,11 @@ class QlrController : public Object
             std::stringstream es(edgesStr);
             std::string edgeTok;
 
-            // split edges by ','
             while (std::getline(es, edgeTok, ','))
             {
                 if (edgeTok.empty())
                     continue;
 
-                // parse "u-v"
                 auto dashPos = edgeTok.find('-');
                 if (dashPos == std::string::npos)
                     continue;
@@ -285,11 +281,11 @@ class QlrController : public Object
             }
         }
 
-        /* Return max, we stick with one to avoid path oscillations */
+        /* Return max, we stick with one to avoid path oscillations (no exploration) */
         return bestA;
     }
 
-    /* Reward is -qlen */
+    /* Reward is qlen */
     double RewardForChoice(uint32_t sw,
                            size_t idx,
                            const std::unordered_map<uint32_t, std::vector<uint64_t>>& qlens)
@@ -391,7 +387,6 @@ class QlrController : public Object
         std::unordered_map<std::string, uint32_t> swRules;
 
         const uint32_t nSwitches = m_switches.GetN();
-
         for (const auto& dstItem : m_destinations)
         {
             const std::string& dstKey = dstItem.first;
@@ -417,10 +412,31 @@ class QlrController : public Object
             if (sw >= Q.size() || Q[sw].size() != actions.size())
                 continue;
 
-            uint32_t a = ArgMax(Q[sw]);
+            /* Hysteresis to reduce flapping */
+            uint32_t bestA = ArgMax(Q[sw]);
+            if (bestA >= actions.size())
+            {
+                bestA = 0;
+            }
+            std::string actKey = std::to_string(sw) + "|" + dstKey;
+            uint32_t curA = bestA;
+            auto itCur = m_lastActionIdx.find(actKey);
+            if (itCur != m_lastActionIdx.end() && itCur->second < actions.size())
+            {
+                curA = itCur->second;
+            }
+            uint32_t a = bestA;
+            if (curA != bestA)
+            {
+                if (Q[sw][bestA] < Q[sw][curA] + m_hysteresisDelta)
+                {
+                    a = curA;
+                }
+            }
+            m_lastActionIdx[actKey] = a;
+
             uint32_t nextSw = actions[a];
 
-            /* Get the port idx */
             uint32_t idx;
             bool found = NeighborToPort(sw, nextSw, &idx);
             double r = (found) ? RewardForChoice(sw, idx, qlens) : 0.0;
@@ -430,7 +446,8 @@ class QlrController : public Object
                 nextMax = MaxRow(Q[nextSw]);
             }
 
-            Q[sw][a] = (1 - m_alpha) * Q[sw][a] + m_LearningRate * (r + m_DiscountFactor * nextMax - Q[sw][a]);
+            Q[sw][a] = (1 - m_alpha) * Q[sw][a] +
+                       m_LearningRate * (r + m_DiscountFactor * nextMax - Q[sw][a]);
 
             if (!found)
             {
@@ -576,8 +593,10 @@ class QlrController : public Object
 
     /* QLearning hyperparameters */
     double m_alpha = 0.1;
-    double m_LearningRate = 0.5;
+    double m_LearningRate = 0.4;
     double m_DiscountFactor = 0.3;
+    /* Minimum Q-value improvement required before switching to a new action */
+    double m_hysteresisDelta = 0.06;
 
     bool m_running = false;
     Time m_controlPeriod = MilliSeconds(50);
@@ -596,6 +615,8 @@ class QlrController : public Object
         m_dagNextHops;
 
     std::unordered_map<std::string, std::vector<std::vector<double>>> m_Q;
+    /* Last action (for hysteresis) */
+    std::unordered_map<std::string, uint32_t> m_lastActionIdx;
 
     std::unordered_map<uint32_t, std::unordered_map<std::string, uint32_t>> m_updIpToPort;
 };

@@ -178,8 +178,8 @@ main(int argc, char* argv[])
         ctrl->RegisterDestinations(/*interfaceIndex=*/1, /*addressIndex=*/0);
         ctrl->BuildAdjacency(edges);
         ctrl->BuildDAGs(dags);
-        ctrl->SetControlPeriod(MilliSeconds(2));
-        ctrl->SetInstallPeriod(MilliSeconds(20));
+        ctrl->SetControlPeriod(MilliSeconds(5));
+        ctrl->SetInstallPeriod(MilliSeconds(15));
         ctrl->Start();
     }
 
