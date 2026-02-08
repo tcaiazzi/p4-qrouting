@@ -35,6 +35,7 @@ def generate_qmatrix_updates(path, node_list, perms):
                     action_body += f"    {row_slice} = {row_slice} + (ig_qdepth + hdr.qlr_updates[{idx}].value - {row_slice});\n"
                     action_body += f"    log_msg(\"updating row{i}_value - after: {{}}\", {{{row_slice}}});\n"
                     action_body += f"    row{i}.write(0, row{i}_value);\n"
+                    action_body += f"    log_msg(\"new row{i}_value: {{}}\", {{row{i}_value}});\n"
 
                     const_entry.append(f"true, {i}")
 
@@ -99,9 +100,7 @@ def generate_qlr_updates(path, node_list, perms):
         action_header = f"action {action_name}() {{\n"
         
         item_idx = 0
-        action_body = "    hdr.qlr.setValid();\n"
-        action_body += "    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];\n"
-        action_body += "    hdr.ethernet.dst_addr[47:40] = 0x1;\n"
+        action_body = "    hdr.ipv4.ecn[0:0] = 0x1;\n"
         for i in range(1, num_nodes + 1):
             if i in items:
                 action_body += f"    hdr.qlr_updates[{i - 1}].has_next = " + ("0" if item_idx == len(items) - 1 else "1") + ";\n"
@@ -166,4 +165,5 @@ if __name__ == '__main__':
 
     num_nodes = int(sys.argv[1])
 
+    print("Generating QLR tables for", num_nodes, "nodes")
     main(num_nodes)
