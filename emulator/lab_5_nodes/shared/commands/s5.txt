@@ -1,0 +1,25 @@
+register_write row1 0 4629771061636890688
+register_write row2 0 4629771061636890688
+register_write row3 0 4629771061632696384
+register_write row4 0 4629771061632712768
+table_add qlr_pkt_updates qlr_pkt_set_1_2_5 3 3 => 
+table_add qlr_pkt_updates qlr_pkt_set_1_2_5 4 3 => 
+table_add qlr_pkt_updates qlr_pkt_set_4_5 1 2 => 
+table_add qlr_pkt_updates qlr_pkt_set_4_5 2 2 => 
+table_add qlr_pkt_updates qlr_pkt_set_4_5 3 2 => 
+table_add read_ig_qdepth get_ig_qdepth_and_idx 2 => 1
+table_add read_ig_qdepth get_ig_qdepth_and_idx 3 => 2
+table_add select_port_from_row_col set_nhop 1 1 => 2
+table_add select_port_from_row_col set_nhop 2 1 => 2
+table_add select_port_from_row_col set_nhop 3 1 => 2
+table_add select_port_from_row_col set_nhop 3 2 => 3
+table_add select_port_from_row_col set_nhop 4 2 => 3
+table_add select_row get_row_num 10.0.1.0/24 6 => 1
+table_add select_row get_row_num 10.0.2.0/24 6 => 2
+table_add select_row get_row_num 10.0.3.0/24 6 => 3
+table_add select_row get_row_num 10.0.4.0/24 6 => 4
+table_add select_row set_nhop 10.0.1.0/24 17 => 2
+table_add select_row set_nhop 10.0.2.0/24 17 => 3
+table_add select_row set_nhop 10.0.3.0/24 17 => 2
+table_add select_row set_nhop 10.0.4.0/24 17 => 3
+table_set_default select_row set_nhop 1

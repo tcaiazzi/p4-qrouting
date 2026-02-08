@@ -99,7 +99,9 @@ def generate_qlr_updates(path, node_list, perms):
         action_header = f"action {action_name}() {{\n"
         
         item_idx = 0
-        action_body = "    hdr.ethernet.dst_addr[47:40] = 0x1;\n"
+        action_body = "    hdr.qlr.setValid();\n"
+        action_body += "    hdr.qlr.last_byte = hdr.ethernet.dst_addr[47:40];\n"
+        action_body += "    hdr.ethernet.dst_addr[47:40] = 0x1;\n"
         for i in range(1, num_nodes + 1):
             if i in items:
                 action_body += f"    hdr.qlr_updates[{i - 1}].has_next = " + ("0" if item_idx == len(items) - 1 else "1") + ";\n"
@@ -158,7 +160,7 @@ def main(n):
 if __name__ == '__main__':
     if len(sys.argv) != 2:
         print(
-            "Usage: plot.py <num_nodes>"
+            "Usage: generate_tables.py <num_nodes>"
         )
         exit(1)
 
