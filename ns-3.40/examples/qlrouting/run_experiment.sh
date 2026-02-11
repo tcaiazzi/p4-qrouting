@@ -36,7 +36,7 @@ if [ "$MODE" = "qlr" ]; then
     result_path="$RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}/${QLR_UPDATE_INTERVAL}/"
     mkdir -p $result_path
 
-    python3 generate_tables.py $SWITCHES
+    python3 generate_tables.py 5
     python3 generate_p4_commands.py "resources/${SWITCHES}_nodes/commands" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
 
     cd p4src && p4c -o ../qlr_build ./qlr.p4 && cd ..

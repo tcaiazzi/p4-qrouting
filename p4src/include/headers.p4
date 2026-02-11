@@ -42,7 +42,7 @@ header tcp_h {
 }
 
 header tcp_options_h {
-    varbit<256> options;
+    varbit<320> options;
 }
 
 header udp_h {
@@ -50,10 +50,6 @@ header udp_h {
     bit<16> dst_port;
     bit<16> len;
     bit<16> checksum;
-}
-
-header qlr_h {
-    bit<8> last_byte;
 }
 
 header qlr_update_h {
@@ -65,6 +61,7 @@ header qlr_update_h {
 struct metadata {
     l4_lookup_t l4_lookup;
     bit<8> qlearning_update;
+    bit<8> qlearning_probe;
 }
 
 struct headers {
@@ -73,7 +70,6 @@ struct headers {
     tcp_h tcp;
     tcp_options_h tcp_options;
     udp_h udp;
-    qlr_h qlr;
     qlr_update_h[NODES_NUM] qlr_updates;
 }
 

@@ -39,11 +39,13 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
 
 
 def generate_all_commands(network: dict, dags: dict, subnets):
-    node_to_network = {k: next(subnets) for k in network}
+    node_to_network = {k: next(subnets) for k in network if k in dags}
     for node_name in network:
         commands = set()
         for tgt in network:
             if node_name == tgt:
+                continue
+            if node_name not in dags or tgt not in dags:
                 continue
 
             tgt_commands = generate_node_commands_from_dag(dags[tgt], network, node_name, tgt)
@@ -52,6 +54,8 @@ def generate_all_commands(network: dict, dags: dict, subnets):
         dst_iface_to_headers = {}
         for dst in network:
             if dst == node_name:
+                continue
+            if dst not in dags:
                 continue
 
             paths = list(nx.all_simple_paths(dags[dst], source=node_name, target=dst))
@@ -86,6 +90,9 @@ def generate_all_commands(network: dict, dags: dict, subnets):
 
         ports = list(network[node_name].values())
         for i, (node, subnet) in enumerate(filter(lambda x: x[0] != node_name, node_to_network.items())):
+            if node_name not in dags:
+                continue
+            
             port_num =  network[node_name][nx.shortest_path(network_graph, source=node_name, target=node)[1]]
             if qlr_active:
                 commands.add(f"table_add select_row get_row_num {subnet} 6 => {node + 1}")
@@ -206,14 +213,13 @@ if __name__ == "__main__":
     print(f"Parsed network: {network}")
     print(f"Parsed host vector: {host_vector}")
 
-    # Parse or create DAGs
-
-    # Parse DAGs from command line
-    dags = {k: nx.DiGraph() for k in network}
+    dags = {k: nx.DiGraph() for k in network if host_vector[k] == 1}
     dag_entries = args.dags.split(';')
     for entry in dag_entries:
         dst_str, edges_str = entry.split(':')
         dst = int(dst_str)
+        if host_vector[dst] == 0:
+            continue
 
         dags[dst].add_nodes_from(network.keys())
 

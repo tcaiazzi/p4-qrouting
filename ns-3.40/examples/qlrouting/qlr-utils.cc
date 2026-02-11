@@ -470,6 +470,8 @@ addHosts(NodeContainer switches,
         {
             if (i == j)
                 continue;
+            if (hostsVector[i] == 0 || hostsVector[j] == 0)
+                continue;
 
             Ptr<Ipv4Interface> hostIpv4Interface = getIpv4Interface(hostInterfaces[i].Get(0));
             Ptr<Ipv4Interface> destinationIpv4Interface =
