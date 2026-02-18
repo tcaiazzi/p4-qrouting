@@ -178,7 +178,7 @@ startThroughputTrace(Ptr<Node> node, float startTime, std::string resultsPath)
 /* Functions to track TCP Retransmissions */
 std::map<std::string, std::pair<SequenceNumber32, uint32_t>> ctx2rtxInfo;
 std::map<std::string, FILE*> rtxStream;
-Time rtxPeriod = Time::FromInteger(100, Time::Unit::MS);
+Time rtxPeriod = Time::FromInteger(10, Time::Unit::MS);
 
 void
 tcpRx(std::string context,

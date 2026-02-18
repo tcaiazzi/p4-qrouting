@@ -33,7 +33,7 @@ RESULTS_PATH="results/$RESULTS_DIR"
 i=0
 result_path=""
 if [ "$MODE" = "qlr" ]; then
-    result_path="$RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}/${QLR_UPDATE_INTERVAL}/"
+    result_path="$RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}/"
     mkdir -p $result_path
 
     python3 generate_tables.py 5

@@ -193,6 +193,57 @@ def plot_jitter_histogram_figure(results, flow_info):
     )
 
 
+def plot_delay_cdf_figure(results, flow_info):
+    def plot_delay_cdf(axes, dst_port, label, color, hatch, flow_monitor_path):
+        sim: Simulation = parse_xml(flow_monitor_path)[0]
+
+        axes.grid(linestyle="--", linewidth=0.5)
+
+        delays = []
+        for flow in sim.flows:
+            flow: Flow = flow
+            t: FiveTuple = flow.fiveTuple
+            if t.destinationPort == dst_port:
+                for bin in flow.delayHistogram:
+                    delays.extend([float(bin.get("start")) * 1000] * int(bin.get("count")))
+
+        if not delays:
+            return
+
+        delays_sorted = np.sort(np.array(delays))
+        cdf = np.arange(1, len(delays_sorted) + 1) / float(len(delays_sorted))
+
+        axes.step(delays_sorted, cdf, where="post", label=label, color=color)
+        axes.set_xlim([-1, 700])
+        axes.set_xlabel("Delay [ms]")
+        axes.set_ylabel("CDF")
+        axes.grid(linestyle="--", linewidth=0.5)
+
+    plt.clf()
+
+    fig, axs = plt.subplots(
+        len(flow_info), 1, sharey="all", tight_layout=True, figsize=(4, 4)
+    )
+    handles = []
+    for ax_n, (dst_port, label, color, hatch, flow_monitor_path) in enumerate(flow_info):
+        plot_delay_cdf(axs[ax_n], dst_port, label, color, hatch, flow_monitor_path)
+        handles.append(mpatches.Patch(fill=None, hatch=hatch, edgecolor=color, label=label))
+
+    fig.legend(
+        handles=handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.04),
+        ncol=len(handles),
+        prop={"size": 6},
+    )
+
+    plt.savefig(
+        os.path.join(figures_path, f"delay_cdf_figure.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+
+
 def plot_fct_histogram_figure(results, flow_info):
     flow_monitor_path = os.path.join(results, "flow_monitor.xml")
 
@@ -578,6 +629,26 @@ if __name__ == "__main__":
     )
 
     plot_jitter_histogram_figure(
+        results_path,
+        [
+            (
+                22222,
+                "NO-QLR",
+                "red",
+                "////",
+                os.path.join(results_path, "qlr_0/0/flow_monitor.xml"),
+            ),
+            (
+                22222,
+                "QLR",
+                "green",
+                "////",
+                os.path.join(results_path, "qlr_1/0/flow_monitor.xml"),
+            ),
+        ],
+    )
+
+    plot_delay_cdf_figure(
         results_path,
         [
             (
