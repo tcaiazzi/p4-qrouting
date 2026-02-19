@@ -57,41 +57,89 @@ ParseTimeString(const std::string& timeStr)
 void
 updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
 {
-    uint64_t totalBufferSlice = queueBufferSlice[p4Device->GetNode()->GetId()];
-    uint64_t colorSlice = (uint64_t)(totalBufferSlice / 4.0f);
+    uint64_t totalBufferSlice =
+        queueBufferSlice[p4Device->GetNode()->GetId()];
+
+    uint64_t colorSlice = totalBufferSlice / 4;
 
     P4Pipeline* pline = p4Device->m_p4_pipeline;
+
     if (pline != nullptr)
     {
         std::string nodeName = p4Device->GetName();
+
         for (size_t p = 1; p < p4Device->GetNPorts(); ++p)
         {
-            uint64_t color = 1;
-            uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
-            if (egressBytes <= colorSlice - 1)
+            uint64_t egressBytes =
+                p4Device->m_mmu->GetEgressBytes(p, 0);
+
+            uint64_t prevColor =
+                p4Device->m_mmu->colorEgress[p][0];
+
+            uint64_t newColor = prevColor;
+
+            uint64_t t1 = colorSlice;
+            uint64_t t2 = colorSlice * 2;
+            uint64_t t3 = colorSlice * 3;
+            uint64_t t4 = colorSlice * 4;
+
+            uint64_t hysteresis = colorSlice / 10;
+
+            if (prevColor == 1)
             {
-                color = 1;
+                if (egressBytes > (t1 + hysteresis))
+                {
+                    newColor = 3;
+                }
             }
-            else if (egressBytes >= colorSlice && egressBytes <= ((colorSlice * 2) - 1))
+            else if (prevColor == 3)
             {
-                color = 2;
+                if (egressBytes > (t2 + hysteresis))
+                {
+                    newColor = 6;
+                }
+                else if (egressBytes < (t1 - hysteresis))
+                {
+                    newColor = 1;
+                }
             }
-            else if (egressBytes >= (colorSlice * 2) && egressBytes <= ((colorSlice * 3) - 1))
+            else if (prevColor == 6)
             {
-                color = 3;
+                if (egressBytes > (t3 + hysteresis))
+                {
+                    newColor = 10;
+                }
+                else if (egressBytes < (t2 - hysteresis))
+                {
+                    newColor = 3;
+                }
             }
-            else if (egressBytes >= (colorSlice * 3) && egressBytes <= ((colorSlice * 4) - 1))
+            else if (prevColor == 10)
             {
-                color = 4;
+                if (egressBytes < (t3 - hysteresis))
+                {
+                    newColor = 6;
+                }
+            }
+            else
+            {
+                newColor = 1;
             }
 
-            if (color != p4Device->m_mmu->colorEgress[p][0])
+            if (newColor != prevColor)
             {
-                NS_LOG_INFO("Node: " << nodeName << " Port: " << p + 1
-                                     << " Egress Bytes: " << egressBytes << " Color: " << color);
-                p4Device->m_mmu->colorEgress[p][0] = color;
+                NS_LOG_INFO("Node: " << nodeName
+                                     << " Port: " << p + 1
+                                     << " Egress Bytes: " << egressBytes
+                                     << " Color: " << newColor);
+
+                p4Device->m_mmu->colorEgress[p][0] = newColor;
             }
-            pline->register_write(0, "IngressPipe.ig_qdepths", p, bm::Data(color));
+
+            pline->register_write(0,
+                                  "IngressPipe.ig_qdepths",
+                                  p,
+                                  bm::Data(newColor));
         }
     }
 
@@ -100,6 +148,7 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
                         p4Device,
                         colorUpdateInterval);
 }
+
 
 void
 traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdepthFile)
@@ -513,6 +562,7 @@ generateWorkloadFromFile(NodeContainer hosts,
                          std::string congestionControl,
                          std::string resultsPath)
 {
+    NS_LOG_INFO("Generating workload from file: " << workloadFilePath);
     auto workloads = WorkloadParser::parseFile(workloadFilePath);
 
     uint16_t qlrPort = 22222;
