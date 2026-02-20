@@ -160,8 +160,8 @@ def generate_delay_sensitive_flows(node_ids, k_flows, start, end, seed, base_por
     pairs = pick_k_ordered_pairs(node_ids, k_flows, seed)
     lines = []
     for idx, (src, dst) in enumerate(pairs):
-        port = base_port + idx
-        lines.append(emit_csv_line(src, dst, start, end, port, f"{rate_mbps:.3f}Mbps", packet_size, 6, 0, 1))
+        total_bytes = int(rate_mbps * 1e6 / 8 * (end - start))
+        lines.append(emit_csv_line(src, dst, start, 0, base_port, f"{rate_mbps:.3f}Mbps", packet_size, 6, total_bytes, 1))
     return lines
 
 
