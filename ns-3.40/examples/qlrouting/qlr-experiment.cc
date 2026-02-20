@@ -115,7 +115,7 @@ main(int argc, char* argv[])
         // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);
         //  LogComponentEnable("utils", LOG_LEVEL_DEBUG);
         // LogComponentEnable("TcpOptionRfc793", LOG_LEVEL_DEBUG);
-        LogComponentEnable("qlr-utils", LOG_LEVEL_INFO);
+        LogComponentEnable("qlr-utils", LOG_LEVEL_DEBUG);
         LogComponentEnable("socket-utils", LOG_LEVEL_DEBUG);
         LogComponentEnable("QLRoutingExample", LOG_LEVEL_INFO);
         LogComponentEnable("Tracer", LOG_LEVEL_DEBUG);
@@ -191,7 +191,14 @@ main(int argc, char* argv[])
                              switches.Get(0)->GetId(),
                              2);
 
-    startThroughputPortTrace(getPath(resultsPath, "throughput/h1-0.tp"), hosts.Get(0)->GetId(), 0);
+    for (uint32_t i = 0; i < hosts.GetN(); ++i){
+        if (hostVector[i] == 0)
+            continue;
+        NS_LOG_INFO("Starting throughput trace for node " + std::to_string(hosts.Get(i)->GetId()) + "(" + Names::FindName(hosts.Get(i)) + ")");
+        startThroughputPortTrace(getPath(resultsPath, "throughput/h" + std::to_string(i + 1) + "-0.tp"),
+                                 hosts.Get(i)->GetId(),
+                                 0);
+    }
 
     NS_LOG_INFO("Create Applications.");
     generateWorkloadFromFile(hosts, workloadFilePath, congestionControl, resultsPath);

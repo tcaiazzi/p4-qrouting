@@ -24,6 +24,7 @@ using namespace ns3;
 NS_LOG_COMPONENT_DEFINE("qlr-utils");
 
 std::map<uint32_t, uint64_t> queueBufferSlice;
+std::map<Ptr<Node>, uint32_t> hostToIndexMap;
 
 void
 computeQueueBufferSlice(Ptr<P4SwitchNetDevice> p4Device)
@@ -469,7 +470,6 @@ addHosts(NodeContainer switches,
          std::string resultsPath)
 {
     NodeContainer hosts;
-    hosts.Create(hostsVector.size());
 
     std::map<uint32_t, NetDeviceContainer> hostInterfaces = {};
 
@@ -482,7 +482,9 @@ addHosts(NodeContainer switches,
     {
         if (hostsVector[i] == 1)
         {
-            Ptr<Node> host = hosts.Get(i);
+            NS_LOG_DEBUG("Creating host h" << i + 1 << " and connecting to switch s" << i + 1);
+            Ptr<Node> host = CreateObject<Node>();
+            hostToIndexMap[host] = i;
             Names::Add("host" + std::to_string(i + 1), host);
 
             Ptr<Node> switchNode = switches.Get(i);
@@ -490,6 +492,7 @@ addHosts(NodeContainer switches,
             NetDeviceContainer link = p2p_host.Install(NodeContainer(host, switchNode));
             hostInterfaces[i].Add(link.Get(0));
             // switchInterfaces[i].Add(link.Get(1));
+            hosts.Add(host);
         }
     }
 
@@ -498,19 +501,18 @@ addHosts(NodeContainer switches,
     hostStack.SetIpv6StackInstall(false);
     hostStack.Install(hosts);
 
-    for (uint32_t i = 0; i < hostsVector.size(); i++)
+    for (uint32_t i = 0; i < hosts.GetN(); i++)
     {
         NS_LOG_DEBUG("Configuring host " << Names::FindName(hosts.Get(i)));
-        if (hostsVector[i] == 1)
-        {
-            Ptr<Node> host = hosts.Get(i);
-
-            Ipv4AddressHelper hostIpv4Helper;
-            std::string ipAddress = "10.0." + std::to_string(i + 1) + ".0";
-            NS_LOG_DEBUG("Assigning IP " << ipAddress << ".1/24 to " << Names::FindName(host));
-            hostIpv4Helper.SetBase(Ipv4Address(ipAddress.c_str()), Ipv4Mask("/24"));
-            hostIpv4Helper.Assign(hostInterfaces[i]);
-        }
+       
+        Ptr<Node> host = hosts.Get(i);
+        uint32_t hostIndex = hostToIndexMap[host];
+        Ipv4AddressHelper hostIpv4Helper;
+        std::string ipAddress = "10.0." + std::to_string(hostIndex + 1) + ".0";
+        NS_LOG_DEBUG("Assigning IP " << ipAddress << ".1/24 to " << Names::FindName(host));
+        hostIpv4Helper.SetBase(Ipv4Address(ipAddress.c_str()), Ipv4Mask("/24"));
+        hostIpv4Helper.Assign(hostInterfaces[hostIndex]);
+        
     }
 
     for (uint32_t i = 0; i < hostsVector.size(); i++)
@@ -571,6 +573,7 @@ generateWorkloadFromFile(NodeContainer hosts,
     AsciiTraceHelper ascii;
     for (uint16_t i = 0; i < hosts.GetN(); i++)
     {
+        NS_LOG_DEBUG("Setting up applications for host " << Names::FindName(hosts.Get(i)));
         Ptr<Node> host = hosts.Get(i);
         ApplicationContainer hostReceiverApp = createSinkTcpApplication(qlrPort, host);
         hostReceiverApp.Start(Seconds(0.0));
@@ -582,8 +585,11 @@ generateWorkloadFromFile(NodeContainer hosts,
 
     for (const auto& wl : workloads)
     {
-        Ptr<Node> senderHost = hosts.Get(wl.sourceId);
-        Ptr<Node> receiverHost = hosts.Get(wl.destinationId);
+        NS_LOG_DEBUG("Scheduling flow from host" << wl.sourceId + 1 << " to host" << wl.destinationId + 1
+                                         << " protocol: " << wl.protocol << " start time: " << wl.startTime
+                                         << " data size: " << wl.dataSize);
+        Ptr<Node> senderHost = Names::Find<Node>("host" + std::to_string(wl.sourceId + 1));
+        Ptr<Node> receiverHost = Names::Find<Node>("host" + std::to_string(wl.destinationId + 1));
         if (wl.protocol == 6)
         {
             for (uint32_t f = 0; f < wl.flowsNumber; f++)

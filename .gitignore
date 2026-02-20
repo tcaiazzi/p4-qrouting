@@ -185,3 +185,4 @@ ns-3.40/examples/qlrouting/figures*
 ns-3.40/examples/qlrouting/logs*
 ns-3.40/examples/qlrouting/resources/*/commands
 behavioral-model
+paper_figures/
