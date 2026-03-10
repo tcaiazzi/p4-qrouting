@@ -166,7 +166,7 @@ def plot_throughput_figure(results, source_node, figure_name, congetion_points=N
     ax.set_xlabel("Time [s]", fontsize=12)
     ax.set_ylabel("Average Throughput [Mbps]", loc="bottom", fontsize=12)
     ax.tick_params(axis='both', which='major', labelsize=12)
-    ax.set_xlim([1, 7])
+    # ax.set_xlim([1, 7])
 
     # draw congestion regions if provided (each item may be (start,end) pair)
     if congetion_points:
@@ -233,103 +233,104 @@ if __name__ == "__main__":
                 f"microbenchmark-1-delay-cdf-{wl}"
             )
 
-        ## BENCHMARK 2
-        figures_path = os.path.join("paper_figures","benchmark2")
-
-        os.makedirs(figures_path, exist_ok=True)
-
-        for wl in ["wl1", "wl2", "wl3", "wl4", "wl5", "wl6", "wl7", "wl8", "wl9", "wl10"]:
-
-            plot_throughput_figure(os.path.join("results", f"microbenchmark_2_TcpLinuxReno_{wl}"), "h1", f"microbenchmark-2-throughput-{wl}", congetion_points=[(2.0, 2.6)], labels=["Baseline", "QLR"])
-        
-            plot_delay_cdf_figure(
-                os.path.join("results", f"microbenchmark_2_TcpLinuxReno_{wl}"),
-                [
-                    (
-                        22222,
-                        "Baseline",
-                        "red",
-                        "-",
-                        os.path.join("results", f"microbenchmark_2_TcpLinuxReno_{wl}", "qlr_0/0/flow_monitor.xml"),
-                    ),
-                    (
-                        22222,
-                        "QLR",
-                        "green",
-                        "-.",
-                        os.path.join("results", f"microbenchmark_2_TcpLinuxReno_{wl}", "qlr_1/0/flow_monitor.xml"),
-                    ),
-                ],
-                f"microbenchmark-2-delay-cdf-{wl}"
-            )
-
-        figures_path = os.path.join("paper_figures","benchmark3")
-
-        os.makedirs(figures_path, exist_ok=True)
-
-        for congestion_control in ["TcpLinuxReno", "TcpVegas"]:
-            for wl, congestions in [("wl1",[(2.0, 2.3)]) , ("wl2",[(2.0, 2.3), (2.6, 2.9)]) , ("wl3",[(2.0, 2.3), (2.6, 2.9), (3.2, 3.5)]) , ("wl4",[(2.0, 2.3), (2.6, 2.9), (3.2, 3.5), (3.8, 4.1)])]:
-
-                plot_throughput_figure(os.path.join("results", f"microbenchmark_3_{congestion_control}_{wl}"), "h1", f"microbenchmark-3-throughput-{congestion_control}-{wl}", congetion_points=congestions, central=True, labels=["Baseline", "QLR", "Central"])
-        
-                plot_delay_cdf_figure(
-                    os.path.join("results", f"microbenchmark_3_{congestion_control}_{wl}"),
-                    [
-                        (
-                            22222,
-                            "Baseline",
-                            "red",
-                            "-",
-                            os.path.join("results", f"microbenchmark_3_{congestion_control}_{wl}", "qlr_0/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "QLR",
-                            "green",
-                            "-.",
-                            os.path.join("results", f"microbenchmark_3_{congestion_control}_{wl}", "qlr_1/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "Central",
-                            "blue",
-                            ":",
-                            os.path.join("results", f"microbenchmark_3_{congestion_control}_{wl}", "central/0/flow_monitor.xml"),
-                        ),
-                    ],
-                    f"microbenchmark-3-delay-cdf-{congestion_control}-{wl}",
-                    ylim=(0.9995, 1.00001) if congestion_control == "TcpVegas" else (0.95, 1.001)
-                )
-
-        # figures_path = os.path.join("paper_figures","benchmark4")
+        # ## BENCHMARK 2
+        # figures_path = os.path.join("paper_figures","benchmark2")
 
         # os.makedirs(figures_path, exist_ok=True)
 
-        # for congestion_control in ["TcpLinuxReno"]:
+        # for wl in ["wl1", "wl2", "wl3", "wl4", "wl5", "wl6", "wl7", "wl8", "wl9", "wl10"]:
+
+        #     plot_throughput_figure(os.path.join("results", f"microbenchmark_2_TcpLinuxReno_{wl}"), "h1", f"microbenchmark-2-throughput-{wl}", congetion_points=[(2.0, 2.6)], labels=["Baseline", "QLR"])
+        
+        #     plot_delay_cdf_figure(
+        #         os.path.join("results", f"microbenchmark_2_TcpLinuxReno_{wl}"),
+        #         [
+        #             (
+        #                 22222,
+        #                 "Baseline",
+        #                 "red",
+        #                 "-",
+        #                 os.path.join("results", f"microbenchmark_2_TcpLinuxReno_{wl}", "qlr_0/0/flow_monitor.xml"),
+        #             ),
+        #             (
+        #                 22222,
+        #                 "QLR",
+        #                 "green",
+        #                 "-.",
+        #                 os.path.join("results", f"microbenchmark_2_TcpLinuxReno_{wl}", "qlr_1/0/flow_monitor.xml"),
+        #             ),
+        #         ],
+        #         f"microbenchmark-2-delay-cdf-{wl}"
+        #     )
+
+        # figures_path = os.path.join("paper_figures","benchmark3")
+
+        # os.makedirs(figures_path, exist_ok=True)
+
+        # for congestion_control in ["TcpLinuxReno", "TcpVegas"]:
         #     for wl, congestions in [("wl1",[(2.0, 2.3)]) , ("wl2",[(2.0, 2.3), (2.6, 2.9)]) , ("wl3",[(2.0, 2.3), (2.6, 2.9), (3.2, 3.5)]) , ("wl4",[(2.0, 2.3), (2.6, 2.9), (3.2, 3.5), (3.8, 4.1)])]:
 
-        #         plot_throughput_figure(os.path.join("results", f"microbenchmark_4_{congestion_control}_{wl}"), "h1", f"microbenchmark-4-throughput-{congestion_control}-{wl}", congetion_points=congestions, labels=["Control Plane QLR", "QLR"])
+        #         plot_throughput_figure(os.path.join("results", f"microbenchmark_3_{congestion_control}_{wl}"), "h1", f"microbenchmark-3-throughput-{congestion_control}-{wl}", congetion_points=congestions, central=True, labels=["Baseline", "QLR", "Central"])
         
         #         plot_delay_cdf_figure(
-        #             os.path.join("results", f"microbenchmark_4_{congestion_control}_{wl}"),
+        #             os.path.join("results", f"microbenchmark_3_{congestion_control}_{wl}"),
         #             [
         #                 (
         #                     22222,
-        #                     "Control Plane QLR",
+        #                     "Baseline",
         #                     "red",
         #                     "-",
-        #                     os.path.join("results", f"microbenchmark_4_{congestion_control}_{wl}", "qlr_0/0/flow_monitor.xml"),
+        #                     os.path.join("results", f"microbenchmark_3_{congestion_control}_{wl}", "qlr_0/0/flow_monitor.xml"),
         #                 ),
         #                 (
         #                     22222,
         #                     "QLR",
         #                     "green",
         #                     "-.",
-        #                     os.path.join("results", f"microbenchmark_4_{congestion_control}_{wl}", "qlr_1/0/flow_monitor.xml"),
+        #                     os.path.join("results", f"microbenchmark_3_{congestion_control}_{wl}", "qlr_1/0/flow_monitor.xml"),
+        #                 ),
+        #                 (
+        #                     22222,
+        #                     "Central",
+        #                     "blue",
+        #                     ":",
+        #                     os.path.join("results", f"microbenchmark_3_{congestion_control}_{wl}", "central/0/flow_monitor.xml"),
         #                 ),
         #             ],
-        #             f"microbenchmark-4-delay-cdf-{congestion_control}-{wl}"
+        #             f"microbenchmark-3-delay-cdf-{congestion_control}-{wl}",
+        #             ylim=(0.9995, 1.00001) if congestion_control == "TcpVegas" else (0.95, 1.001)
         #         )
+
+        figures_path = os.path.join("paper_figures","zoo")
+
+        os.makedirs(figures_path, exist_ok=True)
+
+        for congestion_control in ["TcpLinuxReno"]:
+            for wl, congestions in [("test_tcp",[(2.0, 2.3)])]:
+
+                plot_throughput_figure(os.path.join("results", f"zoo_{congestion_control}_{wl}"), "h3", f"zoo-throughput-{congestion_control}-{wl}", congetion_points=congestions, labels=["Baseline", "QLR"])
+        
+                plot_delay_cdf_figure(
+                    os.path.join("results", f"zoo_{congestion_control}_{wl}"),
+                    [
+                        (
+                            22222,
+                            "Control Plane QLR",
+                            "red",
+                            "-",
+                            os.path.join("results", f"zoo_{congestion_control}_{wl}", "qlr_0/0/flow_monitor.xml"),
+                        ),
+                        (
+                            22222,
+                            "QLR",
+                            "green",
+                            "-.",
+                            os.path.join("results", f"zoo_{congestion_control}_{wl}", "qlr_1/0/flow_monitor.xml"),
+                        ),
+                    ],
+                    f"zoo-delay-cdf-{congestion_control}-{wl}",
+                    ylim=(0.8, 1.00001)
+                )
         
 
         

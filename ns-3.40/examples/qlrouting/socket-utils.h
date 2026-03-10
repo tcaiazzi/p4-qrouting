@@ -16,6 +16,12 @@ ApplicationContainer createTcpApplication(Ipv4Address addressToReach,
                                           Ptr<Node> node,
                                           uint32_t maxBytes,
                                           std::string congestionControl);
+ApplicationContainer createOnOffTcpApplication(Ipv4Address addressToReach,
+                          uint16_t port,
+                          Ptr<Node> node,
+                          std::string dataRate,
+                          uint32_t packetSize,
+                          std::string congestionControl);
 ApplicationContainer createSinkTcpApplication(uint16_t port, Ptr<Node> node);
 ApplicationContainer createUdpApplication(Ipv4Address addressToReach,
                                           uint16_t port,

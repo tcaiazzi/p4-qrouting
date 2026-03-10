@@ -26,7 +26,10 @@ void startTcpFlow(Ptr<Node> receiverHost,
                   Ptr<Node> senderHost,
                   uint16_t port,
                   float startTime,
+                  float endTime,
+                  std::string rate,
                   uint32_t flowDataSize,
+                  uint32_t packetSize,
                   std::string resultsPath,
                   std::string congestionControl = "TcpLinuxReno");
 
@@ -61,9 +64,11 @@ NodeContainer addHosts(NodeContainer switches,
                        std::string resultsPath);
 
 void generateWorkloadFromFile(NodeContainer hosts,
+                              std::vector<int> hostsVector,
                               std::string workloadFilePath,
                               std::string congestionControl,
-                              std::string resultsPath);
+                              std::string resultsPath,
+                              std::string mode);
 
 Ptr<P4SwitchNetDevice> configureP4Switch(Ptr<Node> switchNode,
                                          std::string commandsPath,

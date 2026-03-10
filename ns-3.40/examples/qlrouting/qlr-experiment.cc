@@ -78,7 +78,7 @@ main(int argc, char* argv[])
     cmd.AddValue("p4-command",
                  "The base path for commands to install in each P4 switch",
                  p4baseCommand);
-    cmd.AddValue("mode", "Mode of operation: either qlr or central", mode);
+    cmd.AddValue("mode", "Mode of operation: either qlr or baseline", mode);
 
     cmd.Parse(argc, argv);
 
@@ -172,16 +172,6 @@ main(int argc, char* argv[])
     NodeContainer hosts = nodes.second;
 
     Ptr<QlrController> ctrl = CreateObject<QlrController>();
-    if (mode == "central")
-    {
-        ctrl->Init(switches, hosts, p4SwitchMap);
-        ctrl->RegisterDestinations(/*interfaceIndex=*/1, /*addressIndex=*/0);
-        ctrl->BuildAdjacency(edges);
-        ctrl->BuildDAGs(dags);
-        ctrl->SetControlPeriod(MilliSeconds(200));
-        ctrl->SetInstallPeriod(MilliSeconds(20));
-        ctrl->Start();
-    }
 
     startThroughputPortTrace(getPath(resultsPath, "throughput/s1-1.tp"),
                              switches.Get(0)->GetId(),
@@ -191,17 +181,25 @@ main(int argc, char* argv[])
                              switches.Get(0)->GetId(),
                              2);
 
-    for (uint32_t i = 0; i < hosts.GetN(); ++i){
+    for (uint32_t i = 0; i < hosts.GetN(); ++i)
+    {
         if (hostVector[i] == 0)
             continue;
-        NS_LOG_INFO("Starting throughput trace for node " + std::to_string(hosts.Get(i)->GetId()) + "(" + Names::FindName(hosts.Get(i)) + ")");
-        startThroughputPortTrace(getPath(resultsPath, "throughput/h" + std::to_string(i + 1) + "-0.tp"),
-                                 hosts.Get(i)->GetId(),
-                                 0);
+        NS_LOG_INFO("Starting throughput trace for node " + std::to_string(hosts.Get(i)->GetId()) +
+                    "(" + Names::FindName(hosts.Get(i)) + ")");
+        startThroughputPortTrace(
+            getPath(resultsPath, "throughput/h" + std::to_string(i + 1) + "-0.tp"),
+            hosts.Get(i)->GetId(),
+            0);
     }
 
     NS_LOG_INFO("Create Applications.");
-    generateWorkloadFromFile(hosts, workloadFilePath, congestionControl, resultsPath);
+    generateWorkloadFromFile(hosts,
+                             hostVector,
+                             workloadFilePath,
+                             congestionControl,
+                             resultsPath,
+                             mode);
 
     FlowMonitorHelper flowHelper;
     Ptr<FlowMonitor> flowMon = flowHelper.Install(NodeContainer(switches, hosts));

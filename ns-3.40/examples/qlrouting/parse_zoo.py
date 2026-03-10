@@ -3,6 +3,28 @@ import sys
 import networkx as nx
 
 
+def dag_to_target(G: nx.Graph, target):
+    if target not in G:
+        raise ValueError(f"Target {target} not in graph")
+
+    dist = dict(nx.single_source_shortest_path_length(G, target))
+
+    D = nx.DiGraph()
+    D.add_nodes_from(dist.keys())
+
+    for a, b, data in G.edges(data=True):
+        if a in dist and b in dist:
+            rank_a = (dist[a], str(a))
+            rank_b = (dist[b], str(b))
+
+            if rank_a > rank_b:
+                D.add_edge(a, b, **data)
+            elif rank_b > rank_a:
+                D.add_edge(b, a, **data)
+
+    return D, dist
+
+
 def dag_to_target_with_slack(G: nx.Graph, target, k: int = 0):
     if target not in G:
         raise ValueError(f"Target {target} not in graph")
@@ -41,7 +63,7 @@ if __name__ == "__main__":
 
     dags = []
     for t in G.nodes:
-        dag, dist = dag_to_target_with_slack(G, t, k=2)
+        dag, dist = dag_to_target(G, t)
 
         succs = []
         for u in dag.nodes():

@@ -27,9 +27,37 @@ createTcpApplication(Ipv4Address addressToReach,
     BulkSendHelper source("ns3::TcpSocketFactory",
                           Address(InetSocketAddress(addressToReach, port)));
     source.SetAttribute("MaxBytes", UintegerValue(maxBytes));
-    
 
     return source.Install(node);
+}
+
+
+ApplicationContainer
+createOnOffTcpApplication(Ipv4Address addressToReach,
+                     uint16_t port,
+                     Ptr<Node> node,
+                     std::string dataRate,
+                     uint32_t packetSize,
+                     std::string congestionControl)
+{
+
+    NS_LOG_DEBUG("Creating OnOff TCP Application to " << addressToReach << ":" << port
+                                               << " on node " << node->GetId()
+                                               << " with dataRate=" << dataRate
+                                               << " packetSize=" << packetSize
+                                               << " using CC=" << congestionControl);
+    TypeId congestionControlTid = TypeId::LookupByName("ns3::" + congestionControl);
+
+    Config::Set("/NodeList/" + std::to_string(node->GetId()) + "/$ns3::TcpL4Protocol/SocketType",
+                TypeIdValue(congestionControlTid));
+    
+    OnOffHelper onoff("ns3::TcpSocketFactory", InetSocketAddress(addressToReach, port));
+    onoff.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
+    onoff.SetAttribute("PacketSize", UintegerValue(packetSize));
+    onoff.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    onoff.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+
+    return onoff.Install(node);
 }
 
 ApplicationContainer

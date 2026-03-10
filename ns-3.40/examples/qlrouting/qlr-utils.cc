@@ -58,8 +58,7 @@ ParseTimeString(const std::string& timeStr)
 void
 updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
 {
-    uint64_t totalBufferSlice =
-        queueBufferSlice[p4Device->GetNode()->GetId()];
+    uint64_t totalBufferSlice = queueBufferSlice[p4Device->GetNode()->GetId()];
 
     uint64_t colorSlice = totalBufferSlice / 4;
 
@@ -71,11 +70,9 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
 
         for (size_t p = 1; p < p4Device->GetNPorts(); ++p)
         {
-            uint64_t egressBytes =
-                p4Device->m_mmu->GetEgressBytes(p, 0);
+            uint64_t egressBytes = p4Device->m_mmu->GetEgressBytes(p, 0);
 
-            uint64_t prevColor =
-                p4Device->m_mmu->colorEgress[p][0];
+            uint64_t prevColor = p4Device->m_mmu->colorEgress[p][0];
 
             uint64_t newColor = prevColor;
 
@@ -129,18 +126,13 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
 
             if (newColor != prevColor)
             {
-                NS_LOG_INFO("Node: " << nodeName
-                                     << " Port: " << p + 1
-                                     << " Egress Bytes: " << egressBytes
-                                     << " Color: " << newColor);
+                NS_LOG_INFO("Node: " << nodeName << " Port: " << p + 1
+                                     << " Egress Bytes: " << egressBytes << " Color: " << newColor);
 
                 p4Device->m_mmu->colorEgress[p][0] = newColor;
             }
 
-            pline->register_write(0,
-                                  "IngressPipe.ig_qdepths",
-                                  p,
-                                  bm::Data(newColor));
+            pline->register_write(0, "IngressPipe.ig_qdepths", p, bm::Data(newColor));
         }
     }
 
@@ -149,7 +141,6 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
                         p4Device,
                         colorUpdateInterval);
 }
-
 
 void
 traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdepthFile)
@@ -352,8 +343,8 @@ createTopology(const std::vector<std::pair<int, int>> edges,
         std::string commandsPath = "";
         if (!p4baseCommandPath.empty())
         {
-            commandsPath = p4baseCommandPath + std::to_string(numNodes) +
-                                       "_nodes/commands/s" + std::to_string(i + 1) + ".txt";
+            commandsPath = p4baseCommandPath + std::to_string(numNodes) + "_nodes/commands/s" +
+                           std::to_string(i + 1) + ".txt";
         }
         Ptr<Node> switchNode = switches.Get(i);
 
@@ -384,19 +375,41 @@ startTcpFlow(Ptr<Node> receiverHost,
              Ptr<Node> senderHost,
              uint16_t port,
              float startTime,
+             float endTime,
+             std::string rate,
              uint32_t flowDataSize,
+             uint32_t packetSize,
              std::string resultsPath,
              std::string congestionControl)
 {
     Ptr<Ipv4> receiverHostIpv4 = receiverHost->GetObject<Ipv4>();
 
-    ApplicationContainer hostSenderApp =
-        createTcpApplication(receiverHostIpv4->GetAddress(1, addressIndex).GetAddress(),
-                             port,
-                             senderHost,
-                             flowDataSize,
-                             congestionControl);
+    ApplicationContainer hostSenderApp;
+
+    if (rate == "0")
+    {
+        hostSenderApp =
+            createTcpApplication(receiverHostIpv4->GetAddress(1, addressIndex).GetAddress(),
+                                 port,
+                                 senderHost,
+                                 flowDataSize,
+                                 congestionControl);
+    }
+    else
+    {
+        hostSenderApp =
+            createOnOffTcpApplication(receiverHostIpv4->GetAddress(1, addressIndex).GetAddress(),
+                                      port,
+                                      senderHost,
+                                      rate,
+                                      packetSize,
+                                      congestionControl);
+    }
+
     hostSenderApp.Start(Seconds(startTime));
+
+    if (endTime > 0)
+        hostSenderApp.Stop(Seconds(endTime));
 
     if (nodeToNextTcpSocketIndex.find(senderHost) == nodeToNextTcpSocketIndex.end())
     {
@@ -449,11 +462,11 @@ startUdpFlow(Ptr<Node> receiverHost,
 
     Ipv4Address dst_addr = receiverHostIpv4->GetAddress(1, addressIndex).GetAddress();
 
-    // NS_LOG_INFO("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr
-    //                                       << " on port " << std::to_string(port) << " rate " << rate
-    //                                       << " start " << std::to_string(start_time) << " end "
-    //                                       << std::to_string(end_time) << " dataSize "
-    //                                       << burstDataSize);
+    NS_LOG_INFO("Starting UDP flow from " << Names::FindName(senderHost) << " to " << dst_addr
+                                          << " on port " << std::to_string(port) << " rate " << rate
+                                          << " start " << std::to_string(start_time) << " end "
+                                          << std::to_string(end_time) << " dataSize "
+                                          << burstDataSize);
 
     ApplicationContainer hostSenderApp =
         createUdpApplication(dst_addr, port, senderHost, rate, packetSize, burstDataSize);
@@ -480,20 +493,17 @@ addHosts(NodeContainer switches,
 
     for (uint32_t i = 0; i < hostsVector.size(); i++)
     {
-        if (hostsVector[i] == 1)
-        {
-            NS_LOG_DEBUG("Creating host h" << i + 1 << " and connecting to switch s" << i + 1);
-            Ptr<Node> host = CreateObject<Node>();
-            hostToIndexMap[host] = i;
-            Names::Add("host" + std::to_string(i + 1), host);
+        NS_LOG_DEBUG("Creating host h" << i + 1 << " and connecting to switch s" << i + 1);
+        Ptr<Node> host = CreateObject<Node>();
+        hostToIndexMap[host] = i;
+        Names::Add("host" + std::to_string(i + 1), host);
 
-            Ptr<Node> switchNode = switches.Get(i);
+        Ptr<Node> switchNode = switches.Get(i);
 
-            NetDeviceContainer link = p2p_host.Install(NodeContainer(host, switchNode));
-            hostInterfaces[i].Add(link.Get(0));
-            // switchInterfaces[i].Add(link.Get(1));
-            hosts.Add(host);
-        }
+        NetDeviceContainer link = p2p_host.Install(NodeContainer(host, switchNode));
+        hostInterfaces[i].Add(link.Get(0));
+        // switchInterfaces[i].Add(link.Get(1));
+        hosts.Add(host);
     }
 
     InternetStackHelper hostStack;
@@ -504,7 +514,7 @@ addHosts(NodeContainer switches,
     for (uint32_t i = 0; i < hosts.GetN(); i++)
     {
         NS_LOG_DEBUG("Configuring host " << Names::FindName(hosts.Get(i)));
-       
+
         Ptr<Node> host = hosts.Get(i);
         uint32_t hostIndex = hostToIndexMap[host];
         Ipv4AddressHelper hostIpv4Helper;
@@ -512,18 +522,12 @@ addHosts(NodeContainer switches,
         NS_LOG_DEBUG("Assigning IP " << ipAddress << ".1/24 to " << Names::FindName(host));
         hostIpv4Helper.SetBase(Ipv4Address(ipAddress.c_str()), Ipv4Mask("/24"));
         hostIpv4Helper.Assign(hostInterfaces[hostIndex]);
-        
     }
 
     for (uint32_t i = 0; i < hostsVector.size(); i++)
     {
         for (uint32_t j = 0; j < hostsVector.size(); j++)
         {
-            if (i == j)
-                continue;
-            if (hostsVector[i] == 0 || hostsVector[j] == 0)
-                continue;
-
             Ptr<Ipv4Interface> hostIpv4Interface = getIpv4Interface(hostInterfaces[i].Get(0));
             Ptr<Ipv4Interface> destinationIpv4Interface =
                 getIpv4Interface(hostInterfaces[j].Get(0));
@@ -560,9 +564,11 @@ logBulkSendThroughput(ApplicationContainer sinks, Ptr<OutputStreamWrapper> outFi
 
 void
 generateWorkloadFromFile(NodeContainer hosts,
+                         std::vector<int> hostsVector,
                          std::string workloadFilePath,
                          std::string congestionControl,
-                         std::string resultsPath)
+                         std::string resultsPath,
+                         std::string mode)
 {
     NS_LOG_INFO("Generating workload from file: " << workloadFilePath);
     auto workloads = WorkloadParser::parseFile(workloadFilePath);
@@ -573,10 +579,15 @@ generateWorkloadFromFile(NodeContainer hosts,
     AsciiTraceHelper ascii;
     for (uint16_t i = 0; i < hosts.GetN(); i++)
     {
-        NS_LOG_DEBUG("Setting up applications for host " << Names::FindName(hosts.Get(i)));
         Ptr<Node> host = hosts.Get(i);
-        ApplicationContainer hostReceiverApp = createSinkTcpApplication(qlrPort, host);
-        hostReceiverApp.Start(Seconds(0.0));
+
+        NS_LOG_DEBUG("Setting up applications for host " << Names::FindName(host));
+
+        if (hostsVector[i] == 1)
+        {
+            ApplicationContainer hostReceiverApp = createSinkTcpApplication(qlrPort, host);
+            hostReceiverApp.Start(Seconds(0.0));
+        }
         ApplicationContainer defaultHostReceiverApp = createSinkUdpApplication(defaultPort, host);
         defaultHostReceiverApp.Start(Seconds(0.0));
         ApplicationContainer probeHostReceiverApp = createSinkUdpApplication(probe_port, host);
@@ -585,9 +596,6 @@ generateWorkloadFromFile(NodeContainer hosts,
 
     for (const auto& wl : workloads)
     {
-        NS_LOG_DEBUG("Scheduling flow from host" << wl.sourceId + 1 << " to host" << wl.destinationId + 1
-                                         << " protocol: " << wl.protocol << " start time: " << wl.startTime
-                                         << " data size: " << wl.dataSize);
         Ptr<Node> senderHost = Names::Find<Node>("host" + std::to_string(wl.sourceId + 1));
         Ptr<Node> receiverHost = Names::Find<Node>("host" + std::to_string(wl.destinationId + 1));
         if (wl.protocol == 6)
@@ -599,7 +607,10 @@ generateWorkloadFromFile(NodeContainer hosts,
                              senderHost,
                              wl.dstPort,
                              wl.startTime,
+                             wl.endTime,
+                             wl.dataRate,
                              wl.dataSize,
+                             wl.packetSize,
                              resultsPath,
                              congestionControl);
             }
@@ -608,6 +619,11 @@ generateWorkloadFromFile(NodeContainer hosts,
         {
             for (uint32_t f = 0; f < wl.flowsNumber; f++)
             {
+                if (mode == "baseline" && wl.dstPort == probe_port)
+                {
+                    NS_LOG_INFO("Skipping UDP flow to port " << probe_port << " in baseline mode");
+                    continue;
+                }
                 startUdpFlow(receiverHost,
                              0,
                              senderHost,

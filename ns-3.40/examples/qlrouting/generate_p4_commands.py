@@ -26,7 +26,7 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
     print("Updated Slices after neighbors:", row_slices)
     # print("Row slices:", row_slices)
     for i, row_slice in enumerate(row_slices):
-        if row_slice < 6:
+        if qlr_active and row_slice < 6:
             cmd.append(f"table_add select_port_from_row_col set_nhop {goal + 1} {i} => {i + 1}")
 
     row_slices.reverse()
@@ -39,77 +39,83 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
 
 
 def generate_all_commands(network: dict, dags: dict, subnets):
-    node_to_network = {k: next(subnets) for k in network if k in dags}
+    node_to_network = {}
+    all_node_to_network = {}
+    
+    for k in sorted(network, key=lambda x: int(x)):
+        subnet = next(subnets)
+        if k in dags:
+            node_to_network[k] = subnet
+        all_node_to_network[k] = subnet
+
     for node_name in network:
         commands = set()
         for tgt in network:
             if node_name == tgt:
                 continue
-            if node_name not in dags or tgt not in dags:
+            if tgt not in dags:
                 continue
 
             tgt_commands = generate_node_commands_from_dag(dags[tgt], network, node_name, tgt)
             commands.update(tgt_commands)
 
-        dst_iface_to_headers = {}
-        for dst in network:
-            if dst == node_name:
-                continue
-            if dst not in dags:
-                continue
+        if qlr_active:
+            dst_iface_to_headers = {}
+            for dst in network:
+                if dst == node_name:
+                    continue
+                if dst not in dags:
+                    continue
 
-            paths = list(nx.all_simple_paths(dags[dst], source=node_name, target=dst))
-            neighbors = set(map(lambda x: x[1], paths))
-            # print(f"node_name={node_name}", f"dst={dst}", f"neighbors={neighbors}")
-            for neighbor in neighbors:
-                # print(f"Processing neighbor: {neighbor}")
-                headers_to_activate = set()
-                for update_node, dag in dags.items():
-                    if dst == update_node:
-                        continue
-                    for edge in dag.edges:
-                        if edge[1] == node_name and edge[0] == neighbor:
-                            if dst not in dst_iface_to_headers:
-                                dst_iface_to_headers[dst] = {}
+                paths = list(nx.all_simple_paths(dags[dst], source=node_name, target=dst))
+                neighbors = set(map(lambda x: x[1], paths))
+                # print(f"node_name={node_name}", f"dst={dst}", f"neighbors={neighbors}")
+                for neighbor in neighbors:
+                    # print(f"Processing neighbor: {neighbor}")
+                    headers_to_activate = set()
+                    for update_node, dag in dags.items():
+                        if dst == update_node:
+                            continue
+                        for edge in dag.edges:
+                            if edge[1] == node_name and edge[0] == neighbor:
+                                if dst not in dst_iface_to_headers:
+                                    dst_iface_to_headers[dst] = {}
 
-                            iface = network[node_name][edge[0]]
-                            if iface not in dst_iface_to_headers[dst]:
-                                dst_iface_to_headers[dst][iface] = set()
+                                iface = network[node_name][edge[0]]
+                                if iface not in dst_iface_to_headers[dst]:
+                                    dst_iface_to_headers[dst][iface] = set()
 
-                            # print(f"node_name={node_name}", f"dst={dst}", f"update={update_node}", f"edge={edge}", f"iface={iface}")
+                                # print(f"node_name={node_name}", f"dst={dst}", f"update={update_node}", f"edge={edge}", f"iface={iface}")
 
-                            dst_iface_to_headers[dst][iface].add(str(update_node + 1))
+                                dst_iface_to_headers[dst][iface].add(str(update_node + 1))
 
-        for dst, iface_to_headers in dst_iface_to_headers.items():
-            for iface, headers_to_activate in iface_to_headers.items():
-                if headers_to_activate:
-                    headers_to_activate = sorted(list(headers_to_activate))
+            for dst, iface_to_headers in dst_iface_to_headers.items():
+                for iface, headers_to_activate in iface_to_headers.items():
+                    if headers_to_activate:
+                        headers_to_activate = sorted(list(headers_to_activate))
 
-                    commands.add(f"table_add qlr_pkt_updates qlr_pkt_set_" + "_".join(
-                        headers_to_activate) + f" {dst + 1} {iface + 1} => ")
+                        commands.add(f"table_add qlr_pkt_updates qlr_pkt_set_" + "_".join(
+                            headers_to_activate) + f" {dst + 1} {iface + 1} => ")
 
-        ports = list(network[node_name].values())
-        for i, (node, subnet) in enumerate(filter(lambda x: x[0] != node_name, node_to_network.items())):
-            if node_name not in dags:
-                continue
-            
+            for iface in network[node_name].values():
+                commands.add(f"table_add read_ig_qdepth get_ig_qdepth_and_idx {iface + 1} => {iface}")
+                commands.add(f"register_write ig_qdepth {iface} 1")
+
+        for (node, subnet) in filter(lambda x: x[0] != node_name, node_to_network.items()):
             port_num =  network[node_name][nx.shortest_path(network_graph, source=node_name, target=node)[1]]
             if qlr_active:
                 commands.add(f"table_add select_row get_row_num {subnet} 6 => {node + 1}")
-                if node in network[node_name]:
-                    commands.add(f"table_add handle_update send_probe {subnet} 17 33333 0 => {port_num + 1} {node + 1}")
-                    commands.add(f"table_add handle_update process_probe {node_to_network[node_name]} 17 33333 1 =>")
             else:
                 commands.add(f"table_add select_row set_nhop {subnet} 6 => {port_num + 1}")
 
-            commands.add(f"table_add select_row set_nhop {subnet} 17 => {port_num + 1}")
 
-        max_iface = max(network[node_name].values()) + 1
         commands.add(f"table_set_default select_row set_nhop 1")
-
-        for iface in network[node_name].values():
-            commands.add(f"table_add read_ig_qdepth get_ig_qdepth_and_idx {iface + 1} => {iface}")
-            commands.add(f"register_write ig_qdepth {iface} 1")
+        for (node, subnet) in filter(lambda x: x[0] != node_name, all_node_to_network.items()):
+            port_num =  network[node_name][nx.shortest_path(network_graph, source=node_name, target=node)[1]]
+            if qlr_active and node in network[node_name]:
+                commands.add(f"table_add handle_update send_probe {subnet} 17 33333 0 => {port_num + 1} {node + 1}")
+                commands.add(f"table_add handle_update process_probe {all_node_to_network[node_name]} 17 33333 1 =>")
+            commands.add(f"table_add select_row set_nhop {subnet} 17 => {port_num + 1}")
 
         commands_path = os.path.join(dst_path, f"s{node_name + 1}.txt")
         with open(commands_path, "w") as f:

@@ -1,6 +1,5 @@
 #!/bin/bash
 
-set -ex
 
 export PATH="$PATH:$(pwd)/../../src/p4-switch/helper"
 
@@ -17,7 +16,7 @@ WORKLOAD_FILE="${WORKLOAD_FILE:-examples/qlrouting/resources/3_nodes/workloads/w
 WORKLOAD_NAME="$(basename "$WORKLOAD_FILE")"
 WORKLOAD_BASE="${WORKLOAD_NAME%.*}"
 END="${END:-20}"
-DUMP_TRAFFIC="${DUMP_TRAFFIC:---dump-traffic}"
+DUMP_TRAFFIC="${DUMP_TRAFFIC:-0}"
 CONGESTION_CONTROL="${CONGESTION_CONTROL:-TcpLinuxReno}"
 EXPERIMENT_NAME="${EXPERIMENT_NAME:-qlr-experiment}"
 QLR_UPDATE_INTERVAL="${QLR_UPDATE_INTERVAL:-200ns}"
@@ -27,27 +26,29 @@ P4_COMMANDS="${P4_COMMANDS}"
 experiment_params="--host-bw=$HOST_BW --switch-bw=$SWITCH_BW --edges=$EDGES --hosts=$HOSTS --switches=$SWITCHES --workload-file=$WORKLOAD_FILE --end=$END  --cc=$CONGESTION_CONTROL --color-update-interval=$QLR_UPDATE_INTERVAL --mode=$MODE --p4-program=$P4_PROGRAM"
 [[ -n "$P4_COMMANDS" ]] && experiment_params+=" --p4-command=$P4_COMMANDS"
 
+if [ "$DUMP_TRAFFIC" = "1" ]; then
+    experiment_params+=" --dump-traffic"
+fi
+
+if [ "$QLR_ACTIVE" = "0" ]; then
+    experiment_params+=" --mode=baseline"
+fi
+
+echo "Running experiment with parameters: $experiment_params"
+
 RESULTS_DIR="${EXPERIMENT_NAME}_${CONGESTION_CONTROL}_${WORKLOAD_BASE}"
 RESULTS_PATH="results/$RESULTS_DIR"
 
 i=0
 result_path=""
-if [ "$MODE" = "qlr" ]; then
-    result_path="$RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}/"
-    mkdir -p $result_path
 
-    python3 generate_tables.py 5
-    python3 generate_p4_commands.py "resources/${SWITCHES}_nodes/commands" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
+result_path="$RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}/"
+mkdir -p $result_path
 
-    cd p4src && p4c -o ../qlr_build ./qlr.p4 && cd ..
-elif [ "$MODE" = "central" ]; then
-    result_path="$RESULTS_PATH/central/${i}"
-    mkdir -p $result_path
+python3 generate_tables.py 5
+python3 generate_p4_commands.py "resources/${SWITCHES}_nodes/commands" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
 
-    experiment_params+=" --dags=$DAGS"
-
-    cd p4src && p4c -o ../fwd_build ./fwd.p4 && cd ..
-fi
+cd p4src && p4c -o ../qlr_build ./qlr.p4 && cd ..
 
 sleep 1
 
