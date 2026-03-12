@@ -131,6 +131,22 @@ control IngressPipe(inout headers hdr,
         size = 64;
     }
 
+    bit<64> color_weights = 0;
+    action get_weights_string(bit<64> weight) {
+        color_weights = weight;
+        log_msg("Computed weight: ig_qdepth={} weight={}", {ig_qdepth, color_weights});
+    }
+
+    table compute_weights {
+        key = {
+            ig_qdepth: exact;
+        }
+        actions = {
+            get_weights_string;
+        }
+        size = 256;
+    }
+
     /* Include the qmatrix_update actions and table */
     bit<64> row1_value = 0;
     bit<64> row2_value = 0;
@@ -160,6 +176,7 @@ control IngressPipe(inout headers hdr,
         bit<8> do_qlr = 2;
         /* Read ingress port qdepth and get the ingress port index */
         read_ig_qdepth.apply();
+        compute_weights.apply();
 
         /* Handle QLR packet or probe */
         if (!handle_update.apply().hit) {
@@ -172,7 +189,7 @@ control IngressPipe(inout headers hdr,
                 }
             }
         }
-
+        
         if (meta.qlearning_update == 1 || probe_type == 2) {
             /* Update rows using the pkt information */
             qmatrix_update.apply();

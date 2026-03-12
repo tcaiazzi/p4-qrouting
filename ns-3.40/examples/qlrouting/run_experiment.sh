@@ -46,6 +46,8 @@ result_path="$RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}/"
 mkdir -p $result_path
 
 python3 generate_tables.py 5
+
+echo "Generating P4 commands with command: python3 generate_p4_commands.py \"resources/${SWITCHES}_nodes/commands\" ${QLR_ACTIVE} --edges \"$EDGES\" --host-vector \"$HOSTS\" --dags \"$DAGS\""
 python3 generate_p4_commands.py "resources/${SWITCHES}_nodes/commands" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
 
 cd p4src && p4c -o ../qlr_build ./qlr.p4 && cd ..

@@ -1,5 +1,6 @@
 import argparse
 import ipaddress
+from math import floor
 import os
 import sys
 import struct
@@ -8,6 +9,12 @@ import networkx as nx
 
 qlr_port = 22222
 default_port = 20000
+
+
+colors = [1, 2, 3, 4]
+buffer_size = 64_000_000
+row_slice_size = 64_000_000 / 4
+max_congestion = 256
 
 
 def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int) -> list[str]:
@@ -116,6 +123,40 @@ def generate_all_commands(network: dict, dags: dict, subnets):
                 commands.add(f"table_add handle_update send_probe {subnet} 17 33333 0 => {port_num + 1} {node + 1}")
                 commands.add(f"table_add handle_update process_probe {all_node_to_network[node_name]} 17 33333 1 =>")
             commands.add(f"table_add select_row set_nhop {subnet} 17 => {port_num + 1}")
+
+        if qlr_active:
+            color_weights = {}
+            for destination, dag in dags.items():
+                if int(node_name) == int(destination):
+                    continue
+                print(f"Generating weights for node {node_name} to destination {destination}")
+                longest_path_length = nx.dag_longest_path_length(dag)
+                node_congestion = floor(max_congestion/longest_path_length)
+                for i, color in enumerate(colors):
+                    if color not in color_weights:
+                        color_weights[color] = []
+                    if color == 1: 
+                        color_weights[color].append(1)
+                        continue
+                    color_weight = floor(((row_slice_size * color)*node_congestion)/buffer_size)
+                    print(f"Color {color} weight for node {node_name} to destination {destination}: {color_weight}")
+                    color_weights[color].append(color_weight)
+
+            for color, weights in color_weights.items():
+                weights_bit_string = [0]*8
+                print(int("".join(map(str, weights))))
+
+                for i, weight in enumerate(weights):
+                    weights_bit_string[i] = weight
+
+                print(f"Bit string for color {color} weights:", weights_bit_string)
+                weights_bit_string.reverse()
+
+                packed_bytes = struct.pack(">" + ("B" * len(weights_bit_string)), *weights_bit_string)
+                commands.add(f"table_add compute_weights get_weights_string {color} => {int.from_bytes(packed_bytes, byteorder='big')}")
+                # commands.add(f"table_add compute_weights get_weights_string {destination + 1} {color} => {weights[i]}")
+                    # 
+
 
         commands_path = os.path.join(dst_path, f"s{node_name + 1}.txt")
         with open(commands_path, "w") as f:

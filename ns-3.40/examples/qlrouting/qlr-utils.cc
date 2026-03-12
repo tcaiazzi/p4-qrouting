@@ -87,36 +87,36 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
             {
                 if (egressBytes > (t1 + hysteresis))
                 {
-                    newColor = 3;
+                    newColor = 2;
                 }
             }
-            else if (prevColor == 3)
+            else if (prevColor == 2)
             {
                 if (egressBytes > (t2 + hysteresis))
                 {
-                    newColor = 6;
+                    newColor = 3;
                 }
                 else if (egressBytes < (t1 - hysteresis))
                 {
                     newColor = 1;
                 }
             }
-            else if (prevColor == 6)
+            else if (prevColor == 3)
             {
                 if (egressBytes > (t3 + hysteresis))
                 {
-                    newColor = 10;
+                    newColor = 4;
                 }
                 else if (egressBytes < (t2 - hysteresis))
                 {
-                    newColor = 3;
+                    newColor = 2;
                 }
             }
-            else if (prevColor == 10)
+            else if (prevColor == 4)
             {
                 if (egressBytes < (t3 - hysteresis))
                 {
-                    newColor = 6;
+                    newColor = 3;
                 }
             }
             else

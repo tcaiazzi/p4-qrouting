@@ -8,7 +8,6 @@ def non_reversed_permutations(iterable, num):
         if permutation[0] < permutation[-1]:
             yield permutation
 
-
 def generate_qmatrix_updates(path, node_list, perms):
     num_nodes = len(node_list)
 
@@ -32,7 +31,7 @@ def generate_qmatrix_updates(path, node_list, perms):
                     # Bellman formula
                     row_slice = f"row{i}_value[{slice_end}:{slice_start}]"
                     action_body += f"    log_msg(\"updating row{i}_value - before: {{}}\", {{{row_slice}}});\n"
-                    action_body += f"    {row_slice} = {row_slice} + (ig_qdepth + hdr.qlr_updates[{idx}].value - {row_slice});\n"
+                    action_body += f"    {row_slice} = {row_slice} + (color_weights[{(i*8)-1}:{8*(i-1)}] + hdr.qlr_updates[{idx}].value - {row_slice});\n"
                     action_body += f"    log_msg(\"updating row{i}_value - after: {{}}\", {{{row_slice}}});\n"
                     action_body += f"    row{i}.write(0, row{i}_value);\n"
                     action_body += f"    log_msg(\"new row{i}_value: {{}}\", {{row{i}_value}});\n"
