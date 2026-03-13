@@ -37,9 +37,6 @@ profile_matrix=(
 
 mkdir -p "$workloads_dir"
 
-manifest_file="$workloads_dir/sweep_manifest_$(date +%Y%m%d_%H%M%S).csv"
-echo "profile,seed,congestion_level,number_of_lines,number_of_flow,edge_window_size_factor,burst_duration_s,burst_gap_mean_s,protected_flow_count,protected_rate,protected_packet_size,protected_number_of_flow,workload_file" > "$manifest_file"
-
 for seed in "${sweep_seeds[@]}"; do
 	for profile_entry in "${profile_matrix[@]}"; do
 		IFS='|' read -r profile_name congestion_level number_of_lines number_of_flow edge_window_size_factor burst_duration_s burst_gap_mean_s <<< "$profile_entry"
@@ -49,7 +46,6 @@ for seed in "${sweep_seeds[@]}"; do
 			generated_workload_file="$workloads_dir/${workload_base}.csv"
 
 			echo "[$profile_name][seed=$seed][protected=$pfc] workload=$generated_workload_file"
-			echo "$profile_name,$seed,$congestion_level,$number_of_lines,$number_of_flow,$edge_window_size_factor,$burst_duration_s,$burst_gap_mean_s,$pfc,$protected_rate,$protected_packet_size,$protected_number_of_flow,$generated_workload_file" >> "$manifest_file"
 
 			if [[ "$sweep_dry_run" == "1" ]]; then
 				echo "DRY_RUN: CONGESTION_CONTROL=$congestion_control END=$end_time WORKLOAD_SIM_START=$workload_sim_start WORKLOAD_DURATION=$workload_duration WORKLOAD_LINK_CAPACITY_MBPS=$workload_link_capacity_mbps WORKLOAD_SEED=$seed WORKLOAD_NUMBER_OF_LINES=$number_of_lines WORKLOAD_NUMBER_OF_FLOW=$number_of_flow WORKLOAD_CONGESTION_LEVEL=$congestion_level WORKLOAD_PROBING_RATE=$workload_probing_rate WORKLOAD_EDGE_WINDOW_SIZE_FACTOR=$edge_window_size_factor WORKLOAD_BURST_DURATION_S=$burst_duration_s WORKLOAD_BURST_GAP_MEAN_S=$burst_gap_mean_s WORKLOAD_PROTECTED_FLOW_COUNT=$pfc WORKLOAD_PROTECTED_HOST_VECTOR=$protected_host_vector WORKLOAD_PROTECTED_RATE=$protected_rate WORKLOAD_PROTECTED_PACKET_SIZE=$protected_packet_size WORKLOAD_PROTECTED_NUMBER_OF_FLOW=$protected_number_of_flow GENERATED_WORKLOAD_FILE=$generated_workload_file DUMP_TRAFFIC=$dump_traffic bash ./run-zoo-2.sh"
@@ -81,4 +77,4 @@ for seed in "${sweep_seeds[@]}"; do
 	done
 done
 
-echo "Sweep complete. Manifest: $manifest_file"
+echo "Sweep complete."

@@ -349,6 +349,7 @@ def generate_probing_flows(
 
 def generate_protected_flows(
 	node_ids: list[int],
+	adjacency: dict[int, list[int]],
 	host_vector_str: str,
 	protected_flow_count: int,
 	protected_rate: str,
@@ -369,12 +370,18 @@ def generate_protected_flows(
 			"--protected-host-vector must enable at least 2 topology nodes for protected flows"
 		)
 
-	pairs = [(src, dst) for src in eligible_nodes for dst in eligible_nodes if src != dst]
-	rng.shuffle(pairs)
+	all_pairs = [(src, dst) for src in eligible_nodes for dst in eligible_nodes if src != dst]
+	preferred_pairs = [
+		(src, dst)
+		for src, dst in all_pairs
+		if dst not in adjacency.get(src, [])
+	]
+	pair_pool = preferred_pairs if preferred_pairs else all_pairs
+	rng.shuffle(pair_pool)
 
 	rows = []
 	for index in range(protected_flow_count):
-		src_id, dst_id = pairs[index % len(pairs)]
+		src_id, dst_id = pair_pool[index % len(pair_pool)]
 		rows.append(
 			build_protected_row(
 				src_id=src_id,
@@ -857,6 +864,7 @@ def main() -> None:
 	)
 	protected_rows = generate_protected_flows(
 		node_ids=node_ids,
+		adjacency=adjacency,
 		host_vector_str=args.protected_host_vector if args.protected_host_vector else "",
 		protected_flow_count=args.protected_flow_count,
 		protected_rate=args.protected_rate,

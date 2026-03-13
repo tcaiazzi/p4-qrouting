@@ -79,7 +79,7 @@ fi
 
 
 for WORKLOAD_FILE in \
-    "$GENERATED_WORKLOAD_FILE"
+    "examples/qlrouting/$GENERATED_WORKLOAD_FILE"
 do
 WORKLOAD_NAME="$(basename "$WORKLOAD_FILE")"
 WORKLOAD_BASE="${WORKLOAD_NAME%.*}"
