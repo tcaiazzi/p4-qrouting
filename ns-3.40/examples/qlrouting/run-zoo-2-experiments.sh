@@ -29,10 +29,20 @@ protected_number_of_flow="${WORKLOAD_PROTECTED_NUMBER_OF_FLOW:-1}"
 IFS=',' read -r -a sweep_seeds <<< "$sweep_seeds_csv"
 IFS=',' read -r -a sweep_protected_flow_counts <<< "$protected_flow_counts_csv"
 
+# profile_matrix=(
+# "heavy-1|1.40|240|3|1.00|0.45|0.25"
+# "heavy-2|2.40|240|3|1.00|0.45|0.25"
+# "heavy-3|3.40|240|3|1.00|0.45|0.25"
+# "spiky|1.80|280|4|0.60|0.20|0.12"
+# )
+
 profile_matrix=(
-"moderate|1.00|200|2|0.85|0.35|0.45"
-"heavy|1.40|240|3|1.00|0.45|0.25"
-"spiky|1.80|280|4|0.60|0.20|0.12"
+"moderate-b-1000|1.2|1000|1|1.00|0.45|0.25"
+"moderate-b-2000|1.2|2000|1|1.00|0.45|0.25"
+"heavy-a-1000|1.5|1000|1|1.00|0.45|0.25"
+"heavy-a-2000|1.5|2000|1|1.00|0.45|0.25"
+"heavy-b-1000|2.5|1000|1|1.00|0.45|0.25"
+"heavy-b-2000|2.5|2000|1|1.00|0.45|0.25"
 )
 
 mkdir -p "$workloads_dir"
