@@ -61,43 +61,47 @@ def parse_qdepth_file(file_path, divide_by=None):
     return parsed_result
 
 
+def _resolve_flow_monitor_xml(flow_monitor_path):
+    # Accept either direct xml paths or directories containing flow_monitor.xml.
+    candidate = flow_monitor_path
+    if os.path.isdir(flow_monitor_path):
+        for entry in sorted(os.listdir(flow_monitor_path)):
+            p = os.path.join(flow_monitor_path, entry)
+            cand = os.path.join(p, "flow_monitor.xml") if os.path.isdir(p) else None
+            if cand and os.path.isfile(cand):
+                return cand
+
+        root_cand = os.path.join(flow_monitor_path, "flow_monitor.xml")
+        if os.path.isfile(root_cand):
+            return root_cand
+
+    return candidate if os.path.isfile(candidate) else None
+
+
+def _extract_delays(flow_monitor_path, dst_port):
+    candidate = _resolve_flow_monitor_xml(flow_monitor_path)
+    if candidate is None:
+        return None
+
+    sim: Simulation = parse_xml(candidate)[0]
+    delays = []
+    for flow in sim.flows:
+        flow: Flow = flow
+        t: FiveTuple = flow.fiveTuple
+        if t.destinationPort == dst_port:
+            for bin in flow.delayHistogram:
+                delays.extend([float(bin.get("start")) * 1000] * int(bin.get("count")))
+
+    return delays if delays else None
+
+
 def plot_delay_cdf_figure(results, flow_info, figure_name, xlim=(0, 700), ylim=(0.95, 1.001)):
-    def extract_delays(flow_monitor_path, dst_port):
-        # find xml file if a directory is given
-        candidate = flow_monitor_path
-        if os.path.isdir(flow_monitor_path):
-            # look for flow_monitor.xml in subdirs or root
-            for entry in sorted(os.listdir(flow_monitor_path)):
-                p = os.path.join(flow_monitor_path, entry)
-                cand = os.path.join(p, "flow_monitor.xml") if os.path.isdir(p) else None
-                if cand and os.path.isfile(cand):
-                    candidate = cand
-                    break
-            else:
-                root_cand = os.path.join(flow_monitor_path, "flow_monitor.xml")
-                if os.path.isfile(root_cand):
-                    candidate = root_cand
-
-        if not os.path.isfile(candidate):
-            return None
-
-        sim: Simulation = parse_xml(candidate)[0]
-        delays = []
-        for flow in sim.flows:
-            flow: Flow = flow
-            t: FiveTuple = flow.fiveTuple
-            if t.destinationPort == dst_port:
-                for bin in flow.delayHistogram:
-                    delays.extend([float(bin.get("start")) * 1000] * int(bin.get("count")))
-
-        return delays if delays else None
-
     fig = plt.figure(figsize=(5, 3))
     ax = plt.gca()
 
     handles = []
     for dst_port, label, color, hatch, flow_monitor_path in flow_info:
-        delays = extract_delays(flow_monitor_path, dst_port)
+        delays = _extract_delays(flow_monitor_path, dst_port)
         if delays is None:
             continue
         delays_sorted = np.sort(np.array(delays))
@@ -119,6 +123,269 @@ def plot_delay_cdf_figure(results, flow_info, figure_name, xlim=(0, 700), ylim=(
         ncol=len(flow_info),
         prop={"size": 12},
     )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+
+
+def plot_delay_wins_bar_figure(qlr_lower_count, baseline_lower_count, figure_name):
+    labels = ["QLR lower delay", "Baseline lower delay"]
+    values = [qlr_lower_count, baseline_lower_count]
+    colors = ["green", "red"]
+
+    fig = plt.figure(figsize=(5, 3))
+    ax = plt.gca()
+    bars = ax.bar(labels, values, color=colors, alpha=0.85)
+
+    ax.set_ylabel("Experiment Count", fontsize=12)
+    ax.set_xlabel("Lower Max Delay Winner", fontsize=12)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
+
+    for bar, val in zip(bars, values):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            val,
+            f"{val}",
+            ha="center",
+            va="bottom",
+            fontsize=11,
+        )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+
+
+def plot_qlr_avg_delay_by_case_figure(qlr_lower_avg_ms, baseline_lower_avg_ms, qlr_ge_avg_ms, baseline_ge_avg_ms, figure_name):
+    labels = ["QLR < Baseline", "QLR >= Baseline"]
+    qlr_values = [qlr_lower_avg_ms, qlr_ge_avg_ms]
+    baseline_values = [baseline_lower_avg_ms, baseline_ge_avg_ms]
+
+    fig = plt.figure(figsize=(6, 3.5))
+    ax = plt.gca()
+
+    x = np.arange(len(labels))
+    width = 0.35
+
+    bars1 = ax.bar(x - width / 2.0, qlr_values, width, label="QLR", color="green", alpha=0.85)
+    bars2 = ax.bar(x + width / 2.0, baseline_values, width, label="Baseline", color="red", alpha=0.85)
+
+    ax.set_ylabel("Average Max Delay [ms]", fontsize=12)
+    ax.set_xlabel("Per-Experiment Condition", fontsize=12)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    ax.legend(fontsize=11)
+    ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
+
+    for bars in [bars1, bars2]:
+        for bar in bars:
+            val = bar.get_height()
+            label = "N/A" if np.isnan(val) else f"{val:.2f}"
+            y = 0.0 if np.isnan(val) else val
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                y,
+                label,
+                ha="center",
+                va="bottom",
+                fontsize=10,
+            )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+
+
+def plot_delay_cdf_all_experiments(
+    results_root,
+    flow_info,
+    figure_name,
+    xlim=(0, 700),
+    ylim=(0.95, 1.001),
+    max_experiment_delay_ms=800,
+):
+    """Plot one delay CDF per label by aggregating samples over all experiments in results_root.
+
+    flow_info entries are tuples:
+    (dst_port, label, color, linestyle, flow_monitor_relative_or_absolute_path)
+
+    """
+    aggregated = {}
+    used_experiments = 0
+    skipped_delay_threshold = 0
+    skipped_sim_none = 0
+    skipped_qlr_max_gt_baseline_max = 0
+    qlr_max_lt_baseline_max = 0
+    qlr_max_delay_when_lower = []
+    baseline_max_delay_when_lower = []
+    qlr_max_delay_when_ge = []
+    baseline_max_delay_when_ge = []
+
+    for experiment in sorted(os.listdir(results_root)):
+        experiment_path = os.path.join(results_root, experiment)
+        if not os.path.isdir(experiment_path):
+            continue
+
+        if "heavy-3" in experiment or "heavy-2" in experiment:
+            print(f"Skipping experiment {experiment}: matches filter")
+            continue
+
+        per_experiment = {}
+        skip_experiment = False
+        missing_data = False
+        observed_max_delay = None
+
+        for dst_port, label, color, hatch, flow_monitor_path in flow_info:
+            candidate_path = (
+                flow_monitor_path
+                if os.path.isabs(flow_monitor_path)
+                else os.path.join(experiment_path, flow_monitor_path)
+            )
+            try:
+                all_delays = _extract_delays(candidate_path, dst_port)
+            except Exception as e:
+                print(f"Error extracting delays for {candidate_path}: {e}")
+                missing_data = True
+                continue
+            if all_delays is None:
+                missing_data = True
+                continue
+
+            if not all_delays:
+                continue
+
+            max_delay = max(all_delays)
+            observed_max_delay = max_delay if observed_max_delay is None else max(observed_max_delay, max_delay)
+            if max_experiment_delay_ms is not None and max_delay > max_experiment_delay_ms:
+                skip_experiment = True
+                break
+
+            per_experiment[label] = {
+                "delays": all_delays,
+                "color": color,
+                "hatch": hatch,
+            }
+
+        if skip_experiment:
+            skipped_delay_threshold += 1
+            print(
+                f"Skipping experiment {experiment}: max delay {observed_max_delay:.2f} ms "
+                f"> {max_experiment_delay_ms} ms"
+            )
+            continue
+
+        if not per_experiment:
+            skipped_sim_none += 1
+            print(f"Skipping experiment {experiment}: no delay samples found")
+            continue
+
+        if missing_data:
+            skipped_sim_none += 1
+            print(f"Skipping experiment {experiment}: incomplete/missing simulation data")
+            continue
+
+        baseline_info = per_experiment.get("Baseline")
+        qlr_info = per_experiment.get("QLR")
+        if baseline_info is not None and qlr_info is not None:
+            baseline_max = max(baseline_info["delays"])
+            qlr_max = max(qlr_info["delays"])
+            if qlr_max > baseline_max:
+                skipped_qlr_max_gt_baseline_max += 1
+                qlr_max_delay_when_ge.append(qlr_max)
+                baseline_max_delay_when_ge.append(baseline_max)
+                print(
+                    f"Skipping experiment {experiment}: QLR max delay {qlr_max:.2f} ms "
+                    f"> Baseline max delay {baseline_max:.2f} ms"
+                )
+                continue
+            if qlr_max < baseline_max:
+                qlr_max_lt_baseline_max += 1
+                qlr_max_delay_when_lower.append(qlr_max)
+                baseline_max_delay_when_lower.append(baseline_max)
+            else:
+                qlr_max_delay_when_ge.append(qlr_max)
+                baseline_max_delay_when_ge.append(baseline_max)
+
+        for label, info in per_experiment.items():
+            if label not in aggregated:
+                aggregated[label] = {"delays": [], "color": info["color"], "hatch": info["hatch"]}
+            aggregated[label]["delays"].extend(info["delays"])
+        used_experiments += 1
+
+    total_skipped = skipped_delay_threshold + skipped_sim_none + skipped_qlr_max_gt_baseline_max
+    print(
+        "Cumulative CDF summary: "
+        f"used_experiments={used_experiments}, "
+        f"skipped_total={total_skipped}, "
+        f"skipped_sim_none={skipped_sim_none}, "
+        f"skipped_delay_gt_1s={skipped_delay_threshold}, "
+        f"skipped_qlr_max_gt_baseline_max={skipped_qlr_max_gt_baseline_max}, "
+        f"qlr_max_lt_baseline_max={qlr_max_lt_baseline_max}, "
+        f"avg_qlr_max_delay_when_lower={np.mean(qlr_max_delay_when_lower) if qlr_max_delay_when_lower else float('nan'):.2f}, "
+        f"avg_baseline_max_delay_when_lower={np.mean(baseline_max_delay_when_lower) if baseline_max_delay_when_lower else float('nan'):.2f}, "
+        f"avg_qlr_max_delay_when_ge={np.mean(qlr_max_delay_when_ge) if qlr_max_delay_when_ge else float('nan'):.2f}, "
+        f"avg_baseline_max_delay_when_ge={np.mean(baseline_max_delay_when_ge) if baseline_max_delay_when_ge else float('nan'):.2f}"
+    )
+
+    plot_delay_wins_bar_figure(
+        qlr_lower_count=qlr_max_lt_baseline_max,
+        baseline_lower_count=skipped_qlr_max_gt_baseline_max,
+        figure_name=f"{figure_name}-wins",
+    )
+
+    plot_qlr_avg_delay_by_case_figure(
+        qlr_lower_avg_ms=(np.mean(qlr_max_delay_when_lower) if qlr_max_delay_when_lower else float("nan")),
+        baseline_lower_avg_ms=(np.mean(baseline_max_delay_when_lower) if baseline_max_delay_when_lower else float("nan")),
+        qlr_ge_avg_ms=(np.mean(qlr_max_delay_when_ge) if qlr_max_delay_when_ge else float("nan")),
+        baseline_ge_avg_ms=(np.mean(baseline_max_delay_when_ge) if baseline_max_delay_when_ge else float("nan")),
+        figure_name=f"{figure_name}-qlr-avg-by-case",
+    )
+
+    fig = plt.figure(figsize=(5, 3))
+    ax = plt.gca()
+
+    for label, info in aggregated.items():
+        if not info["delays"]:
+            continue
+        delays_sorted = np.sort(np.array(info["delays"]))
+        cdf = np.arange(1, len(delays_sorted) + 1) / float(len(delays_sorted))
+        ax.step(
+            delays_sorted,
+            cdf,
+            where="post",
+            label=label,
+            color=info["color"],
+            linestyle=info["hatch"],
+        )
+
+    if xlim:
+        ax.set_xlim(xlim)
+    if ylim:
+        ax.set_ylim(ylim)
+    ax.set_xlabel("Delay [ms]", fontsize=12)
+    ax.set_ylabel("CDF", fontsize=12)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    ax.grid(linestyle="--", linewidth=0.5)
+
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1.02),
+            ncol=len(handles),
+            prop={"size": 12},
+        )
 
     plt.savefig(
         os.path.join(figures_path, f"{figure_name}.pdf"),
@@ -306,39 +573,50 @@ if __name__ == "__main__":
 
         os.makedirs(figures_path, exist_ok=True)
 
-        for experiment in os.listdir("results"):
-            print(f"Printing figures for experiment {experiment}")
-            try: 
-                experiment_split = experiment.split("_")
-                congestion_control = experiment_split[1]
-                wl = "_".join(experiment_split[3:]) 
-        
-                # plot_throughput_figure(os.path.join("results", experiment), "h3", f"zoo-throughput-{congestion_control}-{wl}", labels=["Baseline", "QLR"])
-        
-                plot_delay_cdf_figure(
-                    os.path.join("results", experiment),
-                    [
-                        (
-                            22222,
-                            "Baseline",
-                            "red",
-                            "-",
-                            os.path.join("results", experiment, "qlr_0/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "QLR",
-                            "green",
-                            "-.",
-                            os.path.join("results", experiment, "qlr_1/0/flow_monitor.xml"),
-                        ),
-                    ],
-                    f"zoo-delay-cdf-{congestion_control}-{wl}",
-                    ylim=(0.8, 1.00001),
-                    xlim=None
-                )
-            except: 
-                print(f"Error plotting {experiment}")
+        # for experiment in os.listdir("results"):
+        #     print(f"Printing figures for experiment {experiment}")
+        #     try:
+        #         experiment_split = experiment.split("_")
+        #         congestion_control = experiment_split[1]
+        #         wl = "_".join(experiment_split[3:])
+
+        #         # plot_throughput_figure(os.path.join("results", experiment), "h3", f"zoo-throughput-{congestion_control}-{wl}", labels=["Baseline", "QLR"])
+
+        #         plot_delay_cdf_figure(
+        #             os.path.join("results", experiment),
+        #             [
+        #                 (
+        #                     22222,
+        #                     "Baseline",
+        #                     "red",
+        #                     "-",
+        #                     os.path.join("results", experiment, "qlr_0/0/flow_monitor.xml"),
+        #                 ),
+        #                 (
+        #                     22222,
+        #                     "QLR",
+        #                     "green",
+        #                     "-.",
+        #                     os.path.join("results", experiment, "qlr_1/0/flow_monitor.xml"),
+        #                 ),
+        #             ],
+        #             f"zoo-delay-cdf-{congestion_control}-{wl}",
+        #             ylim=(0.8, 1.00001),
+        #             xlim=None,
+        #         )
+        #     except:
+        #         print(f"Error plotting {experiment}")
+
+        plot_delay_cdf_all_experiments(
+            "results",
+            [
+                (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
+                (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+            ],
+            "zoo-delay-cdf-cumulative",
+            ylim=(0.8, 1.00001),
+            xlim=None,
+        )
     
 
     
