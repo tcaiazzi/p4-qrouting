@@ -8,7 +8,7 @@ def non_reversed_permutations(iterable, num):
         if permutation[0] < permutation[-1]:
             yield permutation
 
-def generate_qmatrix_updates(path, node_list, perms):
+def generate_qmatrix_updates(path, node_list, perms, no_updates=False):
     num_nodes = len(node_list)
 
     action_names = []
@@ -31,7 +31,10 @@ def generate_qmatrix_updates(path, node_list, perms):
                     # Bellman formula
                     row_slice = f"row{i}_value[{slice_end}:{slice_start}]"
                     action_body += f"    log_msg(\"updating row{i}_value - before: {{}}\", {{{row_slice}}});\n"
-                    action_body += f"    {row_slice} = {row_slice} + (color_weights[{(i*8)-1}:{8*(i-1)}] + hdr.qlr_updates[{idx}].value - {row_slice});\n"
+                    if no_updates:
+                        action_body += f"    {row_slice} = color_weights[{(i*8)-1}:{8*(i-1)}];\n"
+                    else:
+                        action_body += f"    {row_slice} = {row_slice} + (color_weights[{(i*8)-1}:{8*(i-1)}] + hdr.qlr_updates[{idx}].value - {row_slice});\n"
                     action_body += f"    log_msg(\"updating row{i}_value - after: {{}}\", {{{row_slice}}});\n"
                     action_body += f"    row{i}.write(0, row{i}_value);\n"
                     action_body += f"    log_msg(\"new row{i}_value: {{}}\", {{row{i}_value}});\n"
@@ -134,7 +137,7 @@ def generate_qlr_updates(path, node_list, perms):
         p4_file.write(final_str)
 
 
-def main(n):
+def main(n, no_updates=False):
     n_list = [i for i in range(1, n + 1)]
 
     all_perms = []
@@ -152,18 +155,19 @@ def main(n):
     all_perms.sort()
 
     lut_path = os.path.join("p4src", "lut")
-    generate_qmatrix_updates(lut_path, n_list, all_perms)
+    generate_qmatrix_updates(lut_path, n_list, all_perms, no_updates=no_updates)
     generate_qlr_updates(lut_path, n_list, all_perms)
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
         print(
-            "Usage: generate_tables.py <num_nodes>"
+            "Usage: generate_tables.py <num_nodes> <no_updates>"
         )
         exit(1)
 
     num_nodes = int(sys.argv[1])
+    no_updates = bool(int(sys.argv[2]))
 
     print("Generating QLR tables for", num_nodes, "nodes")
-    main(num_nodes)
+    main(num_nodes, no_updates=no_updates)

@@ -190,7 +190,7 @@ control IngressPipe(inout headers hdr,
             }
         }
         
-        if (meta.qlearning_update == 1 || probe_type == 2) {
+        if (probe_type == 2) {
             /* Update rows using the pkt information */
             qmatrix_update.apply();
         }
@@ -211,6 +211,14 @@ control IngressPipe(inout headers hdr,
             log_msg("selected destination: {} - selected col: {}", {row_num, col_num});
             select_port_from_row_col.apply();
             log_msg("selected port: {}", {standard_metadata.egress_spec});
+
+            hdr.ipv4.ecn = 0x0;
+            
+            hdr.qlr_updates[0].setInvalid();
+            hdr.qlr_updates[1].setInvalid();
+            hdr.qlr_updates[2].setInvalid();
+            hdr.qlr_updates[3].setInvalid();
+            hdr.qlr_updates[4].setInvalid();
         } else if (do_qlr == 0) {
             hdr.ipv4.ecn = 0x0;
             
@@ -221,7 +229,7 @@ control IngressPipe(inout headers hdr,
             hdr.qlr_updates[4].setInvalid();
         }
 
-        if (do_qlr == 1 || probe_type == 1) {
+        if (probe_type == 1) {
             /* Activate update headers (table is populated from the DAGs) */
             qlr_pkt_updates.apply();
         }

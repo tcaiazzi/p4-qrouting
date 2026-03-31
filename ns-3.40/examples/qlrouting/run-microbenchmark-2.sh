@@ -7,6 +7,11 @@ EXPERIMENT_NAME="microbenchmark_2"
 for CONGESTION_CONTROL in TcpLinuxReno
 do
     for WORKLOAD_FILE in \
+        "examples/qlrouting/resources/5_nodes/workloads/wl1.csv" \
+        "examples/qlrouting/resources/5_nodes/workloads/wl2.csv" \
+        "examples/qlrouting/resources/5_nodes/workloads/wl3.csv" \
+        "examples/qlrouting/resources/5_nodes/workloads/wl4.csv" \
+        "examples/qlrouting/resources/5_nodes/workloads/wl5.csv" \
         "examples/qlrouting/resources/5_nodes/workloads/wl6.csv" \
         "examples/qlrouting/resources/5_nodes/workloads/wl7.csv" \
         "examples/qlrouting/resources/5_nodes/workloads/wl8.csv" \

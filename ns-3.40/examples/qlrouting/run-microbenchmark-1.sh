@@ -26,6 +26,12 @@ QLR_ACTIVE=1 P4_PROGRAM=examples/qlrouting/qlr_build/qlr.json P4_COMMANDS="examp
 cp -R results/${RESULTS_DIR}/qlr_1/0/* results/${RESULTS_DIR}/central/0
 rm -rf results/${RESULTS_DIR}/qlr_1/0
 
+mkdir -p results/${RESULTS_DIR}/local_qlr/0
+
+QLR_ACTIVE=1 P4_PROGRAM=examples/qlrouting/qlr_build/qlr.json P4_COMMANDS="examples/qlrouting/resources/" EXPERIMENT_NAME=${EXPERIMENT_NAME} CONGESTION_CONTROL=${CONGESTION_CONTROL} WORKLOAD_FILE=${WORKLOAD_FILE} EDGES="0,1;0,2;1,2" HOSTS="1,1,1" SWITCHES=3 DAGS="0:1-0,2-0,2-1;1:0-1,0-2,2-1;2:0-1,0-2,1-2"  QLR_MODE=local END=10 bash run_experiment.sh
+
+cp -R results/${RESULTS_DIR}/qlr_1/0/* results/${RESULTS_DIR}/local_qlr/0
+rm -rf results/${RESULTS_DIR}/qlr_1/0
 
 QLR_ACTIVE=1 P4_PROGRAM=examples/qlrouting/qlr_build/qlr.json P4_COMMANDS="examples/qlrouting/resources/" EXPERIMENT_NAME=${EXPERIMENT_NAME} CONGESTION_CONTROL=${CONGESTION_CONTROL} WORKLOAD_FILE=${WORKLOAD_FILE} EDGES="0,1;0,2;1,2" HOSTS="1,1,1" SWITCHES=3 DAGS="0:1-0,2-0,2-1;1:0-1,0-2,2-1;2:0-1,0-2,1-2" END=10 bash run_experiment.sh
 done

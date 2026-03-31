@@ -22,6 +22,7 @@ EXPERIMENT_NAME="${EXPERIMENT_NAME:-qlr-experiment}"
 QLR_UPDATE_INTERVAL="${QLR_UPDATE_INTERVAL:-200ns}"
 P4_PROGRAM="${P4_PROGRAM:-examples/qlrouting/qlr_build/qlr.json}"
 P4_COMMANDS="${P4_COMMANDS}"
+QLR_MODE="${QLR_MODE:-global}"  # local or global
 
 experiment_params="--host-bw=$HOST_BW --switch-bw=$SWITCH_BW --edges=$EDGES --hosts=$HOSTS --switches=$SWITCHES --workload-file=$WORKLOAD_FILE --end=$END  --cc=$CONGESTION_CONTROL --color-update-interval=$QLR_UPDATE_INTERVAL --mode=$MODE --p4-program=$P4_PROGRAM"
 [[ -n "$P4_COMMANDS" ]] && experiment_params+=" --p4-command=$P4_COMMANDS"
@@ -45,7 +46,12 @@ result_path=""
 result_path="$RESULTS_PATH/qlr_${QLR_ACTIVE}/${i}/"
 mkdir -p $result_path
 
-python3 generate_tables.py 5
+if [ "$QLR_MODE" = "local" ]; then
+    python3 generate_tables.py 5 1
+else
+    python3 generate_tables.py 5 0
+fi
+
 
 echo "Generating P4 commands with command: python3 generate_p4_commands.py \"resources/${SWITCHES}_nodes/commands\" ${QLR_ACTIVE} --edges \"$EDGES\" --host-vector \"$HOSTS\" --dags \"$DAGS\""
 python3 generate_p4_commands.py "resources/${SWITCHES}_nodes/commands" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
