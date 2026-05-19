@@ -148,7 +148,7 @@ void
 startThroughputPortTrace(std::string fileName, uint32_t nodeId, uint32_t ifaceId)
 {
     std::string nsString = "/NodeList/" + std::to_string(nodeId) + "/DeviceList/" +
-                           std::to_string(ifaceId) + "/$ns3::PointToPointNetDevice/MacTx";
+                           std::to_string(ifaceId) + "/$ns3::PointToPointNetDevice/MacRx";
 
     NS_LOG_DEBUG("Connecting to " << nsString << " for throughput tracking"); 
 

@@ -403,6 +403,7 @@ startTcpFlow(Ptr<Node> receiverHost,
                                       senderHost,
                                       rate,
                                       packetSize,
+                                      flowDataSize,
                                       congestionControl);
     }
 

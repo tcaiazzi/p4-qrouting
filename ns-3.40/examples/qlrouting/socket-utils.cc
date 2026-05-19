@@ -38,6 +38,7 @@ createOnOffTcpApplication(Ipv4Address addressToReach,
                      Ptr<Node> node,
                      std::string dataRate,
                      uint32_t packetSize,
+                     uint32_t maxBytes,
                      std::string congestionControl)
 {
 
@@ -45,6 +46,7 @@ createOnOffTcpApplication(Ipv4Address addressToReach,
                                                << " on node " << node->GetId()
                                                << " with dataRate=" << dataRate
                                                << " packetSize=" << packetSize
+                                               << " maxBytes=" << maxBytes
                                                << " using CC=" << congestionControl);
     TypeId congestionControlTid = TypeId::LookupByName("ns3::" + congestionControl);
 
@@ -54,6 +56,7 @@ createOnOffTcpApplication(Ipv4Address addressToReach,
     OnOffHelper onoff("ns3::TcpSocketFactory", InetSocketAddress(addressToReach, port));
     onoff.SetAttribute("DataRate", DataRateValue(DataRate(dataRate)));
     onoff.SetAttribute("PacketSize", UintegerValue(packetSize));
+    onoff.SetAttribute("MaxBytes", UintegerValue(maxBytes));
     onoff.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
     onoff.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
 

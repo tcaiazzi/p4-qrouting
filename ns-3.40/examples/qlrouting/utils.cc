@@ -7,8 +7,12 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <chrono>
+#include <iomanip>
 
 using namespace ns3;
+
+static auto g_realStart = std::chrono::steady_clock::now();
 
 NS_LOG_COMPONENT_DEFINE("utils");
 
@@ -105,8 +109,19 @@ loadCommands(std::string path)
 void
 printSimulationTime()
 {
-    std::cout << "Simulation Time: " << Simulator::Now().GetSeconds() << std::endl;
-    Simulator::Schedule(Seconds(1), printSimulationTime);
+    int64_t ms = Simulator::Now().GetMilliSeconds();
+    int64_t s  = ms / 1000;
+    int64_t ms_part = ms % 1000;
+    auto realElapsed = std::chrono::steady_clock::now() - g_realStart;
+    int64_t real_ms = std::chrono::duration_cast<std::chrono::milliseconds>(realElapsed).count();
+    int64_t real_s  = real_ms / 1000;
+    int64_t real_ms_part = real_ms % 1000;
+    std::cout << "Simulation Time: "
+              << s << "." << std::setw(3) << std::setfill('0') << ms_part << " s"
+              << "  (real: "
+              << real_s << "." << std::setw(3) << std::setfill('0') << real_ms_part << " s)"
+              << std::endl;
+    Simulator::Schedule(MilliSeconds(100), printSimulationTime);
 }
 
 

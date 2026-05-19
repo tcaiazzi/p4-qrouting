@@ -248,8 +248,15 @@ def build_protected_row(
 		raise ValueError("Protected flow packet_size must be > 0")
 	if number_of_flow < 1:
 		raise ValueError("Protected flow number_of_flow must be >= 1")
-	if parse_rate_mbps(rate) <= 0:
+	rate_mbps = parse_rate_mbps(rate)
+	if rate_mbps <= 0:
 		raise ValueError("Protected flow rate must be > 0")
+
+	# Compute the exact byte count needed to transmit at 'rate' from
+	# start_time to (end_time - 2 s), so the flow ends naturally 2 s before
+	# the simulation end rather than relying on a stop-time signal.
+	active_duration_s = max(0.0, (end_time - 2.0) - start_time)
+	data_size = int(rate_mbps * 1e6 / 8.0 * active_duration_s)
 
 	return WorkloadRow(
 		src_id=src_id,
@@ -260,7 +267,7 @@ def build_protected_row(
 		dst_port=PROTECTED_PORT,
 		rate=rate,
 		packet_size=packet_size,
-		data_size=0,
+		data_size=data_size,
 		number_of_flow=number_of_flow,
 		is_probing=False,
 		is_protected=True,
@@ -582,13 +589,12 @@ def validate_rows(rows: list[WorkloadRow]) -> None:
 				raise ValueError("Protected flows must use TCP protocol")
 			if row.dst_port != PROTECTED_PORT:
 				raise ValueError(f"Protected flow must use port {PROTECTED_PORT}")
-			if row.data_size != 0:
-				raise ValueError("Protected flow must use data_size = 0")
+			# data_size may be non-zero (exact bytes computed from rate × active duration)
 		elif row.protocol != UDP_PROTOCOL:
 			raise ValueError("Non-probing/non-protected flows must use UDP protocol")
 		elif row.dst_port in RESERVED_PORTS:
 			raise ValueError(f"Reserved port used: {row.dst_port}")
-		if row.data_size > 0 and row.end_time != 0.0:
+		if row.data_size > 0 and row.end_time != 0.0 and not row.is_protected:
 			raise ValueError("Rows with data_size > 0 must have end_time = 0")
 		if row.data_size == 0 and row.end_time <= row.start_time:
 			raise ValueError("Rows with data_size = 0 must have end_time > start_time")
