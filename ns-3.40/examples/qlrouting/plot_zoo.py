@@ -33,14 +33,14 @@ def main():
                         "Baseline",
                         "red",
                         "-",
-                        os.path.join(experiment_path, "qlr_0/0/flow_monitor.xml"),
+                        os.path.join(experiment_path, "baseline/0/flow_monitor.xml"),
                     ),
                     (
                         22222,
                         "QLR",
                         "green",
                         "-.",
-                        os.path.join(experiment_path, "qlr_1/0/flow_monitor.xml"),
+                        os.path.join(experiment_path, "qlr/0/flow_monitor.xml"),
                     ),
                     (
                         22222,
@@ -70,14 +70,14 @@ def main():
                         "Baseline",
                         "red",
                         "//",
-                        os.path.join(experiment_path, "qlr_0/0/flow_monitor.xml"),
+                        os.path.join(experiment_path, "baseline/0/flow_monitor.xml"),
                     ),
                     (
                         22222,
                         "QLR",
                         "green",
                         "||",
-                        os.path.join(experiment_path, "qlr_1/0/flow_monitor.xml"),
+                        os.path.join(experiment_path, "qlr/0/flow_monitor.xml"),
                     ),
                     (
                         22222,
@@ -103,8 +103,8 @@ def main():
     paper_plot.plot_delay_cdf_all_experiments(
         results_path,
         [
-            (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-            (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+            (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+            (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
             (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
             (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
         ],
@@ -116,8 +116,8 @@ def main():
     paper_plot.plot_received_bytes_comparison(
         results_path,
         [
-            (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-            (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+            (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+            (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
             (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
             (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
         ],
@@ -127,8 +127,8 @@ def main():
     paper_plot.plot_avg_throughput_comparison(
         results_path,
         [
-            (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-            (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+            (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+            (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
             (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
             (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
         ],
@@ -138,8 +138,8 @@ def main():
     paper_plot.plot_protected_flow_slo_comparison(
         results_path,
         [
-            (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-            (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+            (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+            (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
             (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
             (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
         ],
@@ -150,8 +150,8 @@ def main():
     paper_plot.plot_protected_flow_slo_comparison(
         results_path,
         [
-            (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-            (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+            (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+            (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
             (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
             (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
         ],
@@ -162,8 +162,8 @@ def main():
     paper_plot.plot_protected_flow_slo_comparison(
         results_path,
         [
-            (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-            (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+            (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+            (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
             (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
             (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
         ],

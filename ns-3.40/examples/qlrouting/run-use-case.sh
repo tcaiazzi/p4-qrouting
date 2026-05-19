@@ -232,6 +232,8 @@ for seed in "${sweep_seeds[@]}"; do
             rm -rf "results/${results_dir}/qlr_1/0"
 
             # --- qlr (fast control plane, default interval) ---
+            mkdir -p "results/${results_dir}/qlr/0"
+
             QLR_ACTIVE=1 \
             P4_PROGRAM=examples/qlrouting/qlr_build/qlr.json \
             P4_COMMANDS="examples/qlrouting/resources/" \
@@ -245,6 +247,9 @@ for seed in "${sweep_seeds[@]}"; do
             END="$end_time" \
             DUMP_TRAFFIC="$dump_traffic" \
             bash run_experiment.sh
+
+            cp -R "results/${results_dir}/qlr_1/0/"* "results/${results_dir}/qlr/0/"
+            rm -rf "results/${results_dir}/qlr_1/0"
         done
     done
 done
