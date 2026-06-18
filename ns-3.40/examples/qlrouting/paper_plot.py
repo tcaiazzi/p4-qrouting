@@ -276,13 +276,13 @@ def plot_received_bytes_comparison(results_root, flow_info, figure_name):
 
             baseline_delays = _extract_delays(baseline_candidate, baseline_port)
             qlr_delays = _extract_delays(qlr_candidate, qlr_port)
-            if baseline_delays and qlr_delays:
-                if max(qlr_delays) > max(baseline_delays):
-                    print(
-                        f"Skipping experiment {experiment}: QLR max delay {max(qlr_delays):.2f} ms "
-                        f"> Baseline max delay {max(baseline_delays):.2f} ms"
-                    )
-                    continue
+            # if baseline_delays and qlr_delays:
+            #     if max(qlr_delays) > max(baseline_delays):
+            #         print(
+            #             f"Skipping experiment {experiment}: QLR max delay {max(qlr_delays):.2f} ms "
+            #             f"> Baseline max delay {max(baseline_delays):.2f} ms"
+            #         )
+            #         continue
 
         for dst_port, label, _color, _hatch, flow_monitor_path in flow_info:
             candidate_path = (
@@ -789,8 +789,8 @@ def plot_throughput_figure(results, source_node, figure_name, congestion_points=
     plt.grid(linestyle="--", linewidth=0.5)
 
     # plot Baseline first, then QLR so QLR is drawn on top
-    plot_throughput_line(ax, "qlr_0", ["red", "darkred"], None, labels[0], "-.")
-    plot_throughput_line(ax, "qlr_1", ["green", "darkgreen"], None, labels[1], "--")
+    plot_throughput_line(ax, "baseline", ["red", "darkred"], None, labels[0], "-.")
+    plot_throughput_line(ax, "qlr", ["green", "darkgreen"], None, labels[1], "--")
     if central:
         plot_throughput_line(ax, "central", ["blue", "darkblue"], None, labels[2], ":")
     if local:
@@ -1212,14 +1212,14 @@ if __name__ == "__main__":
                         "Baseline",
                         "red",
                         "-",
-                        os.path.join(results_path, f"microbenchmark_1_TcpLinuxReno_{wl}", "qlr_0/0/flow_monitor.xml"),
+                        os.path.join(results_path, f"microbenchmark_1_TcpLinuxReno_{wl}", "baseline/0/flow_monitor.xml"),
                     ),
                     (
                         22222,
                         "QLR",
                         "green",
                         "-.",
-                        os.path.join(results_path, f"microbenchmark_1_TcpLinuxReno_{wl}", "qlr_1/0/flow_monitor.xml"),
+                        os.path.join(results_path, f"microbenchmark_1_TcpLinuxReno_{wl}", "qlr/0/flow_monitor.xml"),
                     ),
                     (
                         22222,
@@ -1256,14 +1256,14 @@ if __name__ == "__main__":
                         "Baseline",
                         "red",
                         "-",
-                        os.path.join(results_path, f"microbenchmark_2_TcpLinuxReno_{wl}", "qlr_0/0/flow_monitor.xml"),
+                        os.path.join(results_path, f"microbenchmark_2_TcpLinuxReno_{wl}", "baseline/0/flow_monitor.xml"),
                     ),
                     (
                         22222,
                         "QLR",
                         "green",
                         "-.",
-                        os.path.join(results_path, f"microbenchmark_2_TcpLinuxReno_{wl}", "qlr_1/0/flow_monitor.xml"),
+                        os.path.join(results_path, f"microbenchmark_2_TcpLinuxReno_{wl}", "qlr/0/flow_monitor.xml"),
                     ),
                 ],
                 f"microbenchmark-2-delay-cdf-{wl}"
@@ -1285,14 +1285,14 @@ if __name__ == "__main__":
                             "Baseline",
                             "red",
                             "-",
-                            os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}", "qlr_0/0/flow_monitor.xml"),
+                            os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}", "baseline/0/flow_monitor.xml"),
                         ),
                         (
                             22222,
                             "QLR",
                             "green",
                             "-.",
-                            os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}", "qlr_1/0/flow_monitor.xml"),
+                            os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}", "qlr/0/flow_monitor.xml"),
                         ),
                         (
                             22222,
@@ -1316,8 +1316,8 @@ if __name__ == "__main__":
                 plot_delay_cdf_all_experiments(
                 results_path,
                 [
-                    (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-                    (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+                    (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+                    (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
                 ],
                 "benchmark3-delay-cdf-cumulative",
                 ylim=(0.8, 1.00001),
@@ -1327,8 +1327,8 @@ if __name__ == "__main__":
             plot_received_bytes_comparison(
                 results_path,
                 [
-                    (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-                    (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+                    (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+                    (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
                 ],
                 "benchmark3-tx-bytes-comparison",
             )
@@ -1336,8 +1336,8 @@ if __name__ == "__main__":
             plot_avg_throughput_comparison(
                 results_path,
                 [
-                    (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-                    (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+                    (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+                    (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
                     (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
                     (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
                 ],
@@ -1367,14 +1367,14 @@ if __name__ == "__main__":
                             "Baseline",
                             "red",
                             "-",
-                            os.path.join(results_path, experiment, "qlr_0/0/flow_monitor.xml"),
+                            os.path.join(results_path, experiment, "baseline/0/flow_monitor.xml"),
                         ),
                         (
                             22222,
                             "QLR",
                             "green",
                             "-.",
-                            os.path.join(results_path, experiment, "qlr_1/0/flow_monitor.xml"),
+                            os.path.join(results_path, experiment, "qlr/0/flow_monitor.xml"),
                         ),
                         (
                             22222,
@@ -1404,14 +1404,14 @@ if __name__ == "__main__":
                             "Baseline",
                             "red",
                             "//",
-                            os.path.join(results_path, experiment, "qlr_0/0/flow_monitor.xml"),
+                            os.path.join(results_path, experiment, "baseline/0/flow_monitor.xml"),
                         ),
                         (
                             22222,
                             "QLR",
                             "green",
                             "||",
-                            os.path.join(results_path, experiment, "qlr_1/0/flow_monitor.xml"),
+                            os.path.join(results_path, experiment, "qlr/0/flow_monitor.xml"),
                         ),
                         (
                             22222,
@@ -1440,8 +1440,8 @@ if __name__ == "__main__":
         plot_delay_cdf_all_experiments(
             results_path,
             [
-                (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-                (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+                (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+                (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
                 (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
                 (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
             ],
@@ -1453,8 +1453,8 @@ if __name__ == "__main__":
         plot_received_bytes_comparison(
             results_path,
             [
-                (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-                (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+                (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+                (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
                 (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
                 (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
             ],
@@ -1464,8 +1464,8 @@ if __name__ == "__main__":
         plot_avg_throughput_comparison(
             results_path,
             [
-                (22222, "Baseline", "red", "-", "qlr_0/0/flow_monitor.xml"),
-                (22222, "QLR", "green", "-.", "qlr_1/0/flow_monitor.xml"),
+                (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+                (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
                 (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
                 (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
             ],

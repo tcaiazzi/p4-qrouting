@@ -60,6 +60,28 @@ class PortAllocator:
 # Parsing helpers
 # ---------------------------------------------------------------------------
 
+def parse_topology_file(path: str) -> dict[str, str]:
+    """Parse a shell-style topology file and return a dict of variable assignments.
+
+    Lines of the form  KEY="value"  or  KEY=value  are extracted.
+    Comments (#) and blank lines are ignored.
+    """
+    result: dict[str, str] = {}
+    import re
+    pattern = re.compile(r'^([A-Z_][A-Z0-9_]*)=(?:"([^"]*)"|(.*))$')
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            m = pattern.match(line)
+            if m:
+                key = m.group(1)
+                value = m.group(2) if m.group(2) is not None else (m.group(3) or "")
+                result[key] = value
+    return result
+
+
 def parse_edges(edges_str: str) -> list[tuple[int, int]]:
     if not edges_str.strip():
         raise ValueError("--edges cannot be empty")
@@ -217,6 +239,60 @@ def dag_reachable_srcs(dag_edges: set[tuple[int, int]], target: int) -> set[int]
                     next_frontier.add(pred)
         frontier = next_frontier
     return reachable
+
+
+def dag_path(dag_edges: set[tuple[int, int]], src: int, dst: int) -> list[int]:
+    """BFS path from src to dst following directed DAG edges for dst.
+
+    Returns ordered node list [src, ..., dst].
+    Raises ValueError if no path exists in the DAG.
+    """
+    if src == dst:
+        return [src]
+    dag_adj: dict[int, list[int]] = {}
+    for u, v in dag_edges:
+        dag_adj.setdefault(u, []).append(v)
+    prev: dict[int, int] = {src: -1}
+    queue: list[int] = [src]
+    head = 0
+    while head < len(queue):
+        node = queue[head]
+        head += 1
+        for nb in dag_adj.get(node, []):
+            if nb not in prev:
+                prev[nb] = node
+                if nb == dst:
+                    path: list[int] = []
+                    cur = dst
+                    while cur != -1:
+                        path.append(cur)
+                        cur = prev[cur]
+                    path.reverse()
+                    return path
+                queue.append(nb)
+    raise ValueError(f"No DAG path from {src} to {dst}")
+
+
+def dag_connected_without_edge(
+    dag_edges: set[tuple[int, int]], src: int, dst: int, remove_u: int, remove_v: int
+) -> bool:
+    """Return True if dst is still reachable from src in the DAG after removing directed edge (remove_u, remove_v)."""
+    dag_adj: dict[int, list[int]] = {}
+    for u, v in dag_edges:
+        if u == remove_u and v == remove_v:
+            continue
+        dag_adj.setdefault(u, []).append(v)
+    visited: set[int] = {src}
+    stack: list[int] = [src]
+    while stack:
+        node = stack.pop()
+        if node == dst:
+            return True
+        for nb in dag_adj.get(node, []):
+            if nb not in visited:
+                visited.add(nb)
+                stack.append(nb)
+    return False
 
 
 def format_rate_mbps(rate_mbps: float) -> str:
@@ -482,53 +558,80 @@ def generate_protected_flows(
 # Congestion
 # ---------------------------------------------------------------------------
 
-def generate_congestion_flows(
-    dag_edges: set[tuple[int, int]],
-    target: int,
+def generate_congestion_events(
+    protected_rows: list[WorkloadRow],
+    dags: dict[int, set[tuple[int, int]]],
+    num_events: int,
     congestion_start: float,
     congestion_end: float,
-    burst_duration: float,
-    burst_gap: float,
+    duration_min: float,
+    duration_max: float,
     rate: str,
     packet_size: int,
     port_allocator: PortAllocator,
+    rng: random.Random,
 ) -> list[WorkloadRow]:
-    """Incast congestion: all DAG sources simultaneously burst toward target.
+    """Generate point-to-point congestion events tied to protected flows.
 
-    Every node reachable in the DAG (except the target itself) sends UDP
-    traffic to the target in repeating bursts of length ``burst_duration``
-    separated by gaps of ``burst_gap``.  All sources fire at the same time,
-    creating incast at intermediate switches along the DAG paths.
+    For each event: pick a protected flow at random, find the routing path from
+    its src to dst using the DAG for dst, select a link on that path whose
+    removal still leaves an alternate DAG path (i.e. not a DAG bridge), then
+    schedule a UDP flood on that link for a uniformly drawn duration within the
+    congestion window.
     """
-    sources = dag_reachable_srcs(dag_edges, target) - {target}
-    if not sources:
-        raise ValueError(f"No source nodes found in DAG for target {target}")
+    import sys
 
     rows: list[WorkloadRow] = []
-    burst_start = congestion_start
-    while burst_start < congestion_end:
-        burst_end = min(burst_start + burst_duration, congestion_end)
-        if burst_end <= burst_start:
-            break
-        for src_id in sorted(sources):
-            rows.append(
-                WorkloadRow(
-                    src_id=src_id,
-                    dst_id=target,
-                    start_time=burst_start,
-                    end_time=burst_end,
-                    protocol=UDP_PROTOCOL,
-                    dst_port=port_allocator.allocate(),
-                    rate=rate,
-                    packet_size=packet_size,
-                    data_size=0,
-                    number_of_flow=1,
-                    is_probing=False,
-                    is_protected=False,
-                    is_congestion=True,
-                )
+    for _ in range(num_events):
+        flow = rng.choice(protected_rows)
+        dag_edges = dags.get(flow.dst_id)
+        if dag_edges is None:
+            print(
+                f"WARNING: no DAG entry for destination {flow.dst_id}; "
+                "skipping congestion event",
+                file=sys.stderr,
             )
-        burst_start = burst_end + burst_gap
+            continue
+        try:
+            path = dag_path(dag_edges, flow.src_id, flow.dst_id)
+        except ValueError as exc:
+            print(f"WARNING: {exc}; skipping congestion event", file=sys.stderr)
+            continue
+        path_edges = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
+        candidate_edges = [
+            (u, v) for u, v in path_edges
+            if dag_connected_without_edge(dag_edges, flow.src_id, flow.dst_id, u, v)
+        ]
+        if not candidate_edges:
+            print(
+                f"WARNING: all links on DAG path {flow.src_id}->{flow.dst_id} are bridges; "
+                "skipping congestion event",
+                file=sys.stderr,
+            )
+            continue
+        u, v = rng.choice(candidate_edges)
+        start_time = rng.uniform(congestion_start, congestion_end)
+        duration = rng.uniform(duration_min, duration_max)
+        end_time = min(start_time + duration, congestion_end)
+        if end_time <= start_time:
+            continue
+        rows.append(
+            WorkloadRow(
+                src_id=u,
+                dst_id=v,
+                start_time=start_time,
+                end_time=end_time,
+                protocol=UDP_PROTOCOL,
+                dst_port=port_allocator.allocate(),
+                rate=rate,
+                packet_size=packet_size,
+                data_size=0,
+                number_of_flow=1,
+                is_probing=False,
+                is_protected=False,
+                is_congestion=True,
+            )
+        )
     return rows
 
 
@@ -574,16 +677,27 @@ def parse_args() -> argparse.Namespace:
     # Topology
     parser.add_argument("--output", required=True, help="Path to output CSV file")
     parser.add_argument(
+        "--topology-file",
+        default=None,
+        help=(
+            "Path to a shell-style topology file defining EDGES, DAGS, and HOSTS variables "
+            "(e.g. abilene.topology). When provided, --edges, --dags, and "
+            "--protected-host-vector default to the values in this file."
+        ),
+    )
+    parser.add_argument(
         "--edges",
-        required=True,
-        help="Physical topology edges in format '0,1;0,2;1,2' (undirected)",
+        default=None,
+        help="Physical topology edges in format '0,1;0,2;1,2' (undirected). "
+             "Required if --topology-file is not given.",
     )
     parser.add_argument(
         "--dags",
-        required=True,
+        default=None,
         help=(
             "Logical DAGs in format 'target:u-v,u-v,...;target:...' "
-            "(same format produced by parse_zoo.py)."
+            "(same format produced by parse_zoo.py). Used to compute routing paths. "
+            "Required if --topology-file is not given."
         ),
     )
     parser.add_argument(
@@ -627,6 +741,12 @@ def parse_args() -> argparse.Namespace:
             "Comma-separated list of packet sizes in bytes for background flows. "
             "Each flow picks uniformly at random from this list (default: 512)"
         ),
+    )
+    parser.add_argument(
+        "--no-background",
+        action="store_true",
+        default=False,
+        help="Skip background flow generation entirely",
     )
     # Protected
     parser.add_argument(
@@ -676,16 +796,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Generate and validate without writing file")
     # Congestion
     parser.add_argument(
-        "--congestion-target",
-        type=str,
-        default=None,
-        help="Comma-separated DAG target node(s) for incast congestion flows (omit to disable congestion)",
+        "--num-congestion-events",
+        type=int,
+        default=0,
+        help="Number of congestion events to generate (default: 0, disabled)",
     )
     parser.add_argument(
         "--congestion-rate",
         type=str,
         default="50Mbps",
-        help="Rate per congestion source flow (default: 50Mbps)",
+        help="Rate for each congestion flow (default: 50Mbps)",
     )
     parser.add_argument(
         "--congestion-packet-size",
@@ -697,35 +817,25 @@ def parse_args() -> argparse.Namespace:
         "--congestion-start-time",
         type=float,
         default=None,
-        help="Start of the congestion window in seconds (default: sim_start + 20%% of duration)",
+        help="Lower bound of the congestion event start-time sampling window (default: sim_start + 20%% of duration)",
     )
     parser.add_argument(
         "--congestion-end-time",
         type=float,
         default=None,
-        help="End of the congestion window in seconds (default: sim_end - 20%% of duration)",
+        help="Upper bound of the congestion event start-time sampling window (default: sim_end - 20%% of duration)",
     )
     parser.add_argument(
-        "--congestion-burst-duration",
+        "--congestion-duration-min",
         type=float,
-        default=1.0,
-        help="Duration of each congestion burst in seconds (default: 1.0)",
+        default=0.5,
+        help="Minimum duration of a congestion event in seconds (default: 0.5)",
     )
     parser.add_argument(
-        "--congestion-burst-gap",
+        "--congestion-duration-max",
         type=float,
-        default=1.0,
-        help="Gap between consecutive congestion bursts in seconds (default: 1.0)",
-    )
-    parser.add_argument(
-        "--congestion-target-shift",
-        type=str,
-        default="1.0",
-        help=(
-            "Comma-separated possible time-shift values (seconds) between successive "
-            "congestion targets. Each target's start is shifted by a value drawn "
-            "uniformly at random from this list (default: 1.0)"
-        ),
+        default=2.0,
+        help="Maximum duration of a congestion event in seconds (default: 2.0)",
     )
     return parser.parse_args()
 
@@ -759,24 +869,19 @@ def main() -> None:
         raise ValueError("--protected-packet-size must be > 0")
     if parse_rate_mbps(args.protected_rate) <= 0:
         raise ValueError("--protected-rate must be > 0")
-    if args.protected_flow_count > 0 and args.protected_host_vector is None:
-        raise ValueError("--protected-host-vector is required when --protected-flow-count > 0")
-    congestion_targets: list[int] = []
-    if args.congestion_target is not None:
-        congestion_targets = [int(s.strip()) for s in args.congestion_target.split(",") if s.strip()]
-        if not congestion_targets:
-            raise ValueError("--congestion-target must contain at least one node id")
-        if args.congestion_burst_duration <= 0:
-            raise ValueError("--congestion-burst-duration must be > 0")
-        if args.congestion_burst_gap < 0:
-            raise ValueError("--congestion-burst-gap must be >= 0")
+    # Note: protected-host-vector may still be None here if it comes from --topology-file;
+    # the definitive check is performed after topology file resolution below.
+    if args.num_congestion_events < 0:
+        raise ValueError("--num-congestion-events must be >= 0")
+    if args.num_congestion_events > 0:
+        if args.protected_flow_count == 0:
+            raise ValueError("--protected-flow-count > 0 is required when --num-congestion-events > 0")
         if args.congestion_packet_size <= 0:
             raise ValueError("--congestion-packet-size must be > 0")
-    congestion_target_shifts: list[float] = [float(s.strip()) for s in args.congestion_target_shift.split(",") if s.strip()]
-    if not congestion_target_shifts:
-        raise ValueError("--congestion-target-shift must contain at least one value")
-    if any(v < 0 for v in congestion_target_shifts):
-        raise ValueError("All --congestion-target-shift values must be >= 0")
+        if args.congestion_duration_min <= 0:
+            raise ValueError("--congestion-duration-min must be > 0")
+        if args.congestion_duration_max < args.congestion_duration_min:
+            raise ValueError("--congestion-duration-max must be >= --congestion-duration-min")
 
     sim_end = args.sim_start + args.duration
     margin = min(0.5, args.duration * 0.1)
@@ -796,10 +901,31 @@ def main() -> None:
     if protected_end_time <= protected_start_time:
         raise ValueError("--protected-end-time must be > --protected-start-time")
 
+    # --- Resolve topology source (file or explicit args) ---
+    topo_vars: dict[str, str] = {}
+    if args.topology_file is not None:
+        topo_vars = parse_topology_file(args.topology_file)
+
+    edges_str = args.edges or topo_vars.get("EDGES")
+    dags_str = args.dags or topo_vars.get("DAGS")
+    if not edges_str:
+        raise ValueError("--edges is required (or provide --topology-file with an EDGES variable)")
+    if not dags_str:
+        raise ValueError("--dags is required (or provide --topology-file with a DAGS variable)")
+
+    # Fill protected-host-vector from topology file HOSTS if not given explicitly
+    if args.protected_host_vector is None and "HOSTS" in topo_vars:
+        args.protected_host_vector = topo_vars["HOSTS"]
+    if args.protected_flow_count > 0 and args.protected_host_vector is None:
+        raise ValueError(
+            "--protected-host-vector is required when --protected-flow-count > 0 "
+            "(or provide --topology-file with a HOSTS variable)"
+        )
+
     # --- Parse topology ---
     rng = random.Random(args.seed)
-    edges = parse_edges(args.edges)
-    dags = parse_dags(args.dags)
+    edges = parse_edges(edges_str)
+    dags = parse_dags(dags_str)
     if not dags:
         raise ValueError("--dags produced no DAG entries")
     node_ids = parse_node_ids(args.node_ids, edges)
@@ -818,13 +944,7 @@ def main() -> None:
         if args.congestion_end_time is not None
         else sim_end - congestion_margin
     )
-    if congestion_targets:
-        missing = [t for t in congestion_targets if t not in dags]
-        if missing:
-            raise ValueError(
-                f"--congestion-target node(s) {missing} not found in DAGs. "
-                f"Available targets: {sorted(dags.keys())}"
-            )
+    if args.num_congestion_events > 0:
         if congestion_start < args.sim_start or congestion_end > sim_end:
             raise ValueError(
                 "Congestion window must be inside simulation window "
@@ -841,15 +961,19 @@ def main() -> None:
         probing_rate=args.probing_rate,
     )
 
-    background_rows = generate_background_flows(
-        edges=edges,
-        sim_start=args.sim_start,
-        sim_end=sim_end,
-        rate=args.background_rate,
-        flows_per_link=args.background_flows_per_link,
-        packet_sizes=background_packet_sizes,
-        port_allocator=port_allocator,
-        rng=rng,
+    background_rows = (
+        []
+        if args.no_background
+        else generate_background_flows(
+            edges=edges,
+            sim_start=args.sim_start,
+            sim_end=sim_end,
+            rate=args.background_rate,
+            flows_per_link=args.background_flows_per_link,
+            packet_sizes=background_packet_sizes,
+            port_allocator=port_allocator,
+            rng=rng,
+        )
     )
 
     protected_rows = generate_protected_flows(
@@ -866,25 +990,19 @@ def main() -> None:
     )
 
     congestion_rows: list[WorkloadRow] = []
-    _target_start = congestion_start
-    _target_starts: list[float] = []
-    for _i, _ct in enumerate(congestion_targets):
-        if _i > 0:
-            _shift = rng.choice(congestion_target_shifts)
-            _target_start += _shift
-        _target_starts.append(_target_start)
-        if _target_start >= congestion_end:
-            break
-        congestion_rows += generate_congestion_flows(
-            dag_edges=dags[_ct],
-            target=_ct,
-            congestion_start=_target_start,
+    if args.num_congestion_events > 0:
+        congestion_rows = generate_congestion_events(
+            protected_rows=protected_rows,
+            dags=dags,
+            num_events=args.num_congestion_events,
+            congestion_start=congestion_start,
             congestion_end=congestion_end,
-            burst_duration=args.congestion_burst_duration,
-            burst_gap=args.congestion_burst_gap,
+            duration_min=args.congestion_duration_min,
+            duration_max=args.congestion_duration_max,
             rate=args.congestion_rate,
             packet_size=args.congestion_packet_size,
             port_allocator=port_allocator,
+            rng=rng,
         )
 
     rows = probing_rows + protected_rows + background_rows + congestion_rows
@@ -940,21 +1058,13 @@ def main() -> None:
         print(f"  protected_start_time: {protected_start_time:.3f}s")
         print(f"  protected_end_time: {protected_end_time:.3f}s")
         print(f"  protected_number_of_flow: {args.protected_number_of_flow}")
+    print(f"  congestion_events_requested: {args.num_congestion_events}")
     print(f"  congestion_flows: {len(congestion_rows)}")
-    if congestion_targets:
-        print(f"  congestion_targets: {congestion_targets}")
-        print(f"  congestion_target_shifts: {congestion_target_shifts}")
+    if args.num_congestion_events > 0:
         print(f"  congestion_rate: {args.congestion_rate}")
         print(f"  congestion_packet_size: {args.congestion_packet_size}")
         print(f"  congestion_window: [{congestion_start:.3f}s, {congestion_end:.3f}s]")
-        print(f"  congestion_burst_duration: {args.congestion_burst_duration:.3f}s")
-        print(f"  congestion_burst_gap: {args.congestion_burst_gap:.3f}s")
-        for _i, _ct in enumerate(congestion_targets):
-            if _i >= len(_target_starts):
-                break
-            n_src = len(dag_reachable_srcs(dags[_ct], _ct) - {_ct})
-            n_bst = len([r for r in congestion_rows if r.dst_id == _ct]) // max(n_src, 1) if n_src else 0
-            print(f"    target={_ct}: start={_target_starts[_i]:.3f}s, sources={n_src}, bursts={n_bst}")
+        print(f"  congestion_duration: [{args.congestion_duration_min:.3f}s, {args.congestion_duration_max:.3f}s]")
     if args.dry_run:
         print("  output: dry-run (no file written)")
     else:
