@@ -173,14 +173,6 @@ main(int argc, char* argv[])
 
     Ptr<QlrController> ctrl = CreateObject<QlrController>();
 
-    startThroughputPortTrace(getPath(resultsPath, "throughput/s1-1.tp"),
-                             switches.Get(0)->GetId(),
-                             1);
-
-    startThroughputPortTrace(getPath(resultsPath, "throughput/s1-2.tp"),
-                             switches.Get(0)->GetId(),
-                             2);
-
     for (uint32_t i = 0; i < hosts.GetN(); ++i)
     {
         if (hostVector[i] == 0)

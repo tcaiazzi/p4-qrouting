@@ -98,6 +98,25 @@ def _extract_delays(flow_monitor_path, dst_port):
     return delays if delays else None
 
 
+def _extract_jitters(flow_monitor_path, dst_port):
+    candidate = _resolve_flow_monitor_xml(flow_monitor_path)
+    if candidate is None:
+        return None
+
+    sim: Simulation = parse_xml(candidate)[0]
+    jitters = []
+    for flow in sim.flows:
+        flow: Flow = flow
+        t: FiveTuple = flow.fiveTuple
+        if t.destinationPort == dst_port:
+            if getattr(flow, "jitterHistogram", None) is None:
+                continue
+            for bin in flow.jitterHistogram:
+                jitters.extend([float(bin.get("start")) * 1000] * int(bin.get("count")))
+
+    return jitters if jitters else None
+
+
 def _parse_time_to_ns(value):
     if value is None:
         return None
@@ -244,6 +263,70 @@ def _extract_avg_throughput_mbps(flow_monitor_path, dst_port):
     return float(np.mean(throughputs_mbps))
 
 
+def _extract_avg_ipg_ms(flow_monitor_path, dst_port):
+    candidate = _resolve_flow_monitor_xml(flow_monitor_path)
+    if candidate is None:
+        return None
+
+    try:
+        root = ET.parse(candidate).getroot()
+    except Exception:
+        return None
+
+    flow_classifier = root.find(".//Ipv4FlowClassifier")
+    if flow_classifier is None:
+        return None
+
+    flow_id_to_dst_port = {}
+    for flow_entry in flow_classifier.findall("Flow"):
+        flow_id = flow_entry.get("flowId")
+        destination_port = flow_entry.get("destinationPort")
+        if flow_id is None or destination_port is None:
+            continue
+        try:
+            flow_id_to_dst_port[int(flow_id)] = int(destination_port)
+        except ValueError:
+            continue
+
+    flow_stats = root.find(".//FlowStats")
+    if flow_stats is None:
+        return None
+
+    ipg_values_ms = []
+    for flow_entry in flow_stats.findall("Flow"):
+        flow_id = flow_entry.get("flowId")
+        if flow_id is None:
+            continue
+        try:
+            flow_id_int = int(flow_id)
+        except ValueError:
+            continue
+
+        if flow_id_to_dst_port.get(flow_id_int) != dst_port:
+            continue
+
+        rx_packets_str = flow_entry.get("rxPackets")
+        first_rx_ns = _parse_time_to_ns(flow_entry.get("timeFirstRxPacket"))
+        last_rx_ns = _parse_time_to_ns(flow_entry.get("timeLastRxPacket"))
+        if rx_packets_str is None or first_rx_ns is None or last_rx_ns is None:
+            continue
+        try:
+            rx_packets = float(rx_packets_str)
+        except ValueError:
+            continue
+        if rx_packets <= 1 or last_rx_ns <= first_rx_ns:
+            continue
+
+        rx_duration_s = (last_rx_ns - first_rx_ns) * 1e-9
+        avg_ipg_ms = rx_duration_s / (rx_packets - 1) * 1e3
+        ipg_values_ms.append(avg_ipg_ms)
+
+    if not ipg_values_ms:
+        return None
+
+    return float(np.mean(ipg_values_ms))
+
+
 def plot_received_bytes_comparison(results_root, flow_info, figure_name):
     label_order = [label for _, label, _, _, _ in flow_info]
     rx_bytes_by_label = {label: 0.0 for label in label_order}
@@ -252,6 +335,8 @@ def plot_received_bytes_comparison(results_root, flow_info, figure_name):
     tx_duration_samples_by_label = {label: 0 for label in label_order}
 
     for experiment in sorted(os.listdir(results_root)):
+        if "bg10" in experiment:
+            continue
         experiment_path = os.path.join(results_root, experiment)
         if not os.path.isdir(experiment_path):
             continue
@@ -276,13 +361,13 @@ def plot_received_bytes_comparison(results_root, flow_info, figure_name):
 
             baseline_delays = _extract_delays(baseline_candidate, baseline_port)
             qlr_delays = _extract_delays(qlr_candidate, qlr_port)
-            # if baseline_delays and qlr_delays:
-            #     if max(qlr_delays) > max(baseline_delays):
-            #         print(
-            #             f"Skipping experiment {experiment}: QLR max delay {max(qlr_delays):.2f} ms "
-            #             f"> Baseline max delay {max(baseline_delays):.2f} ms"
-            #         )
-            #         continue
+            if baseline_delays and qlr_delays:
+                if max(qlr_delays) > max(baseline_delays):
+                    print(
+                        f"Skipping experiment {experiment}: QLR max delay {max(qlr_delays):.2f} ms "
+                        f"> Baseline max delay {max(baseline_delays):.2f} ms"
+                    )
+                    continue
 
         for dst_port, label, _color, _hatch, flow_monitor_path in flow_info:
             candidate_path = (
@@ -357,6 +442,8 @@ def plot_avg_throughput_comparison(results_root, flow_info, figure_name):
     throughput_samples_by_label = {label: [] for label in label_order}
 
     for experiment in sorted(os.listdir(results_root)):
+        if "bg10" in experiment:
+            continue
         experiment_path = os.path.join(results_root, experiment)
         if not os.path.isdir(experiment_path):
             continue
@@ -494,6 +581,250 @@ def plot_delay_cdf_figure(results, flow_info, figure_name, xlim=(0, 700), ylim=(
     )
 
 
+def plot_jitter_cdf_figure(results, flow_info, figure_name, xlim=None, ylim=(0.95, 1.001)):
+    fig = plt.figure(figsize=(5, 3))
+    ax = plt.gca()
+
+    for dst_port, label, color, hatch, flow_monitor_path in flow_info:
+        jitters = _extract_jitters(flow_monitor_path, dst_port)
+        if jitters is None:
+            continue
+        jitters_sorted = np.sort(np.array(jitters))
+        cdf = np.arange(1, len(jitters_sorted) + 1) / float(len(jitters_sorted))
+        ax.step(jitters_sorted, cdf, where="post", label=label, color=color, linestyle=hatch)
+
+    if xlim:
+        ax.set_xlim(xlim)
+    if ylim:
+        ax.set_ylim(ylim)
+    ax.set_xlabel("Jitter [ms]", fontsize=12)
+    ax.set_ylabel("CDF", fontsize=12)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    ax.grid(linestyle="--", linewidth=0.5)
+
+    fig.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=len(flow_info),
+        prop={"size": 12},
+    )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def plot_deadline_miss_bar_figure(results, flow_info, figure_name, slo_ms=150):
+    labels = []
+    values = []
+    colors = []
+    for dst_port, label, color, _hatch, flow_monitor_path in flow_info:
+        delays = _extract_delays(flow_monitor_path, dst_port)
+        labels.append(label)
+        colors.append(color)
+        if not delays:
+            values.append(float("nan"))
+        else:
+            misses = sum(1 for d in delays if d > slo_ms)
+            values.append(misses / float(len(delays)) * 100.0)
+
+    fig = plt.figure(figsize=(5, 3))
+    ax = plt.gca()
+    x = np.arange(len(labels))
+    bars = ax.bar(x, values, color=colors, alpha=0.85)
+
+    ax.set_ylabel("Deadline-miss rate [%]", fontsize=12)
+    ax.set_xlabel(f"Routing scheme (SLO = {slo_ms} ms)", fontsize=12)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.tick_params(axis='both', which='major', labelsize=11)
+    ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
+
+    for bar, val in zip(bars, values):
+        label = "N/A" if np.isnan(val) else f"{val:.1f}%"
+        y = 0.0 if np.isnan(val) else val
+        ax.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            y,
+            label,
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name, slo_ms_list=(50, 150)):
+    """Aggregate deadline-miss rate of protected flows pooled over all experiments.
+
+    For each routing scheme, concatenate per-packet delays across every experiment,
+    then compute the overall fraction exceeding each SLO. Grouped bars:
+    x = SLO threshold, one bar per scheme.
+    """
+    label_order = [label for _, label, _, _, _ in flow_info]
+    pooled = {label: [] for label in label_order}
+    colors = {label: color for _, label, color, _, _ in flow_info}
+
+    for experiment in sorted(os.listdir(results_root)):
+        if "bg10" in experiment or ("ce1" not in experiment and "ce2" not in experiment and "ce3" not in experiment):
+            continue
+        experiment_path = os.path.join(results_root, experiment)
+        if not os.path.isdir(experiment_path):
+            continue
+
+        for dst_port, label, _color, _hatch, flow_monitor_path in flow_info:
+            candidate = (
+                flow_monitor_path
+                if os.path.isabs(flow_monitor_path)
+                else os.path.join(experiment_path, flow_monitor_path)
+            )
+            delays = _extract_delays(candidate, dst_port)
+            if delays:
+                pooled[label].extend(delays)
+
+    labels = [label for label in label_order if pooled[label]]
+    if not labels:
+        print("Skipping deadline-miss-aggregate: no protected-flow delay samples found")
+        return
+
+    x = np.arange(len(slo_ms_list))
+    n = len(labels)
+    width = 0.8 / n
+
+    fig, ax = plt.subplots(figsize=(max(6, len(slo_ms_list) * 2), 3.5))
+
+    for i, label in enumerate(labels):
+        delays = np.array(pooled[label])
+        miss = [float((delays > slo).mean() * 100.0) for slo in slo_ms_list]
+        offset = (i - n / 2.0 + 0.5) * width
+        bars = ax.bar(
+            x + offset, miss, width,
+            label=label,
+            color=colors.get(label, "gray"),
+            alpha=0.85,
+        )
+        for bar, val in zip(bars, miss):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                val,
+                f"{val:.1f}",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+        print(
+            "  "
+            + label
+            + ": "
+            + ", ".join(f"{slo}ms={m:.2f}%" for slo, m in zip(slo_ms_list, miss))
+            + f"  (n_packets={len(delays)})"
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"{slo} ms" for slo in slo_ms_list])
+    ax.set_xlabel("Delay SLO", fontsize=12)
+    ax.set_ylabel("Deadline-miss rate [%]", fontsize=12)
+    ax.tick_params(axis="both", which="major", labelsize=11)
+    ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
+    ax.legend(fontsize=11)
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def _extract_packet_ipgs_ms(scheme_dir):
+    """Pool per-packet IPG values (ms) from all .ipg files produced by the tracer
+    under <scheme_dir>/ipg/. Each line is: time_s ipg_ms srcIp:srcPort.
+    """
+    ipg_dir = os.path.join(scheme_dir, "ipg")
+    if not os.path.isdir(ipg_dir):
+        return []
+
+    ipgs = []
+    for entry in sorted(os.listdir(ipg_dir)):
+        if not entry.endswith(".ipg"):
+            continue
+        file_path = os.path.join(ipg_dir, entry)
+        try:
+            with open(file_path, "r") as ipg_file:
+                for line in ipg_file:
+                    parts = line.split()
+                    if len(parts) < 2:
+                        continue
+                    try:
+                        ipgs.append(float(parts[1]))
+                    except ValueError:
+                        continue
+        except OSError:
+            continue
+
+    return ipgs
+
+
+def plot_ipg_cdf_per_experiment(experiment_path, flow_info, figure_name, xlim=None, ylim=(0.95, 1.001)):
+    """One figure per experiment: CDF of per-packet IPG of protected flows,
+    one step curve per routing scheme. Reads the .ipg files written by the tracer.
+    """
+    aggregated = {}
+    for dst_port, label, color, linestyle, flow_monitor_path in flow_info:
+        scheme_dir = os.path.dirname(flow_monitor_path)
+        ipgs = _extract_packet_ipgs_ms(scheme_dir)
+        if not ipgs:
+            continue
+        aggregated[label] = {"ipgs": ipgs, "color": color, "linestyle": linestyle}
+
+    if not aggregated:
+        return
+
+    fig = plt.figure(figsize=(5, 3))
+    ax = plt.gca()
+
+    for label, info in aggregated.items():
+        ipgs_sorted = np.sort(np.array(info["ipgs"]))
+        cdf = np.arange(1, len(ipgs_sorted) + 1) / float(len(ipgs_sorted))
+        ax.step(
+            ipgs_sorted,
+            cdf,
+            where="post",
+            label=label,
+            color=info["color"],
+            linestyle=info["linestyle"],
+        )
+
+    if xlim:
+        ax.set_xlim(xlim)
+    if ylim:
+        ax.set_ylim(ylim)
+    ax.set_xlabel("IPG [ms]", fontsize=12)
+    ax.set_ylabel("CDF", fontsize=12)
+    ax.tick_params(axis="both", which="major", labelsize=12)
+    ax.grid(linestyle="--", linewidth=0.5)
+
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(handles, labels, fontsize=11)
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
 def plot_delay_wins_bar_figure(qlr_lower_count, baseline_lower_count, figure_name):
     labels = ["QLR lower delay", "Baseline lower delay"]
     values = [qlr_lower_count, baseline_lower_count]
@@ -525,19 +856,28 @@ def plot_delay_wins_bar_figure(qlr_lower_count, baseline_lower_count, figure_nam
     )
 
 
-def plot_qlr_avg_delay_by_case_figure(qlr_lower_avg_ms, baseline_lower_avg_ms, qlr_ge_avg_ms, baseline_ge_avg_ms, figure_name):
+def plot_qlr_avg_delay_by_case_figure(
+    qlr_lower_avg_ms, baseline_lower_avg_ms, qlr_ge_avg_ms, baseline_ge_avg_ms,
+    local_qlr_lower_avg_ms, local_qlr_ge_avg_ms,
+    central_lower_avg_ms, central_ge_avg_ms,
+    figure_name,
+):
     labels = ["QLR < Baseline", "QLR >= Baseline"]
     qlr_values = [qlr_lower_avg_ms, qlr_ge_avg_ms]
     baseline_values = [baseline_lower_avg_ms, baseline_ge_avg_ms]
+    local_qlr_values = [local_qlr_lower_avg_ms, local_qlr_ge_avg_ms]
+    central_values = [central_lower_avg_ms, central_ge_avg_ms]
 
-    fig = plt.figure(figsize=(6, 3.5))
+    fig = plt.figure(figsize=(8, 3.5))
     ax = plt.gca()
 
     x = np.arange(len(labels))
-    width = 0.35
+    width = 0.2
 
-    bars1 = ax.bar(x - width / 2.0, qlr_values, width, label="QLR", color="green", alpha=0.85)
-    bars2 = ax.bar(x + width / 2.0, baseline_values, width, label="Baseline", color="red", alpha=0.85)
+    bars1 = ax.bar(x - 1.5 * width, qlr_values, width, label="QLR", color="green", alpha=0.85)
+    bars2 = ax.bar(x - 0.5 * width, baseline_values, width, label="Baseline", color="red", alpha=0.85)
+    bars3 = ax.bar(x + 0.5 * width, local_qlr_values, width, label="Local QLR", color="purple", alpha=0.85)
+    bars4 = ax.bar(x + 1.5 * width, central_values, width, label="Central", color="blue", alpha=0.85)
 
     ax.set_ylabel("Average Max Delay [ms]", fontsize=12)
     ax.set_xlabel("Per-Experiment Condition", fontsize=12)
@@ -547,7 +887,7 @@ def plot_qlr_avg_delay_by_case_figure(qlr_lower_avg_ms, baseline_lower_avg_ms, q
     ax.legend(fontsize=11)
     ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
 
-    for bars in [bars1, bars2]:
+    for bars in [bars1, bars2, bars3, bars4]:
         for bar in bars:
             val = bar.get_height()
             label = "N/A" if np.isnan(val) else f"{val:.2f}"
@@ -558,7 +898,7 @@ def plot_qlr_avg_delay_by_case_figure(qlr_lower_avg_ms, baseline_lower_avg_ms, q
                 label,
                 ha="center",
                 va="bottom",
-                fontsize=10,
+                fontsize=8,
             )
 
     plt.savefig(
@@ -566,6 +906,67 @@ def plot_qlr_avg_delay_by_case_figure(qlr_lower_avg_ms, baseline_lower_avg_ms, q
         format="pdf",
         bbox_inches="tight",
     )
+
+
+def plot_ipg_cdf_figure(results_root, flow_info, figure_name):
+    """CDF of per-experiment average IPG across all routing schemes in flow_info.
+
+    flow_info entries: (dst_port, label, color, linestyle, flow_monitor_relative_path)
+    Each experiment contributes one avg-IPG data point per label.
+    """
+    aggregated = {}
+    for experiment in sorted(os.listdir(results_root)):
+        if "bg10" in experiment:
+            continue
+        experiment_path = os.path.join(results_root, experiment)
+        if not os.path.isdir(experiment_path):
+            continue
+
+        for dst_port, label, color, linestyle, flow_monitor_path in flow_info:
+            candidate_path = (
+                flow_monitor_path
+                if os.path.isabs(flow_monitor_path)
+                else os.path.join(experiment_path, flow_monitor_path)
+            )
+            ipg_ms = _extract_avg_ipg_ms(candidate_path, dst_port)
+            if ipg_ms is None:
+                continue
+            if label not in aggregated:
+                aggregated[label] = {"ipg_values": [], "color": color, "linestyle": linestyle}
+            aggregated[label]["ipg_values"].append(ipg_ms)
+
+    fig = plt.figure(figsize=(5, 3))
+    ax = plt.gca()
+
+    for label, info in aggregated.items():
+        if not info["ipg_values"]:
+            continue
+        ipg_sorted = np.sort(np.array(info["ipg_values"]))
+        cdf = np.arange(1, len(ipg_sorted) + 1) / float(len(ipg_sorted))
+        ax.step(
+            ipg_sorted,
+            cdf,
+            where="post",
+            label=label,
+            color=info["color"],
+            linestyle=info["linestyle"],
+        )
+
+    ax.set_xlabel("Avg IPG [ms]", fontsize=12)
+    ax.set_ylabel("CDF", fontsize=12)
+    ax.tick_params(axis="both", which="major", labelsize=12)
+    ax.grid(linestyle="--", linewidth=0.5)
+
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(handles, labels, fontsize=11)
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
 
 
 def plot_delay_cdf_all_experiments(
@@ -590,10 +991,16 @@ def plot_delay_cdf_all_experiments(
     qlr_max_lt_baseline_max = 0
     qlr_max_delay_when_lower = []
     baseline_max_delay_when_lower = []
+    local_qlr_max_delay_when_lower = []
+    central_max_delay_when_lower = []
     qlr_max_delay_when_ge = []
     baseline_max_delay_when_ge = []
+    local_qlr_max_delay_when_ge = []
+    central_max_delay_when_ge = []
 
     for experiment in sorted(os.listdir(results_root)):
+        if "bg10" in experiment:
+            continue
         experiment_path = os.path.join(results_root, experiment)
         if not os.path.isdir(experiment_path):
             continue
@@ -658,13 +1065,21 @@ def plot_delay_cdf_all_experiments(
 
         baseline_info = per_experiment.get("Baseline")
         qlr_info = per_experiment.get("QLR")
+        local_qlr_info = per_experiment.get("Local QLR")
+        central_info = per_experiment.get("Central")
         if baseline_info is not None and qlr_info is not None:
             baseline_max = max(baseline_info["delays"])
             qlr_max = max(qlr_info["delays"])
+            local_qlr_max = max(local_qlr_info["delays"]) if local_qlr_info else None
+            central_max = max(central_info["delays"]) if central_info else None
             if qlr_max > baseline_max:
                 skipped_qlr_max_gt_baseline_max += 1
                 qlr_max_delay_when_ge.append(qlr_max)
                 baseline_max_delay_when_ge.append(baseline_max)
+                if local_qlr_max is not None:
+                    local_qlr_max_delay_when_ge.append(local_qlr_max)
+                if central_max is not None:
+                    central_max_delay_when_ge.append(central_max)
                 print(
                     f"Skipping experiment {experiment}: QLR max delay {qlr_max} ms "
                     f"> Baseline max delay {baseline_max} ms"
@@ -674,9 +1089,17 @@ def plot_delay_cdf_all_experiments(
                 qlr_max_lt_baseline_max += 1
                 qlr_max_delay_when_lower.append(qlr_max)
                 baseline_max_delay_when_lower.append(baseline_max)
+                if local_qlr_max is not None:
+                    local_qlr_max_delay_when_lower.append(local_qlr_max)
+                if central_max is not None:
+                    central_max_delay_when_lower.append(central_max)
             else:
                 qlr_max_delay_when_ge.append(qlr_max)
                 baseline_max_delay_when_ge.append(baseline_max)
+                if local_qlr_max is not None:
+                    local_qlr_max_delay_when_ge.append(local_qlr_max)
+                if central_max is not None:
+                    central_max_delay_when_ge.append(central_max)
 
         for label, info in per_experiment.items():
             if label not in aggregated:
@@ -710,6 +1133,10 @@ def plot_delay_cdf_all_experiments(
         baseline_lower_avg_ms=(np.mean(baseline_max_delay_when_lower) if baseline_max_delay_when_lower else float("nan")),
         qlr_ge_avg_ms=(np.mean(qlr_max_delay_when_ge) if qlr_max_delay_when_ge else float("nan")),
         baseline_ge_avg_ms=(np.mean(baseline_max_delay_when_ge) if baseline_max_delay_when_ge else float("nan")),
+        local_qlr_lower_avg_ms=(np.mean(local_qlr_max_delay_when_lower) if local_qlr_max_delay_when_lower else float("nan")),
+        local_qlr_ge_avg_ms=(np.mean(local_qlr_max_delay_when_ge) if local_qlr_max_delay_when_ge else float("nan")),
+        central_lower_avg_ms=(np.mean(central_max_delay_when_lower) if central_max_delay_when_lower else float("nan")),
+        central_ge_avg_ms=(np.mean(central_max_delay_when_ge) if central_max_delay_when_ge else float("nan")),
         figure_name=f"{figure_name}-qlr-avg-by-case",
     )
 
@@ -1448,6 +1875,17 @@ if __name__ == "__main__":
             "zoo-delay-cdf-cumulative",
             ylim=(0.8, 1.00001),
             xlim=None,
+        )
+
+        plot_ipg_cdf_figure(
+            results_path,
+            [
+                (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
+                (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
+                (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
+                (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
+            ],
+            "zoo-ipg-cdf",
         )
 
         plot_received_bytes_comparison(

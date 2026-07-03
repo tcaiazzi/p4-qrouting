@@ -343,8 +343,9 @@ createTopology(const std::vector<std::pair<int, int>> edges,
         std::string commandsPath = "";
         if (!p4baseCommandPath.empty())
         {
-            commandsPath = p4baseCommandPath + std::to_string(numNodes) + "_nodes/commands/s" +
-                           std::to_string(i + 1) + ".txt";
+            // p4baseCommandPath is the full commands directory (topology-named);
+            // just append the per-switch file.
+            commandsPath = p4baseCommandPath + "/s" + std::to_string(i + 1) + ".txt";
         }
         Ptr<Node> switchNode = switches.Get(i);
 
@@ -588,6 +589,10 @@ generateWorkloadFromFile(NodeContainer hosts,
         {
             ApplicationContainer hostReceiverApp = createSinkTcpApplication(qlrPort, host);
             hostReceiverApp.Start(Seconds(0.0));
+
+            std::string ipgPath =
+                getPath(getPath(resultsPath, "ipg"), Names::FindName(host) + ".ipg");
+            startIpgTrace(hostReceiverApp.Get(0), ipgPath, Names::FindName(host));
         }
         ApplicationContainer defaultHostReceiverApp = createSinkUdpApplication(defaultPort, host);
         defaultHostReceiverApp.Start(Seconds(0.0));

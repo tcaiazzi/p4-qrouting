@@ -21,11 +21,16 @@ CONGESTION_CONTROL="${CONGESTION_CONTROL:-TcpLinuxReno}"
 EXPERIMENT_NAME="${EXPERIMENT_NAME:-qlr-experiment}"
 QLR_UPDATE_INTERVAL="${QLR_UPDATE_INTERVAL:-200ns}"
 P4_PROGRAM="${P4_PROGRAM:-examples/qlrouting/qlr_build/qlr.json}"
-P4_COMMANDS="${P4_COMMANDS}"
 QLR_MODE="${QLR_MODE:-global}"  # local or global
 
+# Commands live in a topology-named directory (defaults to "<N>_nodes" for
+# standalone/microbenchmark runs). The commands are both GENERATED here and
+# passed as the full path to the simulator, so the two always agree.
+RESOURCES_TAG="${RESOURCES_TAG:-${SWITCHES}_nodes}"
+commands_reldir="resources/${RESOURCES_TAG}/commands"
+
 experiment_params="--host-bw=$HOST_BW --switch-bw=$SWITCH_BW --edges=$EDGES --hosts=$HOSTS --switches=$SWITCHES --workload-file=$WORKLOAD_FILE --end=$END  --cc=$CONGESTION_CONTROL --color-update-interval=$QLR_UPDATE_INTERVAL --mode=$MODE --p4-program=$P4_PROGRAM"
-[[ -n "$P4_COMMANDS" ]] && experiment_params+=" --p4-command=$P4_COMMANDS"
+experiment_params+=" --p4-command=examples/qlrouting/${commands_reldir}"
 
 if [ "$DUMP_TRAFFIC" = "1" ]; then
     experiment_params+=" --dump-traffic"
@@ -53,8 +58,10 @@ else
 fi
 
 
-echo "Generating P4 commands with command: python3 generate_p4_commands.py \"resources/${SWITCHES}_nodes/commands\" ${QLR_ACTIVE} --edges \"$EDGES\" --host-vector \"$HOSTS\" --dags \"$DAGS\""
-python3 generate_p4_commands.py "resources/${SWITCHES}_nodes/commands" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
+# Generate commands into the same topology-named dir that is passed to the
+# simulator (--p4-command above), so tables always match the running topology.
+echo "Generating P4 commands with command: python3 generate_p4_commands.py \"${commands_reldir}\" ${QLR_ACTIVE} --edges \"$EDGES\" --host-vector \"$HOSTS\" --dags \"$DAGS\""
+python3 generate_p4_commands.py "${commands_reldir}" ${QLR_ACTIVE} --edges $EDGES --host-vector $HOSTS --dags $DAGS
 
 cd p4src && p4c -o ../qlr_build ./qlr.p4 && cd ..
 

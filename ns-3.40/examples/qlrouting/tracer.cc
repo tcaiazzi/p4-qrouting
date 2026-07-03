@@ -28,6 +28,7 @@
 #include <iomanip>
 #include <iostream>
 #include <random>
+#include <sstream>
 #include <string>
 
 #include "utils.h"
@@ -226,4 +227,53 @@ startTcpRtx(Ptr<Node> node, std::string fileName, uint32_t socketId)
     }
 
     Config::Connect(nsString, MakeCallback(&tcpRx));
+}
+
+/* Functions to track the inter-packet gap (IPG) of TCP connections at the receiver */
+std::map<std::string, uint64_t> ctx2lastIpgTs;
+std::map<std::string, FILE*> ipgStream;
+
+void
+ipgRxTrace(std::string context, Ptr<const Packet> p, const Address& from)
+{
+    auto streamIt = ipgStream.find(context);
+    if (streamIt == ipgStream.end())
+        return;
+
+    std::string src = "unknown";
+    if (InetSocketAddress::IsMatchingType(from))
+    {
+        InetSocketAddress inet = InetSocketAddress::ConvertFrom(from);
+        std::ostringstream oss;
+        oss << inet.GetIpv4() << ":" << inet.GetPort();
+        src = oss.str();
+    }
+
+    uint64_t now = Simulator::Now().GetNanoSeconds();
+    std::string key = context + "|" + src;
+
+    auto lastIt = ctx2lastIpgTs.find(key);
+    if (lastIt != ctx2lastIpgTs.end())
+    {
+        double ipgMs = (now - lastIt->second) * 1e-6;
+        fprintf(streamIt->second, "%f %f %s\n", Simulator::Now().GetSeconds(), ipgMs, src.c_str());
+        fflush(streamIt->second);
+        fsync(fileno(streamIt->second));
+    }
+
+    ctx2lastIpgTs[key] = now;
+}
+
+void
+startIpgTrace(Ptr<Application> sinkApp, std::string fileName, std::string context)
+{
+    std::filesystem::path filePath(fileName);
+    std::filesystem::create_directories(filePath.parent_path());
+
+    auto it = ipgStream.find(context);
+    if (it == ipgStream.end())
+        ipgStream[context] = fopen(fileName.c_str(), "w");
+
+    NS_LOG_DEBUG("Connecting to " << context << " sink for IPG tracking, saving to " << fileName);
+    sinkApp->TraceConnect("Rx", context, MakeCallback(&ipgRxTrace));
 }

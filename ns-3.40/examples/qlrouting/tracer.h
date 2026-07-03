@@ -23,6 +23,9 @@ extern std::map<std::string, std::pair<SequenceNumber32, uint32_t>> ctx2rtxInfo;
 extern std::map<std::string, FILE*> rtxStream;
 extern Time rtxPeriod;
 
+extern std::map<std::string, uint64_t> ctx2lastIpgTs;
+extern std::map<std::string, FILE*> ipgStream;
+
 // Function declarations
 uint32_t GetNodeIdFromContext(std::string context);
 uint32_t GetSocketIdFromContext(std::string context);
@@ -33,5 +36,7 @@ void startThroughputPortTrace(std::string fileName, uint32_t nodeId, uint32_t if
 void startThroughputTrace(Ptr<Node> node, float startTime, std::string resultsPath);
 void tcpRx(std::string context, const Ptr<const Packet> p, const TcpHeader& hdr, const Ptr<const TcpSocketBase> skt);
 void startTcpRtx(Ptr<Node> node, std::string fileName, uint32_t socketId);
+void ipgRxTrace(std::string context, Ptr<const Packet> p, const Address& from);
+void startIpgTrace(Ptr<Application> sinkApp, std::string fileName, std::string context);
 
 #endif

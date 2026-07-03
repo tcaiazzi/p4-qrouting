@@ -11,8 +11,15 @@ def main():
     plot_local_qlr = True
 
     results_path = "results"
-    paper_plot.figures_path = os.path.join("paper_figures", "zoo-new-gen")
+    paper_plot.figures_path = os.path.join("paper_figures", "use-case-dense-2")
     os.makedirs(paper_plot.figures_path, exist_ok=True)
+
+    # Resources tag for the topology being plotted (must match RESOURCES_TAG used
+    # at run time): "11_nodes" for the original Abilene, "abilene-dense" for the
+    # denser variant. Drives where protected-flow SLO reads the workload CSVs.
+    resources_tag = "abilene-dense"
+    # resources_tag = "11_nodes"  
+    workload_csv_dir = f"resources/{resources_tag}/workloads"
 
     # Master system table: (flag, label, color, cdf_linestyle, hist_hatch, subdir)
     _SYSTEMS = [
@@ -33,6 +40,8 @@ def main():
     _throughput_labels = [lbl for _en, lbl, *_ in _SYSTEMS]
 
     for experiment in os.listdir(results_path):
+        if "bg10" in experiment:
+            continue
         print(f"Printing figures for experiment {experiment}")
         try:
             experiment_split = experiment.split("_")
@@ -68,6 +77,35 @@ def main():
                 ],
                 f"zoo-fct-histogram-{congestion_control}-{wl}",
             )
+
+            paper_plot.plot_ipg_cdf_per_experiment(
+                experiment_path,
+                [
+                    (port, lbl, col, sty, os.path.join(experiment_path, rel))
+                    for port, lbl, col, sty, rel in _rel_cdf
+                ],
+                f"zoo-ipg-cdf-{congestion_control}-{wl}",
+            )
+
+            paper_plot.plot_jitter_cdf_figure(
+                experiment_path,
+                [
+                    (port, lbl, col, sty, os.path.join(experiment_path, rel))
+                    for port, lbl, col, sty, rel in _rel_cdf
+                ],
+                f"zoo-jitter-cdf-{congestion_control}-{wl}",
+            )
+
+            for slo_ms in (10, 20, 50, 150):
+                paper_plot.plot_deadline_miss_bar_figure(
+                    experiment_path,
+                    [
+                        (port, lbl, col, sty, os.path.join(experiment_path, rel))
+                        for port, lbl, col, sty, rel in _rel_cdf
+                    ],
+                    f"zoo-deadline-miss-{slo_ms}ms-{congestion_control}-{wl}",
+                    slo_ms=slo_ms,
+                )
         except Exception as e:
             print(f"Error processing experiment {experiment}: {e}")
             continue
@@ -78,6 +116,12 @@ def main():
         "zoo-delay-cdf-cumulative",
         ylim=(0.8, 1.00001),
         xlim=None,
+    )
+
+    paper_plot.plot_ipg_cdf_figure(
+        results_path,
+        _rel_cdf,
+        "zoo-ipg-cdf",
     )
 
     paper_plot.plot_received_bytes_comparison(
@@ -92,16 +136,24 @@ def main():
         "zoo-avg-throughput-comparison",
     )
 
-    paper_plot.plot_protected_flow_slo_comparison(
-        results_path, _rel_cdf, "zoo-protected-flow-slo_99", threshold=0.99
+    paper_plot.plot_deadline_miss_bar_all_experiments(
+        results_path, _rel_cdf, "zoo-deadline-miss-aggregate",
+        slo_ms_list=(10, 20, 50, 150),
     )
 
     paper_plot.plot_protected_flow_slo_comparison(
-        results_path, _rel_cdf, "zoo-protected-flow-slo_95", threshold=0.95
+        results_path, _rel_cdf, "zoo-protected-flow-slo_99",
+        workload_csv_dir=workload_csv_dir, threshold=0.99
     )
 
     paper_plot.plot_protected_flow_slo_comparison(
-        results_path, _rel_cdf, "zoo-protected-flow-slo_90", threshold=0.90
+        results_path, _rel_cdf, "zoo-protected-flow-slo_95",
+        workload_csv_dir=workload_csv_dir, threshold=0.95
+    )
+
+    paper_plot.plot_protected_flow_slo_comparison(
+        results_path, _rel_cdf, "zoo-protected-flow-slo_90",
+        workload_csv_dir=workload_csv_dir, threshold=0.90
     )
 if __name__ == "__main__":
     main()

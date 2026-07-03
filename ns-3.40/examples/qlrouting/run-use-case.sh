@@ -21,7 +21,7 @@ echo "[topology] loaded $topology_file (nodes=$SWITCHES)"
 # Experiment-level settings
 # ---------------------------------------------------------------------------
 congestion_control="${CONGESTION_CONTROL:-TcpLinuxReno}"
-dump_traffic="${DUMP_TRAFFIC:-1}"
+dump_traffic="${DUMP_TRAFFIC:-0}"
 end_time="${END:-3}"
 controlplane_speed="${CONTROLPLANE_SPEED:-500ms}"
 
@@ -42,7 +42,7 @@ no_background="${WORKLOAD_NO_BACKGROUND:-1}"
 
 # Protected flow settings
 protected_host_vector="${WORKLOAD_PROTECTED_HOST_VECTOR:-$HOSTS}"
-protected_rate="${WORKLOAD_PROTECTED_RATE:-10Mbps}"
+protected_rate="${WORKLOAD_PROTECTED_RATE:-1Mbps}"
 protected_packet_size="${WORKLOAD_PROTECTED_PACKET_SIZE:-512}"
 protected_number_of_flow="${WORKLOAD_PROTECTED_NUMBER_OF_FLOW:-1}"
 
@@ -59,7 +59,14 @@ run_central="${RUN_CENTRAL:-1}"
 run_local_qlr="${RUN_LOCAL_QLR:-1}"
 run_qlr="${RUN_QLR:-1}"
 
-workloads_dir="resources/11_nodes/workloads"
+# Topology identity / output isolation.
+# topo_prefix defaults to the topology file's basename (abilene.topology ->
+# "abilene", abilene-dense.topology -> "abilene-dense"). Both workloads and P4
+# commands are placed under resources/<resources_tag>/, keyed by topology name.
+topo_prefix="${TOPO_PREFIX:-$(basename "$topology_file" .topology)}"
+resources_tag="${RESOURCES_TAG:-$topo_prefix}"
+
+workloads_dir="resources/${resources_tag}/workloads"
 
 IFS=',' read -r -a sweep_seeds               <<< "$sweep_seeds_csv"
 IFS=',' read -r -a sweep_protected_flow_counts <<< "$sweep_protected_flow_counts_csv"
@@ -75,10 +82,11 @@ IFS=',' read -r -a sweep_protected_flow_counts <<< "$sweep_protected_flow_counts
 profile_matrix=(
    # "light|10Mbps|64,512,1400|0|||0.5|2.0|0.2|0.2"
     # "heavy-single|10Mbps|64,512,1400|1|250Mbps|1400|0.5|2.0|0.2|0.2"
-    "heavy-2|10Mbps|64,512,1400|2|250Mbps|1400|0.5|2.0|0.2|0.2"
-    "heavy-2|10Mbps|64,512,1400|3|250Mbps|1400|0.5|2.0|0.2|0.2"
-    "heavy-2|10Mbps|64,512,1400|4|250Mbps|1400|0.5|2.0|0.2|0.2"
-    "heavy-2|10Mbps|64,512,1400|5|250Mbps|1400|0.5|2.0|0.2|0.2"
+    # "heavy-1|1Mbps|64,512,1400|1|250Mbps|1400|0.5|2.0|0.2|0.2"
+    "heavy-2|1Mbps|64,512,1400|2|250Mbps|1400|0.5|2.0|0.2|0.2"
+    "heavy-3|1Mbps|64,512,1400|3|250Mbps|1400|0.5|2.0|0.2|0.2"
+    "heavy-4|1Mbps|64,512,1400|4|250Mbps|1400|0.5|2.0|0.2|0.2"
+    "heavy-5|1Mbps|64,512,1400|5|250Mbps|1400|0.5|2.0|0.2|0.2"
    # "heavy-multi|10Mbps|64,512,1400|10|50Mbps|1400|0.5|2.0|0.2|0.2"
 )
 
@@ -184,7 +192,7 @@ for seed in "${sweep_seeds[@]}"; do
             # ----------------------------------------------------------------
             # Run experiments
             # ----------------------------------------------------------------
-            results_dir="abilene_${congestion_control}_${workload_base}"
+            results_dir="${topo_prefix}_${congestion_control}_${workload_base}"
 
             # --- baseline (no QLR) ---
             if [[ "$run_baseline" == "1" ]]; then
@@ -192,8 +200,8 @@ for seed in "${sweep_seeds[@]}"; do
 
                 QLR_ACTIVE=0 \
                 P4_PROGRAM=examples/qlrouting/qlr_build/qlr.json \
-                P4_COMMANDS="examples/qlrouting/resources/" \
-                EXPERIMENT_NAME="abilene" \
+                EXPERIMENT_NAME="$topo_prefix" \
+                RESOURCES_TAG="$resources_tag" \
                 CONGESTION_CONTROL="$congestion_control" \
                 WORKLOAD_FILE="examples/qlrouting/$workload_file" \
                 DAGS="$DAGS" \
@@ -214,8 +222,8 @@ for seed in "${sweep_seeds[@]}"; do
 
                 QLR_ACTIVE=1 \
                 P4_PROGRAM=examples/qlrouting/qlr_build/qlr.json \
-                P4_COMMANDS="examples/qlrouting/resources/" \
-                EXPERIMENT_NAME="abilene" \
+                EXPERIMENT_NAME="$topo_prefix" \
+                RESOURCES_TAG="$resources_tag" \
                 CONGESTION_CONTROL="$congestion_control" \
                 WORKLOAD_FILE="examples/qlrouting/$workload_file" \
                 DAGS="$DAGS" \
@@ -237,8 +245,8 @@ for seed in "${sweep_seeds[@]}"; do
 
                 QLR_ACTIVE=1 \
                 P4_PROGRAM=examples/qlrouting/qlr_build/qlr.json \
-                P4_COMMANDS="examples/qlrouting/resources/" \
-                EXPERIMENT_NAME="abilene" \
+                EXPERIMENT_NAME="$topo_prefix" \
+                RESOURCES_TAG="$resources_tag" \
                 CONGESTION_CONTROL="$congestion_control" \
                 WORKLOAD_FILE="examples/qlrouting/$workload_file" \
                 DAGS="$DAGS" \
@@ -260,8 +268,8 @@ for seed in "${sweep_seeds[@]}"; do
 
                 QLR_ACTIVE=1 \
                 P4_PROGRAM=examples/qlrouting/qlr_build/qlr.json \
-                P4_COMMANDS="examples/qlrouting/resources/" \
-                EXPERIMENT_NAME="abilene" \
+                EXPERIMENT_NAME="$topo_prefix" \
+                RESOURCES_TAG="$resources_tag" \
                 CONGESTION_CONTROL="$congestion_control" \
                 WORKLOAD_FILE="examples/qlrouting/$workload_file" \
                 DAGS="$DAGS" \
