@@ -558,6 +558,109 @@ def generate_protected_flows(
 # Congestion
 # ---------------------------------------------------------------------------
 
+def _congestion_events_per_destination(
+    protected_rows: list[WorkloadRow],
+    dags: dict[int, set[tuple[int, int]]],
+    events_per_dest: int,
+    congestion_start: float,
+    congestion_end: float,
+    duration_min: float,
+    duration_max: float,
+    rate: str,
+    packet_size: int,
+    port_allocator: PortAllocator,
+    rng: random.Random,
+) -> list[WorkloadRow]:
+    """Per-destination congestion that blocks DIFFERENT paths concurrently.
+
+    For each distinct protected destination we allocate a DISJOINT time slot
+    (destinations never overlap in time) and, within that slot, place up to
+    ``events_per_dest`` CONCURRENT floods, each on a link of a different path
+    toward the destination (successive-path blocking: block a link, recompute
+    the path on the residual DAG, block a link of that new path, ...). A route
+    to the destination is always left open (never disconnect) — that is the
+    path the global scheme can still find, while a purely-local scheme reroutes
+    from one blocked path into another that is congested at the same time.
+    """
+    import sys
+
+    rows: list[WorkloadRow] = []
+    # Distinct destinations, insertion order preserved for reproducible slots.
+    dest_to_src: dict[int, int] = {}
+    for r in protected_rows:
+        dest_to_src.setdefault(r.dst_id, r.src_id)
+    destinations = list(dest_to_src.keys())
+    num_dests = len(destinations)
+    if num_dests == 0 or events_per_dest <= 0:
+        return rows
+
+    slot_len = (congestion_end - congestion_start) / num_dests
+
+    for k, dst in enumerate(destinations):
+        dag_edges = dags.get(dst)
+        if dag_edges is None:
+            print(
+                f"WARNING: no DAG entry for destination {dst}; skipping",
+                file=sys.stderr,
+            )
+            continue
+        src = dest_to_src[dst]
+
+        # Disjoint time slot for this destination; one shared window inside it
+        # so all its events are concurrent.
+        slot_start = congestion_start + k * slot_len
+        slot_end = slot_start + slot_len
+        duration = min(rng.uniform(duration_min, duration_max), slot_len)
+        start_time = slot_start
+        end_time = min(start_time + duration, slot_end)
+        if end_time <= start_time:
+            continue
+
+        blocked: set[tuple[int, int]] = set()
+        for _ in range(events_per_dest):
+            residual = dag_edges - blocked
+            try:
+                path = dag_path(residual, src, dst)
+            except ValueError:
+                break  # no path left in the residual DAG; keep dst reachable
+            # Prefer the DEEPEST reroutable link on the path (farthest from
+            # src, i.e. largest index along the path). A local scheme commits at
+            # the upstream branch BEFORE it can observe a deep block and gets
+            # trapped, while the global scheme (downstream color propagation)
+            # diverts around it. Blocking the branch-adjacent link instead would
+            # be visible to local -> local recovers -> no local-vs-global gap.
+            candidates = [
+                (i, path[i], path[i + 1])
+                for i in range(len(path) - 1)
+                if (path[i], path[i + 1]) not in blocked
+                and dag_connected_without_edge(
+                    residual, src, dst, path[i], path[i + 1]
+                )
+            ]
+            if not candidates:
+                break  # remaining links are bridges; stop to leave a live route
+            _, u, v = max(candidates, key=lambda c: c[0])
+            blocked.add((u, v))
+            rows.append(
+                WorkloadRow(
+                    src_id=u,
+                    dst_id=v,
+                    start_time=start_time,
+                    end_time=end_time,
+                    protocol=UDP_PROTOCOL,
+                    dst_port=port_allocator.allocate(),
+                    rate=rate,
+                    packet_size=packet_size,
+                    data_size=0,
+                    number_of_flow=1,
+                    is_probing=False,
+                    is_protected=False,
+                    is_congestion=True,
+                )
+            )
+    return rows
+
+
 def generate_congestion_events(
     protected_rows: list[WorkloadRow],
     dags: dict[int, set[tuple[int, int]]],
@@ -570,15 +673,35 @@ def generate_congestion_events(
     packet_size: int,
     port_allocator: PortAllocator,
     rng: random.Random,
+    mode: str = "independent",
 ) -> list[WorkloadRow]:
     """Generate point-to-point congestion events tied to protected flows.
 
-    For each event: pick a protected flow at random, find the routing path from
-    its src to dst using the DAG for dst, select a link on that path whose
-    removal still leaves an alternate DAG path (i.e. not a DAG bridge), then
-    schedule a UDP flood on that link for a uniformly drawn duration within the
-    congestion window.
+    mode="independent" (default): for each event pick a protected flow at
+    random, find the routing path from its src to dst using the DAG for dst,
+    select a link on that path whose removal still leaves an alternate DAG path
+    (i.e. not a DAG bridge), then schedule a UDP flood for a uniformly drawn
+    duration within the congestion window.
+
+    mode="per-destination": see ``_congestion_events_per_destination`` — blocks
+    ``num_events`` different paths per destination, concurrently, in disjoint
+    time slots across destinations.
     """
+    if mode == "per-destination":
+        return _congestion_events_per_destination(
+            protected_rows=protected_rows,
+            dags=dags,
+            events_per_dest=num_events,
+            congestion_start=congestion_start,
+            congestion_end=congestion_end,
+            duration_min=duration_min,
+            duration_max=duration_max,
+            rate=rate,
+            packet_size=packet_size,
+            port_allocator=port_allocator,
+            rng=rng,
+        )
+
     import sys
 
     rows: list[WorkloadRow] = []
@@ -837,6 +960,18 @@ def parse_args() -> argparse.Namespace:
         default=2.0,
         help="Maximum duration of a congestion event in seconds (default: 2.0)",
     )
+    parser.add_argument(
+        "--congestion-mode",
+        choices=["independent", "per-destination"],
+        default="independent",
+        help=(
+            "independent (default): --num-congestion-events random events over "
+            "the whole window. per-destination: --num-congestion-events events "
+            "PER protected destination, each blocking a DIFFERENT path toward it, "
+            "concurrent within a destination but in disjoint time slots across "
+            "destinations."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1003,6 +1138,7 @@ def main() -> None:
             packet_size=args.congestion_packet_size,
             port_allocator=port_allocator,
             rng=rng,
+            mode=args.congestion_mode,
         )
 
     rows = probing_rows + protected_rows + background_rows + congestion_rows

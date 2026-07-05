@@ -21,7 +21,7 @@ echo "[topology] loaded $topology_file (nodes=$SWITCHES)"
 # Experiment-level settings
 # ---------------------------------------------------------------------------
 congestion_control="${CONGESTION_CONTROL:-TcpLinuxReno}"
-dump_traffic="${DUMP_TRAFFIC:-0}"
+dump_traffic="${DUMP_TRAFFIC:-1}"
 end_time="${END:-3}"
 controlplane_speed="${CONTROLPLANE_SPEED:-500ms}"
 
@@ -50,12 +50,12 @@ protected_number_of_flow="${WORKLOAD_PROTECTED_NUMBER_OF_FLOW:-1}"
 # Sweep axes
 # ---------------------------------------------------------------------------
 sweep_seeds_csv="${SWEEP_SEEDS:-1234}"
-sweep_protected_flow_counts_csv="${SWEEP_PROTECTED_FLOW_COUNTS:-1,5,10,20,50}"
+sweep_protected_flow_counts_csv="${SWEEP_PROTECTED_FLOW_COUNTS:-1}"
 sweep_dry_run="${SWEEP_DRY_RUN:-0}"
 
 # Which experiment types to run (1 = enabled, 0 = skip)
-run_baseline="${RUN_BASELINE:-1}"
-run_central="${RUN_CENTRAL:-1}"
+run_baseline="${RUN_BASELINE:-0}"
+run_central="${RUN_CENTRAL:-0}"
 run_local_qlr="${RUN_LOCAL_QLR:-1}"
 run_qlr="${RUN_QLR:-1}"
 
@@ -79,15 +79,18 @@ IFS=',' read -r -a sweep_protected_flow_counts <<< "$sweep_protected_flow_counts
 #   cong_start_frac / cong_end_frac: fractions of duration defining the sampling
 #   window for congestion event start times.
 # ---------------------------------------------------------------------------
+# Speed axis (QLR vs central): sweep the NUMBER of SHORT bursts. Each burst
+# (100-250ms) is well below the 500ms control-plane interval, so central keeps
+# missing them; as the count grows its disadvantage vs data-plane QLR/local
+# accumulates. Baseline never reroutes. dur_min/dur_max are 0.1/0.25.
 profile_matrix=(
-   # "light|10Mbps|64,512,1400|0|||0.5|2.0|0.2|0.2"
-    # "heavy-single|10Mbps|64,512,1400|1|250Mbps|1400|0.5|2.0|0.2|0.2"
-    # "heavy-1|1Mbps|64,512,1400|1|250Mbps|1400|0.5|2.0|0.2|0.2"
-    "heavy-2|1Mbps|64,512,1400|2|250Mbps|1400|0.5|2.0|0.2|0.2"
-    "heavy-3|1Mbps|64,512,1400|3|250Mbps|1400|0.5|2.0|0.2|0.2"
-    "heavy-4|1Mbps|64,512,1400|4|250Mbps|1400|0.5|2.0|0.2|0.2"
-    "heavy-5|1Mbps|64,512,1400|5|250Mbps|1400|0.5|2.0|0.2|0.2"
-   # "heavy-multi|10Mbps|64,512,1400|10|50Mbps|1400|0.5|2.0|0.2|0.2"
+    # "burst-1|1Mbps|64,512,1400|1|250Mbps|1400|0.25|0.5|0.1|0.1"
+    # "burst-2|1Mbps|64,512,1400|2|250Mbps|1400|0.25|0.5|0.1|0.1"
+    "burst-3|1Mbps|64,512,1400|3|250Mbps|1400|0.25|0.5|0.1|0.1"
+    # "burst-4|1Mbps|64,512,1400|4|250Mbps|1400|0.25|0.5|0.1|0.1"
+    # "burst-6|1Mbps|64,512,1400|6|250Mbps|1400|0.25|0.5|0.1|0.1"
+    # Long-event variants (central can react to each -> schemes converge):
+    # "heavy-2|1Mbps|64,512,1400|2|250Mbps|1400|0.5|2.0|0.2|0.2"
 )
 
 mkdir -p "$workloads_dir"
@@ -173,6 +176,7 @@ for seed in "${sweep_seeds[@]}"; do
                     --congestion-duration-max "$cong_dur_max"
                     --congestion-start-time  "$cong_start_time"
                     --congestion-end-time    "$cong_end_time"
+                    --congestion-mode        per-destination
                 )
             fi
 

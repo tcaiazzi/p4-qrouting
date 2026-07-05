@@ -11,7 +11,7 @@ def main():
     plot_local_qlr = True
 
     results_path = "results"
-    paper_plot.figures_path = os.path.join("paper_figures", "use-case-dense-2")
+    paper_plot.figures_path = os.path.join("paper_figures", "use-case-dense-6")
     os.makedirs(paper_plot.figures_path, exist_ok=True)
 
     # Resources tag for the topology being plotted (must match RESOURCES_TAG used
