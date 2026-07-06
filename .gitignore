@@ -176,7 +176,6 @@ emulator/lab/shared/p4src/
 .DS_Store
 .vscode/
 .DS_Store
-ns-3.40/examples/qlrouting/p4src
 ns-3.40/examples/qlrouting/fwd_build
 ns-3.40/examples/qlrouting/qlr_build
 ns-3.40/examples/qlrouting/results*

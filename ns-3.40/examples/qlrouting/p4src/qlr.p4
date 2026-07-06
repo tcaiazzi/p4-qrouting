@@ -37,8 +37,9 @@ control IngressPipe(inout headers hdr,
     register<bit<64>>(1) row3;
     register<bit<64>>(1) row4;
     register<bit<64>>(1) row5;
-    register<bit<8>>(NODES_NUM) ig_qdepths;
-    
+    register<bit<8>>(8) ig_qdepths;
+    register<bit<8>>(1) node_id_reg;   // this switch's topology node id (for logs)
+
     action drop() {
         mark_to_drop(standard_metadata);
     }
@@ -53,6 +54,9 @@ control IngressPipe(inout headers hdr,
     action set_nhop(bit<9> port) {
         standard_metadata.egress_spec = port;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+        bit<8> nid;
+        node_id_reg.read(nid, 0);
+        log_msg("node {} set_nhop dst_row {} -> egress {}", {nid, row_num, port});
     }
     
     table select_row {
@@ -81,6 +85,9 @@ control IngressPipe(inout headers hdr,
     action process_probe() {
         mark_to_drop(standard_metadata);
         probe_type = 2;
+        bit<8> nid;
+        node_id_reg.read(nid, 0);
+        log_msg("node {} process_probe", {nid});   // DIAG: does this fire on cores?
     }
 
     table handle_update {
@@ -191,8 +198,39 @@ control IngressPipe(inout headers hdr,
         }
         
         if (probe_type == 2) {
+            if (!hdr.qlr_updates[0].isValid()) {
+                hdr.qlr_updates[0].dst_id = 0;
+                hdr.qlr_updates[0].value = 0;
+            }
+            if (!hdr.qlr_updates[1].isValid()) {
+                hdr.qlr_updates[1].dst_id = 0;
+                hdr.qlr_updates[1].value = 0;
+            }
+            if (!hdr.qlr_updates[2].isValid()) {
+                hdr.qlr_updates[2].dst_id = 0;
+                hdr.qlr_updates[2].value = 0;
+            }
+            if (!hdr.qlr_updates[3].isValid()) {
+                hdr.qlr_updates[3].dst_id = 0;
+                hdr.qlr_updates[3].value = 0;
+            }
+            if (!hdr.qlr_updates[4].isValid()) {
+                hdr.qlr_updates[4].dst_id = 0;
+                hdr.qlr_updates[4].value = 0;
+            }
             /* Update rows using the pkt information */
-            qmatrix_update.apply();
+            bit<8> nidq;
+            node_id_reg.read(nidq, 0);
+            // DIAG: dump the arriving update slots (dst_id per slot; 0 = empty) + ingress idx
+            log_msg("node {} probe slots {} {} {} {} {} ig_idx {}",
+                    {nidq, hdr.qlr_updates[0].dst_id, hdr.qlr_updates[1].dst_id,
+                     hdr.qlr_updates[2].dst_id, hdr.qlr_updates[3].dst_id,
+                     hdr.qlr_updates[4].dst_id, ig_idx});
+            if (qmatrix_update.apply().hit) {           // DIAG: table hit vs miss on cores
+                log_msg("node {} qmatrix_update HIT ig_idx {}", {nidq, ig_idx});
+            } else {
+                log_msg("node {} qmatrix_update MISS ig_idx {}", {nidq, ig_idx});
+            }
         }
         if (do_qlr == 1 || probe_type == 1) {
             row1.read(row1_value, 0);
@@ -232,6 +270,14 @@ control IngressPipe(inout headers hdr,
         if (probe_type == 1) {
             /* Activate update headers (table is populated from the DAGs) */
             qlr_pkt_updates.apply();
+            // DIAG (sender): what THIS node emits on a forwarded probe.
+            bit<8> nids;
+            node_id_reg.read(nids, 0);
+            log_msg("node {} send_probe row_num {} egress {} slots {} {} {} {} {}",
+                    {nids, row_num, standard_metadata.egress_spec,
+                     hdr.qlr_updates[0].dst_id, hdr.qlr_updates[1].dst_id,
+                     hdr.qlr_updates[2].dst_id, hdr.qlr_updates[3].dst_id,
+                     hdr.qlr_updates[4].dst_id});
         }
     }
 }
