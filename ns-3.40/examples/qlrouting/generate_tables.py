@@ -8,47 +8,52 @@ def non_reversed_permutations(iterable, num):
         if permutation[0] < permutation[-1]:
             yield permutation
 
-def generate_qmatrix_updates(path, node_list, perms, no_updates=False):
+def generate_qmatrix_updates(path, node_list, perms, no_updates=False, n_cols=None):
     num_nodes = len(node_list)
+    # Columns are the byte-lanes of the `row` register (bit<64> = 8 lanes) and are
+    # keyed by `ig_idx` (= ingress port number). They must NOT be tied to num_nodes:
+    # a dense core can receive a probe on a port whose ig_idx > num_nodes, which would
+    # otherwise MISS the table and drop the update. Cover the full register capacity.
+    if n_cols is None:
+        n_cols = 8
+    assert 1 <= n_cols <= 8, f"n_cols={n_cols} exceeds row register capacity (bit<64> = 8 lanes)"
 
     action_names = []
     actions = []
     consts = []
     for items in perms:
         items_str = "_".join(list([f"r{i}" for i in items]))
-        for col in range(1, num_nodes + 1):
+        for col in range(1, n_cols + 1):
             action_name = f"qmatrix_update_{items_str}_c{col}"
             action_header = f"action {action_name}() {{\n"
 
             const_entry = []
-            action_body = ""
+            # Read this switch's node id so the row-update logs identify the node.
+            action_body = "    bit<8> nid;\n    node_id_reg.read(nid, 0);\n"
             idx = 0
             for i in range(1, num_nodes + 1):
                 if i in items:
                     action_body += f"    row{i}.read(row{i}_value, 0);\n"
                     slice_start = 8 * (col - 1)
                     slice_end = (8 * col) - 1
-                    # Bellman formula
+                    # Bellman formula. Valid updates arrive PACKED (deparser emits
+                    # only valid headers, contiguously), so read qlr_updates[idx].
                     row_slice = f"row{i}_value[{slice_end}:{slice_start}]"
-                    action_body += f"    log_msg(\"updating row{i}_value - before: {{}}\", {{{row_slice}}});\n"
+                    action_body += f"    log_msg(\"node {{}} updating row{i}_value - before: {{}}\", {{nid, {row_slice}}});\n"
                     if no_updates:
                         action_body += f"    {row_slice} = color_weights[{(i*8)-1}:{8*(i-1)}];\n"
                     else:
                         action_body += f"    {row_slice} = {row_slice} + (color_weights[{(i*8)-1}:{8*(i-1)}] + hdr.qlr_updates[{idx}].value - {row_slice});\n"
-                    action_body += f"    log_msg(\"updating row{i}_value - after: {{}}\", {{{row_slice}}});\n"
+                    action_body += f"    log_msg(\"node {{}} updating row{i}_value - after: {{}}\", {{nid, {row_slice}}});\n"
                     action_body += f"    row{i}.write(0, row{i}_value);\n"
-                    action_body += f"    log_msg(\"new row{i}_value: {{}}\", {{row{i}_value}});\n"
-
-
+                    action_body += f"    log_msg(\"node {{}} new row{i}_value: {{}}\", {{nid, row{i}_value}});\n"
                     const_entry.append(f"true, {i}")
-
                     idx += 1
                 else:
                     action_body += f"    log_msg(\"reading row{i}_value\");\n"
                     action_body += f"    row{i}.read(row{i}_value, 0);\n"
 
             const_entry.extend(["false, 0" for _ in range(1, num_nodes - len(const_entry) + 1)])
-
             const_entry.append(str(col))
 
             action_names.append(action_name)

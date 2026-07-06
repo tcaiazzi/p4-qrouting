@@ -109,7 +109,7 @@ main(int argc, char* argv[])
     {
         // LogComponentEnable("FlowMonitor", LOG_LEVEL_DEBUG);
         // LogComponentEnable("SwitchMmu", LOG_LEVEL_DEBUG);
-        LogComponentEnable("P4Pipeline", LOG_LEVEL_DEBUG);
+        LogComponentEnable("P4Pipeline", LOG_LEVEL_INFO);
         // LogComponentEnable("P4SwitchNetDevice", LOG_LEVEL_DEBUG);
         LogComponentEnable("P4SwitchHelper", LOG_LEVEL_DEBUG);
         // LogComponentEnable("TcpSocketBase", LOG_LEVEL_DEBUG);

@@ -57,6 +57,8 @@ def generate_all_commands(network: dict, dags: dict, subnets):
 
     for node_name in network:
         commands = set()
+        # Record this switch's topology node id so P4 log_msg can identify it.
+        commands.add(f"register_write node_id_reg 0 {int(node_name)}")
         for tgt in network:
             if node_name == tgt:
                 continue
@@ -67,42 +69,31 @@ def generate_all_commands(network: dict, dags: dict, subnets):
             commands.update(tgt_commands)
 
         if qlr_active:
-            dst_iface_to_headers = {}
-            for dst in network:
-                if dst == node_name:
-                    continue
-                if dst not in dags:
-                    continue
+            # Probes are 1-hop: this node sends a probe to EACH neighbor Y. On the
+            # probe to Y we advertise this node's Q for the destinations D that Y
+            # routes THROUGH this node -- i.e. (Y -> node_name) is an edge in D's
+            # DAG. The table is keyed on the probe's 1-hop destination (row_num =
+            # Y+1) and the egress toward Y, so EVERY neighbor probe (host AND core)
+            # matches -> the qlr_pkt_set action sets ecn[0]=1 -> the receiver's
+            # parser extracts the update headers and refreshes its Q-matrix.
+            #
+            # Previously this was keyed on the host destination, so probes toward
+            # core neighbors (row_num >= 6) never matched, the ecn flag stayed 0,
+            # the parser skipped the updates, and cores never learned any Q.
+            neighbor_to_dest_rows = {}
+            for dst, dag in dags.items():
+                for edge in dag.edges:
+                    if edge[1] == node_name:            # (neighbor -> node_name) in dag[dst]
+                        neighbor = edge[0]
+                        neighbor_to_dest_rows.setdefault(neighbor, set()).add(dst + 1)
 
-                paths = list(nx.all_simple_paths(dags[dst], source=node_name, target=dst))
-                neighbors = set(map(lambda x: x[1], paths))
-                # print(f"node_name={node_name}", f"dst={dst}", f"neighbors={neighbors}")
-                for neighbor in neighbors:
-                    # print(f"Processing neighbor: {neighbor}")
-                    headers_to_activate = set()
-                    for update_node, dag in dags.items():
-                        if dst == update_node:
-                            continue
-                        for edge in dag.edges:
-                            if edge[1] == node_name and edge[0] == neighbor:
-                                if dst not in dst_iface_to_headers:
-                                    dst_iface_to_headers[dst] = {}
-
-                                iface = network[node_name][edge[0]]
-                                if iface not in dst_iface_to_headers[dst]:
-                                    dst_iface_to_headers[dst][iface] = set()
-
-                                # print(f"node_name={node_name}", f"dst={dst}", f"update={update_node}", f"edge={edge}", f"iface={iface}")
-
-                                dst_iface_to_headers[dst][iface].add(str(update_node + 1))
-
-            for dst, iface_to_headers in dst_iface_to_headers.items():
-                for iface, headers_to_activate in iface_to_headers.items():
-                    if headers_to_activate:
-                        headers_to_activate = sorted(list(headers_to_activate))
-
-                        commands.add(f"table_add qlr_pkt_updates qlr_pkt_set_" + "_".join(
-                            headers_to_activate) + f" {dst + 1} {iface + 1} => ")
+            for neighbor, dest_rows in neighbor_to_dest_rows.items():
+                headers = "_".join(str(r) for r in sorted(dest_rows))
+                port = network[node_name][neighbor]
+                commands.add(
+                    f"table_add qlr_pkt_updates qlr_pkt_set_{headers} "
+                    f"{neighbor + 1} {port + 1} => "
+                )
 
             for iface in network[node_name].values():
                 commands.add(f"table_add read_ig_qdepth get_ig_qdepth_and_idx {iface + 1} => {iface}")
