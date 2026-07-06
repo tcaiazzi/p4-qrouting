@@ -54,9 +54,9 @@ sweep_protected_flow_counts_csv="${SWEEP_PROTECTED_FLOW_COUNTS:-1}"
 sweep_dry_run="${SWEEP_DRY_RUN:-0}"
 
 # Which experiment types to run (1 = enabled, 0 = skip)
-run_baseline="${RUN_BASELINE:-0}"
-run_central="${RUN_CENTRAL:-0}"
-run_local_qlr="${RUN_LOCAL_QLR:-0}"
+run_baseline="${RUN_BASELINE:-1}"
+run_central="${RUN_CENTRAL:-1}"
+run_local_qlr="${RUN_LOCAL_QLR:-1}"
 run_qlr="${RUN_QLR:-1}"
 
 # Topology identity / output isolation.
