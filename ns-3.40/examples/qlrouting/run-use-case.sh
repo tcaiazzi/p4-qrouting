@@ -21,7 +21,7 @@ echo "[topology] loaded $topology_file (nodes=$SWITCHES)"
 # Experiment-level settings
 # ---------------------------------------------------------------------------
 congestion_control="${CONGESTION_CONTROL:-TcpLinuxReno}"
-dump_traffic="${DUMP_TRAFFIC:-1}"
+dump_traffic="${DUMP_TRAFFIC:-0}"
 end_time="${END:-3}"
 controlplane_speed="${CONTROLPLANE_SPEED:-500ms}"
 
@@ -50,7 +50,7 @@ protected_number_of_flow="${WORKLOAD_PROTECTED_NUMBER_OF_FLOW:-1}"
 # Sweep axes
 # ---------------------------------------------------------------------------
 sweep_seeds_csv="${SWEEP_SEEDS:-1234}"
-sweep_protected_flow_counts_csv="${SWEEP_PROTECTED_FLOW_COUNTS:-1}"
+sweep_protected_flow_counts_csv="${SWEEP_PROTECTED_FLOW_COUNTS:-5,10,20,50}"
 sweep_dry_run="${SWEEP_DRY_RUN:-0}"
 
 # Which experiment types to run (1 = enabled, 0 = skip)
@@ -84,11 +84,11 @@ IFS=',' read -r -a sweep_protected_flow_counts <<< "$sweep_protected_flow_counts
 # missing them; as the count grows its disadvantage vs data-plane QLR/local
 # accumulates. Baseline never reroutes. dur_min/dur_max are 0.1/0.25.
 profile_matrix=(
-    # "burst-1|1Mbps|64,512,1400|1|250Mbps|1400|0.25|0.5|0.1|0.1"
-    # "burst-2|1Mbps|64,512,1400|2|250Mbps|1400|0.25|0.5|0.1|0.1"
-    "burst-3|1Mbps|64,512,1400|3|250Mbps|1400|0.25|0.5|0.1|0.1"
-    # "burst-4|1Mbps|64,512,1400|4|250Mbps|1400|0.25|0.5|0.1|0.1"
-    # "burst-6|1Mbps|64,512,1400|6|250Mbps|1400|0.25|0.5|0.1|0.1"
+    "burst-1|1Mbps|64,512,1400|1|250Mbps|1400|0.25|0.5|0.1|0.1"
+    "burst-2|1Mbps|64,512,1400|2|250Mbps|1400|0.25|0.5|0.1|0.1"
+    # "burst-3|1Mbps|64,512,1400|3|250Mbps|1400|0.25|0.5|0.1|0.1"
+    "burst-4|1Mbps|64,512,1400|4|250Mbps|1400|0.25|0.5|0.1|0.1"
+    "burst-5|1Mbps|64,512,1400|5|250Mbps|1400|0.25|0.5|0.1|0.1"
     # Long-event variants (central can react to each -> schemes converge):
     # "heavy-2|1Mbps|64,512,1400|2|250Mbps|1400|0.5|2.0|0.2|0.2"
 )

@@ -9,7 +9,6 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 from flowmon_parser import parse_xml, FiveTuple, Flow, Simulation
-from sortedcontainers import SortedDict
 
 
 class OOMFormatter(matplotlib.ticker.ScalarFormatter):
@@ -654,6 +653,67 @@ def plot_deadline_miss_bar_figure(results, flow_info, figure_name, slo_ms=150):
             va="bottom",
             fontsize=10,
         )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def plot_deadline_miss_bar_multi_slo_figure(results, flow_info, figure_name, slo_ms_list=(10, 20, 50, 150)):
+    """Per-experiment deadline-miss rate of protected flows for several SLOs in
+    one figure. Same layout as the aggregate figure: grouped bars with
+    x = SLO threshold, one bar per scheme.
+    """
+    label_order = [label for _, label, _, _, _ in flow_info]
+    colors = {label: color for _, label, color, _, _ in flow_info}
+
+    per_scheme_delays = {}
+    for dst_port, label, _color, _hatch, flow_monitor_path in flow_info:
+        delays = _extract_delays(flow_monitor_path, dst_port)
+        if delays:
+            per_scheme_delays[label] = np.array(delays)
+
+    labels = [label for label in label_order if label in per_scheme_delays]
+    if not labels:
+        print(f"Skipping {figure_name}: no protected-flow delay samples found")
+        return
+
+    x = np.arange(len(slo_ms_list))
+    n = len(labels)
+    width = 0.8 / n
+
+    fig, ax = plt.subplots(figsize=(max(6, len(slo_ms_list) * 2), 3.5))
+
+    for i, label in enumerate(labels):
+        delays = per_scheme_delays[label]
+        miss = [float((delays > slo).mean() * 100.0) for slo in slo_ms_list]
+        offset = (i - n / 2.0 + 0.5) * width
+        bars = ax.bar(
+            x + offset, miss, width,
+            label=label,
+            color=colors.get(label, "gray"),
+            alpha=0.85,
+        )
+        for bar, val in zip(bars, miss):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                val,
+                f"{val:.1f}",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"{slo} ms" for slo in slo_ms_list])
+    ax.set_xlabel("Delay SLO", fontsize=12)
+    ax.set_ylabel("Deadline-miss rate [%]", fontsize=12)
+    ax.tick_params(axis="both", which="major", labelsize=11)
+    ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
+    ax.legend(fontsize=11)
 
     plt.savefig(
         os.path.join(figures_path, f"{figure_name}.pdf"),

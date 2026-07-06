@@ -96,16 +96,15 @@ def main():
                 f"zoo-jitter-cdf-{congestion_control}-{wl}",
             )
 
-            for slo_ms in (10, 20, 50, 150):
-                paper_plot.plot_deadline_miss_bar_figure(
-                    experiment_path,
-                    [
-                        (port, lbl, col, sty, os.path.join(experiment_path, rel))
-                        for port, lbl, col, sty, rel in _rel_cdf
-                    ],
-                    f"zoo-deadline-miss-{slo_ms}ms-{congestion_control}-{wl}",
-                    slo_ms=slo_ms,
-                )
+            paper_plot.plot_deadline_miss_bar_multi_slo_figure(
+                experiment_path,
+                [
+                    (port, lbl, col, sty, os.path.join(experiment_path, rel))
+                    for port, lbl, col, sty, rel in _rel_cdf
+                ],
+                f"zoo-deadline-miss-{congestion_control}-{wl}",
+                slo_ms_list=(10, 20, 50, 150),
+            )
         except Exception as e:
             print(f"Error processing experiment {experiment}: {e}")
             continue
