@@ -295,6 +295,37 @@ def dag_connected_without_edge(
     return False
 
 
+def has_reroutable_path(
+    dag_edges: set[tuple[int, int]] | None, src: int, dst: int
+) -> bool:
+    """True if the DAG path from src to dst has at least one non-bridge edge,
+    i.e. congestion can actually be placed on this (src, dst) pair without
+    disconnecting dst (see ``_congestion_events_per_destination``).
+    """
+    if dag_edges is None:
+        return False
+    try:
+        path = dag_path(dag_edges, src, dst)
+    except ValueError:
+        return False
+    return any(
+        dag_connected_without_edge(dag_edges, src, dst, path[i], path[i + 1])
+        for i in range(len(path) - 1)
+    )
+
+
+def find_branch_waypoint_index(edges: set[tuple[int, int]], path: list[int]) -> int:
+    """Index of the first node along `path` with out-degree > 1 in `edges`
+    (i.e. the first real routing choice). Returns 0 (no restriction) if the
+    path has no branch node — every link is already "after the waypoint".
+    """
+    for i, node in enumerate(path[:-1]):
+        out_degree = sum(1 for u, _ in edges if u == node)
+        if out_degree > 1:
+            return i
+    return 0
+
+
 def format_rate_mbps(rate_mbps: float) -> str:
     return f"{max(rate_mbps, 0.001):.3f}Mbps"
 
@@ -495,6 +526,7 @@ def generate_protected_flows(
     protected_end_time: float,
     protected_number_of_flow: int,
     rng: random.Random,
+    dags: dict[int, set[tuple[int, int]]] | None = None,
 ) -> list[WorkloadRow]:
     if protected_flow_count <= 0:
         return []
@@ -509,24 +541,42 @@ def generate_protected_flows(
 
     n = len(eligible_nodes)
 
-    def _best_shift_srcs() -> list[int]:
+    def _best_shift_srcs(round_start: int) -> list[int]:
         """Return a source list parallel to eligible_nodes using a circular shift.
 
         A shift by k gives src[i] = eligible_nodes[(i+k) % n], which is a
         derangement (src != dst for every position) as long as 0 < k < n.
-        We pick the shift that maximises the number of non-adjacent (src, dst)
-        pairs (preferred for multi-hop Q-routing flows), breaking ties randomly.
+        We pick the shift that maximises, in priority order: (1) the number of
+        pairs among the ones THIS round will actually emit (positions
+        [round_start, round_start + protected_flow_count)) that have a
+        reroutable DAG path — a congestion event is pointless otherwise —
+        then (2) the number of non-adjacent (src, dst) pairs over the full
+        assignment (preferred for multi-hop Q-routing flows). Ties are broken
+        randomly. Criterion (1) only applies when ``dags`` is given (i.e. the
+        caller actually plans to generate congestion events).
         """
+        used_count = min(n, protected_flow_count - round_start)
         shifts = list(range(1, n))
         rng.shuffle(shifts)  # randomise tie-breaking order
         best_shift = shifts[0]
-        best_score = -1
+        best_score = (-1, -1)
         for shift in shifts:
-            score = sum(
+            cand_srcs = [eligible_nodes[(i + shift) % n] for i in range(n)]
+            non_adjacent = sum(
                 1
                 for i, dst in enumerate(eligible_nodes)
-                if dst not in adjacency.get(eligible_nodes[(i + shift) % n], [])
+                if dst not in adjacency.get(cand_srcs[i], [])
             )
+            reroutable = 0
+            if dags is not None:
+                reroutable = sum(
+                    1
+                    for i in range(used_count)
+                    if has_reroutable_path(
+                        dags.get(eligible_nodes[i]), cand_srcs[i], eligible_nodes[i]
+                    )
+                )
+            score = (reroutable, non_adjacent)
             if score > best_score:
                 best_score = score
                 best_shift = shift
@@ -536,7 +586,7 @@ def generate_protected_flows(
     round_srcs: list[int] = []
     for index in range(protected_flow_count):
         if index % n == 0:
-            round_srcs = _best_shift_srcs()
+            round_srcs = _best_shift_srcs(index)
         dst_id = eligible_nodes[index % n]
         src_id = round_srcs[index % n]
         rows.append(
@@ -570,6 +620,7 @@ def _congestion_events_per_destination(
     packet_size: int,
     port_allocator: PortAllocator,
     rng: random.Random,
+    link_selection: str = "waypoint-random",
 ) -> list[WorkloadRow]:
     """Per-destination congestion that blocks DIFFERENT paths concurrently.
 
@@ -639,7 +690,12 @@ def _congestion_events_per_destination(
             ]
             if not candidates:
                 break  # remaining links are bridges; stop to leave a live route
-            _, u, v = max(candidates, key=lambda c: c[0])
+            if link_selection == "deepest":
+                _, u, v = max(candidates, key=lambda c: c[0])
+            else:  # "waypoint-random"
+                waypoint_idx = find_branch_waypoint_index(residual, path)
+                eligible = [c for c in candidates if c[0] >= waypoint_idx] or candidates
+                _, u, v = rng.choice(eligible)
             blocked.add((u, v))
             rows.append(
                 WorkloadRow(
@@ -674,6 +730,7 @@ def generate_congestion_events(
     port_allocator: PortAllocator,
     rng: random.Random,
     mode: str = "independent",
+    link_selection: str = "waypoint-random",
 ) -> list[WorkloadRow]:
     """Generate point-to-point congestion events tied to protected flows.
 
@@ -686,6 +743,14 @@ def generate_congestion_events(
     mode="per-destination": see ``_congestion_events_per_destination`` — blocks
     ``num_events`` different paths per destination, concurrently, in disjoint
     time slots across destinations.
+
+    link_selection="waypoint-random" (default): pick uniformly among non-bridge
+    links on/after the first DAG branch point (the first node with more than
+    one outgoing edge toward the destination — before that point there is no
+    routing choice to test). link_selection="deepest": always pick the link
+    closest to the destination in "per-destination" mode (legacy/deterministic
+    behavior); in "independent" mode this has no dedicated legacy behavior, so
+    it falls back to the same uniform choice over the whole path as before.
     """
     if mode == "per-destination":
         return _congestion_events_per_destination(
@@ -700,6 +765,7 @@ def generate_congestion_events(
             packet_size=packet_size,
             port_allocator=port_allocator,
             rng=rng,
+            link_selection=link_selection,
         )
 
     import sys
@@ -732,7 +798,15 @@ def generate_congestion_events(
                 file=sys.stderr,
             )
             continue
-        u, v = rng.choice(candidate_edges)
+        if link_selection == "waypoint-random":
+            waypoint_idx = find_branch_waypoint_index(dag_edges, path)
+            eligible_edges = [
+                (u, v) for i, (u, v) in enumerate(path_edges)
+                if (u, v) in candidate_edges and i >= waypoint_idx
+            ] or candidate_edges
+        else:
+            eligible_edges = candidate_edges
+        u, v = rng.choice(eligible_edges)
         start_time = rng.uniform(congestion_start, congestion_end)
         duration = rng.uniform(duration_min, duration_max)
         end_time = min(start_time + duration, congestion_end)
@@ -972,6 +1046,16 @@ def parse_args() -> argparse.Namespace:
             "destinations."
         ),
     )
+    parser.add_argument(
+        "--congestion-link-selection",
+        choices=["deepest", "waypoint-random"],
+        default="waypoint-random",
+        help=(
+            "waypoint-random (default): pick uniformly among non-bridge links "
+            "on/after the first DAG branch point. deepest: always pick the "
+            "link closest to the destination (legacy/deterministic behavior)."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1122,6 +1206,7 @@ def main() -> None:
         protected_end_time=protected_end_time,
         protected_number_of_flow=args.protected_number_of_flow,
         rng=rng,
+        dags=dags if args.num_congestion_events > 0 else None,
     )
 
     congestion_rows: list[WorkloadRow] = []
@@ -1139,6 +1224,7 @@ def main() -> None:
             port_allocator=port_allocator,
             rng=rng,
             mode=args.congestion_mode,
+            link_selection=args.congestion_link_selection,
         )
 
     rows = probing_rows + protected_rows + background_rows + congestion_rows

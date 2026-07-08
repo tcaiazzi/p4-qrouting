@@ -24,6 +24,7 @@ congestion_control="${CONGESTION_CONTROL:-TcpLinuxReno}"
 dump_traffic="${DUMP_TRAFFIC:-0}"
 end_time="${END:-3}"
 controlplane_speed="${CONTROLPLANE_SPEED:-500ms}"
+congestion_link_selection="${CONGESTION_LINK_SELECTION:-waypoint-random}"
 
 # ---------------------------------------------------------------------------
 # Workload generator – global settings
@@ -49,8 +50,8 @@ protected_number_of_flow="${WORKLOAD_PROTECTED_NUMBER_OF_FLOW:-1}"
 # ---------------------------------------------------------------------------
 # Sweep axes
 # ---------------------------------------------------------------------------
-sweep_seeds_csv="${SWEEP_SEEDS:-1234}"
-sweep_protected_flow_counts_csv="${SWEEP_PROTECTED_FLOW_COUNTS:-5,10,20,50}"
+sweep_seeds_csv="${SWEEP_SEEDS:-1234,1312}"
+sweep_protected_flow_counts_csv="${SWEEP_PROTECTED_FLOW_COUNTS:-1,5}"
 sweep_dry_run="${SWEEP_DRY_RUN:-0}"
 
 # Which experiment types to run (1 = enabled, 0 = skip)
@@ -86,7 +87,7 @@ IFS=',' read -r -a sweep_protected_flow_counts <<< "$sweep_protected_flow_counts
 profile_matrix=(
     "burst-1|1Mbps|64,512,1400|1|250Mbps|1400|0.25|0.5|0.1|0.1"
     "burst-2|1Mbps|64,512,1400|2|250Mbps|1400|0.25|0.5|0.1|0.1"
-    # "burst-3|1Mbps|64,512,1400|3|250Mbps|1400|0.25|0.5|0.1|0.1"
+    "burst-3|1Mbps|64,512,1400|3|250Mbps|1400|0.25|0.5|0.1|0.1"
     "burst-4|1Mbps|64,512,1400|4|250Mbps|1400|0.25|0.5|0.1|0.1"
     "burst-5|1Mbps|64,512,1400|5|250Mbps|1400|0.25|0.5|0.1|0.1"
     # Long-event variants (central can react to each -> schemes converge):
@@ -125,14 +126,16 @@ for seed in "${sweep_seeds[@]}"; do
             ce_tag="ce${num_cong_events}"
             cr_tag="cr$(echo "$cong_rate" | sed 's/bps$//')"
             dur_tag="dmin${cong_dur_min}dmax${cong_dur_max}"
+            sel_tag="sel${congestion_link_selection}"
         else
             ce_tag="ceNone"
             cr_tag="crNone"
             dur_tag="durNone"
+            sel_tag="selNone"
         fi
 
         for pfc in "${sweep_protected_flow_counts[@]}"; do
-            workload_base="use_case_${profile_name}_seed${seed}_prot${pfc}_bg${bg_rate_tag}_${ce_tag}_${cr_tag}_${dur_tag}"
+            workload_base="use_case_${profile_name}_seed${seed}_prot${pfc}_bg${bg_rate_tag}_${ce_tag}_${cr_tag}_${dur_tag}_${sel_tag}"
             workload_file="$workloads_dir/${workload_base}.csv"
 
             echo "[$profile_name][seed=$seed][protected=$pfc] workload=$workload_file"
@@ -177,6 +180,7 @@ for seed in "${sweep_seeds[@]}"; do
                     --congestion-start-time  "$cong_start_time"
                     --congestion-end-time    "$cong_end_time"
                     --congestion-mode        per-destination
+                    --congestion-link-selection "$congestion_link_selection"
                 )
             fi
 

@@ -326,7 +326,7 @@ def _extract_avg_ipg_ms(flow_monitor_path, dst_port):
     return float(np.mean(ipg_values_ms))
 
 
-def plot_received_bytes_comparison(results_root, flow_info, figure_name):
+def plot_received_bytes_comparison(results_root, flow_info, figure_name, link_selection_tag=None):
     label_order = [label for _, label, _, _, _ in flow_info]
     rx_bytes_by_label = {label: 0.0 for label in label_order}
     samples_by_label = {label: 0 for label in label_order}
@@ -335,6 +335,8 @@ def plot_received_bytes_comparison(results_root, flow_info, figure_name):
 
     for experiment in sorted(os.listdir(results_root)):
         if "bg10" in experiment:
+            continue
+        if link_selection_tag is not None and link_selection_tag not in experiment:
             continue
         experiment_path = os.path.join(results_root, experiment)
         if not os.path.isdir(experiment_path):
@@ -436,12 +438,14 @@ def plot_received_bytes_comparison(results_root, flow_info, figure_name):
     )
 
 
-def plot_avg_throughput_comparison(results_root, flow_info, figure_name):
+def plot_avg_throughput_comparison(results_root, flow_info, figure_name, link_selection_tag=None):
     label_order = [label for _, label, _, _, _ in flow_info]
     throughput_samples_by_label = {label: [] for label in label_order}
 
     for experiment in sorted(os.listdir(results_root)):
         if "bg10" in experiment:
+            continue
+        if link_selection_tag is not None and link_selection_tag not in experiment:
             continue
         experiment_path = os.path.join(results_root, experiment)
         if not os.path.isdir(experiment_path):
@@ -723,7 +727,7 @@ def plot_deadline_miss_bar_multi_slo_figure(results, flow_info, figure_name, slo
     plt.close(fig)
 
 
-def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name, slo_ms_list=(50, 150)):
+def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name, slo_ms_list=(50, 150), link_selection_tag=None):
     """Aggregate deadline-miss rate of protected flows pooled over all experiments.
 
     For each routing scheme, concatenate per-packet delays across every experiment,
@@ -736,6 +740,8 @@ def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name,
 
     for experiment in sorted(os.listdir(results_root)):
         if "bg10" in experiment or ("ce1" not in experiment and "ce2" not in experiment and "ce3" not in experiment):
+            continue
+        if link_selection_tag is not None and link_selection_tag not in experiment:
             continue
         experiment_path = os.path.join(results_root, experiment)
         if not os.path.isdir(experiment_path):
@@ -968,7 +974,7 @@ def plot_qlr_avg_delay_by_case_figure(
     )
 
 
-def plot_ipg_cdf_figure(results_root, flow_info, figure_name):
+def plot_ipg_cdf_figure(results_root, flow_info, figure_name, link_selection_tag=None):
     """CDF of per-experiment average IPG across all routing schemes in flow_info.
 
     flow_info entries: (dst_port, label, color, linestyle, flow_monitor_relative_path)
@@ -977,6 +983,8 @@ def plot_ipg_cdf_figure(results_root, flow_info, figure_name):
     aggregated = {}
     for experiment in sorted(os.listdir(results_root)):
         if "bg10" in experiment:
+            continue
+        if link_selection_tag is not None and link_selection_tag not in experiment:
             continue
         experiment_path = os.path.join(results_root, experiment)
         if not os.path.isdir(experiment_path):
@@ -1036,6 +1044,7 @@ def plot_delay_cdf_all_experiments(
     xlim=(0, 700),
     ylim=(0.95, 1.001),
     max_experiment_delay_ms=800,
+    link_selection_tag=None,
 ):
     """Plot one delay CDF per label by aggregating samples over all experiments in results_root.
 
@@ -1060,6 +1069,8 @@ def plot_delay_cdf_all_experiments(
 
     for experiment in sorted(os.listdir(results_root)):
         if "bg10" in experiment:
+            continue
+        if link_selection_tag is not None and link_selection_tag not in experiment:
             continue
         experiment_path = os.path.join(results_root, experiment)
         if not os.path.isdir(experiment_path):
@@ -1541,6 +1552,7 @@ def plot_protected_flow_slo_comparison(
     figure_name,
     workload_csv_dir="resources/11_nodes/workloads",
     threshold=0.95,
+    link_selection_tag=None,
 ):
     """Grouped bar chart: fraction of protected flows meeting >= threshold * set_throughput.
 
@@ -1551,6 +1563,8 @@ def plot_protected_flow_slo_comparison(
     data_by_prot: dict = {}  # prot_value -> label -> list[float]
 
     for experiment in sorted(os.listdir(results_root)):
+        if link_selection_tag is not None and link_selection_tag not in experiment:
+            continue
         experiment_path = os.path.join(results_root, experiment)
         # if not os.path.isdir(experiment_path) or "seed8080" not in experiment_path or "heavy-c" not in experiment_path:
         #     print(f"Skipping {experiment_path}: not a directory or missing 'seed1234' in name")
