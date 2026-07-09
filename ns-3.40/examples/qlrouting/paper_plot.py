@@ -362,13 +362,13 @@ def plot_received_bytes_comparison(results_root, flow_info, figure_name, link_se
 
             baseline_delays = _extract_delays(baseline_candidate, baseline_port)
             qlr_delays = _extract_delays(qlr_candidate, qlr_port)
-            if baseline_delays and qlr_delays:
-                if max(qlr_delays) > max(baseline_delays):
-                    print(
-                        f"Skipping experiment {experiment}: QLR max delay {max(qlr_delays):.2f} ms "
-                        f"> Baseline max delay {max(baseline_delays):.2f} ms"
-                    )
-                    continue
+            # if baseline_delays and qlr_delays:
+            #     if max(qlr_delays) > max(baseline_delays):
+            #         print(
+            #             f"Skipping experiment {experiment}: QLR max delay {max(qlr_delays):.2f} ms "
+            #             f"> Baseline max delay {max(baseline_delays):.2f} ms"
+            #         )
+            #         continue
 
         for dst_port, label, _color, _hatch, flow_monitor_path in flow_info:
             candidate_path = (
@@ -1076,10 +1076,6 @@ def plot_delay_cdf_all_experiments(
         if not os.path.isdir(experiment_path):
             continue
 
-        # if "heavy-a-2000" in experiment or "2000" in experiment:
-        #     print(f"Skipping experiment {experiment}: matches filter")
-        #     continue
-
         per_experiment = {}
         skip_experiment = False
         missing_data = False
@@ -1106,9 +1102,9 @@ def plot_delay_cdf_all_experiments(
 
             max_delay = max(all_delays)
             observed_max_delay = max_delay if observed_max_delay is None else max(observed_max_delay, max_delay)
-            if max_experiment_delay_ms is not None and max_delay > max_experiment_delay_ms:
-                skip_experiment = True
-                break
+            # if max_experiment_delay_ms is not None and max_delay > max_experiment_delay_ms:
+            #     skip_experiment = True
+            #     break
 
             per_experiment[label] = {
                 "delays": all_delays,
