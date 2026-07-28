@@ -608,6 +608,60 @@ def generate_protected_flows(
 # Congestion
 # ---------------------------------------------------------------------------
 
+def _greedy_block_ceiling(dag_edges, src, dst, link_selection):
+    """Max number of successive path-blocks the greedy algorithm below could
+    sustain for (src, dst) on this DAG, run to natural exhaustion (no
+    candidates left / no path left) instead of capped at events_per_dest --
+    the TRUE resilience ceiling this system can exploit for this (src, dst)
+    pair, as opposed to how many events a specific under-provisioned
+    workload happened to request.
+
+    NOT the same as min-cut / edge connectivity: the greedy algorithm only
+    ever blocks a NON-bridge edge on the specific path it currently follows,
+    never the (src,dst) pair's true global bottleneck (blocking that would
+    disconnect dst, so it's filtered out by construction) -- so a pair with
+    a single global bottleneck elsewhere can still sustain many successive
+    blocks via local detours, while a pair with a higher min-cut can sustain
+    fewer if the specific path chosen at each step has less local slack.
+    Verified empirically on real Atlanta workloads: min-cut and this ceiling
+    are NOT positively correlated, sometimes inversely so.
+
+    Uses its OWN independent, deterministically-seeded rng (seeded from
+    (src, dst) alone -- str seed, stable across PYTHONHASHSEED, verified),
+    never the caller's -- probing this never perturbs the caller's random
+    draws, so the main workload CSV output stays byte-identical regardless
+    of whether this is computed. Same (src, dst) pair on the same DAG always
+    yields the same ceiling, independent of which workload/call it's probed
+    from.
+    """
+    rng = random.Random(f"ceiling-{src}-{dst}")
+    blocked: set[tuple[int, int]] = set()
+    count = 0
+    while True:
+        residual = dag_edges - blocked
+        try:
+            path = dag_path(residual, src, dst)
+        except ValueError:
+            break
+        candidates = [
+            (i, path[i], path[i + 1])
+            for i in range(len(path) - 1)
+            if (path[i], path[i + 1]) not in blocked
+            and dag_connected_without_edge(residual, src, dst, path[i], path[i + 1])
+        ]
+        if not candidates:
+            break
+        if link_selection == "deepest":
+            _, u, v = max(candidates, key=lambda c: c[0])
+        else:  # "waypoint-random"
+            waypoint_idx = find_branch_waypoint_index(residual, path)
+            eligible = [c for c in candidates if c[0] >= waypoint_idx] or candidates
+            _, u, v = rng.choice(eligible)
+        blocked.add((u, v))
+        count += 1
+    return count
+
+
 def _congestion_events_per_destination(
     protected_rows: list[WorkloadRow],
     dags: dict[int, set[tuple[int, int]]],
@@ -621,7 +675,7 @@ def _congestion_events_per_destination(
     port_allocator: PortAllocator,
     rng: random.Random,
     link_selection: str = "waypoint-random",
-) -> list[WorkloadRow]:
+) -> tuple[list[WorkloadRow], dict[int, dict]]:
     """Per-destination congestion that blocks DIFFERENT paths concurrently.
 
     For each distinct protected destination we allocate a DISJOINT time slot
@@ -647,8 +701,27 @@ def _congestion_events_per_destination(
         dest_to_src.setdefault(r.dst_id, r.src_id)
     destinations = list(dest_to_src.keys())
     num_dests = len(destinations)
+    # Ground truth for paper_plot.py's aggregate figures: this loop already
+    # knows exactly which destination each row is generated for AND which
+    # (src, dst) pair / DAG it used, so record it directly instead of making
+    # callers reverse-engineer it from row timestamps or CSV order (the
+    # latter is lossy once --protected-flow-count > len(destinations):
+    # _best_shift_srcs can re-pick a different src each "round", and the
+    # final CSV sorts protected rows by (src_id, dst_id, dst_port) since they
+    # all share one start_time, losing the generation-order src<->dst
+    # pairing this function actually used).
+    # count: real number of congestion events generated (0 is a valid,
+    #   explicit count, e.g. a destination that got no reroutable path left).
+    # ceiling: max successive blocks _greedy_block_ceiling finds achievable
+    #   for this (src, dst) pair, run to natural exhaustion instead of
+    #   capped at events_per_dest -- see that function's docstring for why
+    #   this (not min-cut) is the right "path capacity" figure to compare
+    #   the real count against.
+    per_dest_info: dict[int, dict] = {
+        dst: {"src": dest_to_src[dst], "ceiling": 0, "count": 0} for dst in destinations
+    }
     if num_dests == 0 or events_per_dest <= 0:
-        return rows
+        return rows, per_dest_info
 
     slot_len = (congestion_end - congestion_start) / num_dests
 
@@ -661,6 +734,8 @@ def _congestion_events_per_destination(
             )
             continue
         src = dest_to_src[dst]
+
+        per_dest_info[dst]["ceiling"] = _greedy_block_ceiling(dag_edges, src, dst, link_selection)
 
         # Disjoint time slot for this destination.
         slot_start = congestion_start + k * slot_len
@@ -735,7 +810,13 @@ def _congestion_events_per_destination(
                     is_congestion=True,
                 )
             )
-    return rows
+            per_dest_info[dst]["count"] += 1
+        # ceiling was probed with its OWN independent rng (see
+        # _greedy_block_ceiling), which can occasionally pick different
+        # edges than the real run above and so land on a lower count; clamp
+        # so "free = ceiling - count" downstream is never negative.
+        per_dest_info[dst]["ceiling"] = max(per_dest_info[dst]["ceiling"], per_dest_info[dst]["count"])
+    return rows, per_dest_info
 
 
 def generate_congestion_events(
@@ -752,7 +833,7 @@ def generate_congestion_events(
     rng: random.Random,
     mode: str = "independent",
     link_selection: str = "waypoint-random",
-) -> list[WorkloadRow]:
+) -> tuple[list[WorkloadRow], dict[int, int] | None]:
     """Generate point-to-point congestion events tied to protected flows.
 
     mode="independent" (default): for each event pick a protected flow at
@@ -772,6 +853,12 @@ def generate_congestion_events(
     closest to the destination in "per-destination" mode (legacy/deterministic
     behavior); in "independent" mode this has no dedicated legacy behavior, so
     it falls back to the same uniform choice over the whole path as before.
+
+    Returns (rows, per_dest_info): per_dest_info maps each protected
+    destination to {"src", "ceiling", "count"} in "per-destination" mode
+    (see _congestion_events_per_destination), or None in "independent" mode
+    (events there aren't tied to a single destination's slot, so none of
+    that is meaningful).
     """
     if mode == "per-destination":
         return _congestion_events_per_destination(
@@ -850,7 +937,7 @@ def generate_congestion_events(
                 is_congestion=True,
             )
         )
-    return rows
+    return rows, None
 
 
 # ---------------------------------------------------------------------------
@@ -894,6 +981,22 @@ def parse_args() -> argparse.Namespace:
     )
     # Topology
     parser.add_argument("--output", required=True, help="Path to output CSV file")
+    parser.add_argument(
+        "--ce-counts-dir",
+        default=None,
+        help=(
+            "If given (mode='per-destination' congestion only), write a "
+            "'<workload-name>.ce_counts.csv' sidecar in this directory, one "
+            "line per protected destination: 'dst_id,src_id,count,ceiling' "
+            "-- count is the real number of congestion events generated for "
+            "that destination, ceiling is the max successive blocks the "
+            "same greedy algorithm could sustain for that (src,dst) pair if "
+            "run to exhaustion (see _greedy_block_ceiling). Ground truth "
+            "for aggregate figures that group by real congestion count or "
+            "by remaining path capacity (ceiling - count), instead of "
+            "reverse-engineering either from row timestamps."
+        ),
+    )
     parser.add_argument(
         "--topology-file",
         default=None,
@@ -1231,8 +1334,9 @@ def main() -> None:
     )
 
     congestion_rows: list[WorkloadRow] = []
+    per_dest_info = None
     if args.num_congestion_events > 0:
-        congestion_rows = generate_congestion_events(
+        congestion_rows, per_dest_info = generate_congestion_events(
             protected_rows=protected_rows,
             dags=dags,
             num_events=args.num_congestion_events,
@@ -1273,6 +1377,16 @@ def main() -> None:
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("\n".join(csv_lines) + "\n", encoding="utf-8")
+
+        if per_dest_info is not None and args.ce_counts_dir:
+            ce_counts_dir = Path(args.ce_counts_dir)
+            ce_counts_dir.mkdir(parents=True, exist_ok=True)
+            sidecar_path = ce_counts_dir / f"{output_path.stem}.ce_counts.csv"
+            sidecar_lines = [
+                f"{dst},{info['src']},{info['count']},{info['ceiling']}"
+                for dst, info in sorted(per_dest_info.items())
+            ]
+            sidecar_path.write_text("\n".join(sidecar_lines) + "\n", encoding="utf-8")
 
     udp_count = sum(1 for row in rows if row.protocol == UDP_PROTOCOL)
     tcp_count = sum(1 for row in rows if row.protocol == TCP_PROTOCOL)

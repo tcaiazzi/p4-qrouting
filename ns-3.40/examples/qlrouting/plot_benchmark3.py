@@ -25,7 +25,7 @@ def main():
                 congestion_points=congestions,
                 central=True,
                 local=True,
-                labels=["Baseline", "QLR", "Central", "QLR Local"],
+                labels=["Baseline", "QLR", "Control Plane", "HP-QLR"],
             )
 
             paper_plot.plot_delay_cdf_figure(

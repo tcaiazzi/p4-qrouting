@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from itertools import islice
 import xml.etree.ElementTree as ET
@@ -326,7 +327,7 @@ def _extract_avg_ipg_ms(flow_monitor_path, dst_port):
     return float(np.mean(ipg_values_ms))
 
 
-def plot_received_bytes_comparison(results_root, flow_info, figure_name, link_selection_tag=None):
+def plot_received_bytes_comparison(results_root, flow_info, figure_name, link_selection_tag=None, exclude_seeds=None):
     label_order = [label for _, label, _, _, _ in flow_info]
     rx_bytes_by_label = {label: 0.0 for label in label_order}
     samples_by_label = {label: 0 for label in label_order}
@@ -335,6 +336,8 @@ def plot_received_bytes_comparison(results_root, flow_info, figure_name, link_se
 
     for experiment in sorted(os.listdir(results_root)):
         if "bg10" in experiment:
+            continue
+        if _experiment_has_excluded_seed(experiment, exclude_seeds):
             continue
         if link_selection_tag is not None and link_selection_tag not in experiment:
             continue
@@ -438,12 +441,14 @@ def plot_received_bytes_comparison(results_root, flow_info, figure_name, link_se
     )
 
 
-def plot_avg_throughput_comparison(results_root, flow_info, figure_name, link_selection_tag=None):
+def plot_avg_throughput_comparison(results_root, flow_info, figure_name, link_selection_tag=None, exclude_seeds=None):
     label_order = [label for _, label, _, _, _ in flow_info]
     throughput_samples_by_label = {label: [] for label in label_order}
 
     for experiment in sorted(os.listdir(results_root)):
         if "bg10" in experiment:
+            continue
+        if _experiment_has_excluded_seed(experiment, exclude_seeds):
             continue
         if link_selection_tag is not None and link_selection_tag not in experiment:
             continue
@@ -727,21 +732,346 @@ def plot_deadline_miss_bar_multi_slo_figure(results, flow_info, figure_name, slo
     plt.close(fig)
 
 
-def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name, slo_ms_list=(50, 150), link_selection_tag=None):
+def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name, slo_ms_list=(50, 150), link_selection_tag=None, ce_filter=None, pfc_filter=None, workload_csv_dir=None, exclude_seeds=None):
     """Aggregate deadline-miss rate of protected flows pooled over all experiments.
 
-    For each routing scheme, concatenate per-packet delays across every experiment,
-    then compute the overall fraction exceeding each SLO. Grouped bars:
-    x = SLO threshold, one bar per scheme.
+    For each routing scheme, deadline-miss rate is computed SEPARATELY for
+    each contributing run (one experiment, or one destination within an
+    experiment when ce_filter splits per-destination -- see below), then
+    the bar height is the MEAN across runs and the error bar is the
+    std across runs -- run-to-run variance, not just packet-level noise
+    within one pooled sample. Grouped bars: x = SLO threshold, one bar per
+    scheme.
+
+    ce_filter: if given (an int), only pool experiments with this many
+    congestion events. pfc_filter: if given (an int), only pool experiments
+    tagged "_prot{pfc_filter}_" (one specific protected-flow count). Combines
+    with ce_filter when both are given.
+
+    workload_csv_dir: if given, ce_filter is matched against the REAL number
+    of congestion events actually generated for EACH protected destination
+    in the experiment's workload CSV (see _per_destination_congestion_counts),
+    not the "_ce<N>_" folder tag -- the generator can produce fewer events
+    than requested when the topology lacks enough redundant paths, AND
+    different destinations within the same multi-destination experiment can
+    each get a different real count -- including exactly 0, which is a valid,
+    distinct bucket from "some other destination got N". When ce_filter is
+    given, only the destinations that actually got exactly that many events
+    contribute -- and only their own delay samples, not the whole
+    experiment's. If the per-destination attribution is inconclusive for an
+    experiment (its reconstructed congestion time window doesn't match the
+    observed data -- see _per_destination_congestion_counts), that
+    experiment falls back to the old whole-experiment average (see
+    _count_congestion_events_in_workload). Without workload_csv_dir, falls
+    back to the folder-tag heuristic (legacy behavior).
     """
     label_order = [label for _, label, _, _, _ in flow_info]
-    pooled = {label: [] for label in label_order}
+    # One entry per contributing RUN (an experiment, or a single destination
+    # within an experiment when ce_filter splits per-destination) -- kept
+    # separate, not pooled into one flat list, so run-to-run variance can be
+    # computed at plot time instead of only the pooled packet-level rate.
+    per_run_delays = {label: [] for label in label_order}
     colors = {label: color for _, label, color, _, _ in flow_info}
 
     for experiment in sorted(os.listdir(results_root)):
-        if "bg10" in experiment or ("ce1" not in experiment and "ce2" not in experiment and "ce3" not in experiment):
+        if "bg10" in experiment:
+            continue
+        if _experiment_has_excluded_seed(experiment, exclude_seeds):
+            continue
+        if pfc_filter is not None and f"_prot{pfc_filter}_" not in experiment:
             continue
         if link_selection_tag is not None and link_selection_tag not in experiment:
+            continue
+        experiment_path = os.path.join(results_root, experiment)
+        if not os.path.isdir(experiment_path):
+            continue
+
+        workload_csv = (
+            _experiment_workload_csv_path(experiment, workload_csv_dir)
+            if workload_csv_dir is not None
+            else None
+        )
+
+        if ce_filter is not None and workload_csv is not None:
+            per_dest_counts = _per_destination_congestion_counts(workload_csv)
+            if per_dest_counts is not None:
+                matching_dests = {d for d, c in per_dest_counts.items() if c == ce_filter}
+                if matching_dests:
+                    for dst_port, label, _color, _hatch, flow_monitor_path in flow_info:
+                        candidate = (
+                            flow_monitor_path
+                            if os.path.isabs(flow_monitor_path)
+                            else os.path.join(experiment_path, flow_monitor_path)
+                        )
+                        delays_by_dest = _extract_delays_by_destination(candidate, dst_port)
+                        for dst_id in matching_dests:
+                            if delays_by_dest.get(dst_id):
+                                per_run_delays[label].append(delays_by_dest[dst_id])
+                continue
+
+        real_ce = _count_congestion_events_in_workload(workload_csv) if workload_csv is not None else None
+        if ce_filter is not None:
+            if workload_csv is not None:
+                if real_ce != ce_filter:
+                    continue
+            elif f"_ce{ce_filter}_" not in experiment:
+                continue
+        elif workload_csv is not None:
+            if not real_ce:
+                continue
+        elif not re.search(r"_ce\d+_", experiment):
+            continue
+
+        for dst_port, label, _color, _hatch, flow_monitor_path in flow_info:
+            candidate = (
+                flow_monitor_path
+                if os.path.isabs(flow_monitor_path)
+                else os.path.join(experiment_path, flow_monitor_path)
+            )
+            delays = _extract_delays(candidate, dst_port)
+            if delays:
+                per_run_delays[label].append(delays)
+
+    labels = [label for label in label_order if per_run_delays[label]]
+    if not labels:
+        print("Skipping deadline-miss-aggregate: no protected-flow delay samples found")
+        return
+
+    x = np.arange(len(slo_ms_list))
+    n = len(labels)
+    width = 0.8 / n
+
+    fig, ax = plt.subplots(figsize=(max(6, len(slo_ms_list) * 2), 3.5))
+
+    for i, label in enumerate(labels):
+        # Per-run miss rate at each SLO -- shape (n_runs, n_slo).
+        per_run_miss = np.array([
+            [float((np.array(run_delays) > slo).mean() * 100.0) for slo in slo_ms_list]
+            for run_delays in per_run_delays[label]
+        ])
+        mean_miss = per_run_miss.mean(axis=0)
+        std_miss = per_run_miss.std(axis=0)
+        n_packets = sum(len(run_delays) for run_delays in per_run_delays[label])
+        offset = (i - n / 2.0 + 0.5) * width
+        bars = ax.bar(
+            x + offset, mean_miss, width,
+            yerr=std_miss, capsize=3,
+            label=label,
+            color=colors.get(label, "gray"),
+            alpha=0.85,
+        )
+        for bar, val, std in zip(bars, mean_miss, std_miss):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                val + std,
+                f"{val:.1f}",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+        print(
+            "  "
+            + label
+            + ": "
+            + ", ".join(
+                f"{slo}ms={m:.2f}%±{s:.2f}" for slo, m, s in zip(slo_ms_list, mean_miss, std_miss)
+            )
+            + f"  (n_runs={len(per_run_delays[label])}, n_packets={n_packets})"
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"{slo} ms" for slo in slo_ms_list])
+    ax.set_xlabel("Delay SLO", fontsize=12)
+    ax.set_ylabel("Deadline-miss rate [%]", fontsize=12)
+    ax.tick_params(axis="both", which="major", labelsize=11)
+    ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.18),
+        ncol=n,
+        fontsize=11,
+    )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def plot_deadline_miss_bar_by_ce_subplots_figure(results_root, flow_info, figure_name, ce_values, slo_ms_list=(10, 20, 50, 150), link_selection_tag=None, pfc_filter=None, workload_csv_dir=None, exclude_seeds=None):
+    """One subplot per ce value, side by side in a single figure/file, each
+    subplot identical in style to plot_deadline_miss_bar_all_experiments
+    (x = SLO threshold, one bar per scheme) -- with a single legend shared
+    across all subplots instead of one per figure.
+
+    workload_csv_dir: if given, each protected DESTINATION within an
+    experiment is bucketed by the REAL number of congestion events actually
+    generated for it (see _per_destination_congestion_counts), instead of
+    the whole experiment being bucketed by the "_ce<N>_" folder tag -- two
+    destinations in the same multi-destination experiment can land in
+    different subplots (including a destination with 0 real events, which
+    is a valid, distinct bucket). Falls back to the old whole-experiment
+    average (_count_congestion_events_in_workload) when the per-destination
+    attribution is inconclusive (its reconstructed congestion time window
+    doesn't match the observed data -- see _per_destination_congestion_counts).
+    """
+    label_order = [label for _, label, _, _, _ in flow_info]
+    colors = {label: color for _, label, color, _, _ in flow_info}
+    pooled = {ce: {label: [] for label in label_order} for ce in ce_values}
+
+    for experiment in sorted(os.listdir(results_root)):
+        if "bg10" in experiment:
+            continue
+        if _experiment_has_excluded_seed(experiment, exclude_seeds):
+            continue
+        if pfc_filter is not None and f"_prot{pfc_filter}_" not in experiment:
+            continue
+        if link_selection_tag is not None and link_selection_tag not in experiment:
+            continue
+        experiment_path = os.path.join(results_root, experiment)
+        if not os.path.isdir(experiment_path):
+            continue
+
+        if workload_csv_dir is not None:
+            workload_csv = _experiment_workload_csv_path(experiment, workload_csv_dir)
+            per_dest_counts = _per_destination_congestion_counts(workload_csv)
+            if per_dest_counts is not None:
+                matching = {d: c for d, c in per_dest_counts.items() if c in pooled}
+                if matching:
+                    for dst_port, label, _color, _hatch, flow_monitor_path in flow_info:
+                        candidate = (
+                            flow_monitor_path
+                            if os.path.isabs(flow_monitor_path)
+                            else os.path.join(experiment_path, flow_monitor_path)
+                        )
+                        delays_by_dest = _extract_delays_by_destination(candidate, dst_port)
+                        for dst_id, ce_value in matching.items():
+                            if delays_by_dest.get(dst_id):
+                                pooled[ce_value][label].extend(delays_by_dest[dst_id])
+                continue
+            ce_value = _count_congestion_events_in_workload(workload_csv)
+        else:
+            m = re.search(r"_ce(\d+)_", experiment)
+            ce_value = int(m.group(1)) if m else None
+
+        if ce_value not in pooled:
+            continue
+
+        for dst_port, label, _color, _hatch, flow_monitor_path in flow_info:
+            candidate = (
+                flow_monitor_path
+                if os.path.isabs(flow_monitor_path)
+                else os.path.join(experiment_path, flow_monitor_path)
+            )
+            delays = _extract_delays(candidate, dst_port)
+            if delays:
+                pooled[ce_value][label].extend(delays)
+
+    labels = [label for label in label_order if any(pooled[ce][label] for ce in ce_values)]
+    if not labels:
+        print(f"Skipping {figure_name}: no protected-flow delay samples found")
+        return
+
+    x = np.arange(len(slo_ms_list))
+    n = len(labels)
+    width = 0.8 / n
+    n_ce = len(ce_values)
+
+    fig, axes = plt.subplots(
+        1, n_ce,
+        figsize=(max(6, len(slo_ms_list) * 2) * n_ce * 0.55, 3.5),
+        sharey=True,
+    )
+    if n_ce == 1:
+        axes = [axes]
+
+    for ax, ce in zip(axes, ce_values):
+        for i, label in enumerate(labels):
+            delays_list = pooled[ce][label]
+            offset = (i - n / 2.0 + 0.5) * width
+            if not delays_list:
+                continue
+            delays = np.array(delays_list)
+            miss = [float((delays > slo).mean() * 100.0) for slo in slo_ms_list]
+            bars = ax.bar(
+                x + offset, miss, width,
+                label=label,
+                color=colors.get(label, "gray"),
+                alpha=0.85,
+            )
+            for bar, val in zip(bars, miss):
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2.0,
+                    val,
+                    f"{val:.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=7,
+                )
+            print(
+                f"  CE={ce} {label}: "
+                + ", ".join(f"{slo}ms={m:.2f}%" for slo, m in zip(slo_ms_list, miss))
+                + f"  (n_packets={len(delays)})"
+            )
+
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{slo} ms" for slo in slo_ms_list])
+        ax.set_xlabel("Delay SLO", fontsize=11)
+        ax.set_title(f"CE={ce}", fontsize=12)
+        ax.tick_params(axis="both", which="major", labelsize=10)
+        ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
+
+    axes[0].set_ylabel("Deadline-miss rate [%]", fontsize=12)
+
+    handles, legend_labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles, legend_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.08),
+        ncol=n,
+        fontsize=11,
+    )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def plot_deadline_miss_bar_by_pfc_subplots_figure(results_root, flow_info, figure_name, pfc_values, slo_ms_list=(10, 20, 50, 150), link_selection_tag=None, exclude_seeds=None):
+    """One subplot per protected-flow-count value, side by side in a single
+    figure/file, each subplot identical in style to
+    plot_deadline_miss_bar_all_experiments (x = SLO threshold, one bar per
+    scheme) -- with a single legend shared across all subplots, mirroring
+    plot_deadline_miss_bar_by_ce_subplots_figure but bucketed by protected-
+    flow-count instead of congestion events.
+
+    Unlike CE, protected-flow-count is a single --protected-flow-count CLI
+    value for the WHOLE workload (every protected flow in an experiment
+    shares it), not a per-destination quantity -- so there's no
+    destination-identity confound to control for here, and no sidecar is
+    needed: the "_prot<N>_" folder tag IS the real value, bucketing is at
+    the whole-experiment level (like plot_deadline_miss_bar_all_experiments'
+    pfc_filter), not per-destination.
+    """
+    label_order = [label for _, label, _, _, _ in flow_info]
+    colors = {label: color for _, label, color, _, _ in flow_info}
+    pooled = {pfc: {label: [] for label in label_order} for pfc in pfc_values}
+
+    for experiment in sorted(os.listdir(results_root)):
+        if "bg10" in experiment:
+            continue
+        if _experiment_has_excluded_seed(experiment, exclude_seeds):
+            continue
+        if link_selection_tag is not None and link_selection_tag not in experiment:
+            continue
+        m = re.search(r"_prot(\d+)_", experiment)
+        pfc_value = int(m.group(1)) if m else None
+        if pfc_value not in pooled:
             continue
         experiment_path = os.path.join(results_root, experiment)
         if not os.path.isdir(experiment_path):
@@ -755,53 +1085,203 @@ def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name,
             )
             delays = _extract_delays(candidate, dst_port)
             if delays:
-                pooled[label].extend(delays)
+                pooled[pfc_value][label].extend(delays)
 
-    labels = [label for label in label_order if pooled[label]]
+    labels = [label for label in label_order if any(pooled[pfc][label] for pfc in pfc_values)]
     if not labels:
-        print("Skipping deadline-miss-aggregate: no protected-flow delay samples found")
+        print(f"Skipping {figure_name}: no protected-flow delay samples found")
         return
 
     x = np.arange(len(slo_ms_list))
     n = len(labels)
     width = 0.8 / n
+    n_pfc = len(pfc_values)
 
-    fig, ax = plt.subplots(figsize=(max(6, len(slo_ms_list) * 2), 3.5))
+    fig, axes = plt.subplots(
+        1, n_pfc,
+        figsize=(max(6, len(slo_ms_list) * 2) * n_pfc * 0.55, 3.5),
+        sharey=True,
+    )
+    if n_pfc == 1:
+        axes = [axes]
 
-    for i, label in enumerate(labels):
-        delays = np.array(pooled[label])
-        miss = [float((delays > slo).mean() * 100.0) for slo in slo_ms_list]
-        offset = (i - n / 2.0 + 0.5) * width
-        bars = ax.bar(
-            x + offset, miss, width,
-            label=label,
-            color=colors.get(label, "gray"),
-            alpha=0.85,
-        )
-        for bar, val in zip(bars, miss):
-            ax.text(
-                bar.get_x() + bar.get_width() / 2.0,
-                val,
-                f"{val:.1f}",
-                ha="center",
-                va="bottom",
-                fontsize=8,
+    for ax, pfc in zip(axes, pfc_values):
+        for i, label in enumerate(labels):
+            delays_list = pooled[pfc][label]
+            offset = (i - n / 2.0 + 0.5) * width
+            if not delays_list:
+                continue
+            delays = np.array(delays_list)
+            miss = [float((delays > slo).mean() * 100.0) for slo in slo_ms_list]
+            bars = ax.bar(
+                x + offset, miss, width,
+                label=label,
+                color=colors.get(label, "gray"),
+                alpha=0.85,
             )
-        print(
-            "  "
-            + label
-            + ": "
-            + ", ".join(f"{slo}ms={m:.2f}%" for slo, m in zip(slo_ms_list, miss))
-            + f"  (n_packets={len(delays)})"
-        )
+            for bar, val in zip(bars, miss):
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2.0,
+                    val,
+                    f"{val:.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=7,
+                )
+            print(
+                f"  PFC={pfc} {label}: "
+                + ", ".join(f"{slo}ms={m:.2f}%" for slo, m in zip(slo_ms_list, miss))
+                + f"  (n_packets={len(delays)})"
+            )
 
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"{slo} ms" for slo in slo_ms_list])
-    ax.set_xlabel("Delay SLO", fontsize=12)
-    ax.set_ylabel("Deadline-miss rate [%]", fontsize=12)
-    ax.tick_params(axis="both", which="major", labelsize=11)
-    ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
-    ax.legend(fontsize=11)
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{slo} ms" for slo in slo_ms_list])
+        ax.set_xlabel("Delay SLO", fontsize=11)
+        ax.set_title(f"Protected flows={pfc}", fontsize=12)
+        ax.tick_params(axis="both", which="major", labelsize=10)
+        ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
+
+    axes[0].set_ylabel("Deadline-miss rate [%]", fontsize=12)
+
+    handles, legend_labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles, legend_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.08),
+        ncol=n,
+        fontsize=11,
+    )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def plot_deadline_miss_bar_by_free_occupied_subplots_figure(results_root, flow_info, figure_name, pairs, slo_ms_list=(10, 20, 50, 150), link_selection_tag=None, pfc_filter=None, workload_csv_dir=None, exclude_seeds=None):
+    """One subplot per (occupied, free) path-capacity pair, side by side in
+    a single figure/file, each subplot identical in style to
+    plot_deadline_miss_bar_all_experiments (x = SLO threshold, one bar per
+    scheme) -- with a single legend shared across all subplots.
+
+    Buckets each protected DESTINATION within an experiment by its real
+    (occupied, free) pair (see _per_destination_free_occupied): occupied is
+    the real number of congestion events generated for it, free is the
+    remaining successive-block capacity its (src, dst) pair's DAG could
+    still sustain. Unlike the CE-bucketed figures, there is no
+    whole-experiment fallback -- a workload without the ce_counts sidecar
+    simply doesn't contribute (this metric only exists there).
+
+    pairs: list of (occupied, free) tuples to create subplots for, in the
+    order given (see plot_zoo.py's discovery loop for how to collect these
+    across results_root).
+
+    workload_csv_dir is required (not optional) -- there's nothing to bucket
+    on otherwise.
+    """
+    label_order = [label for _, label, _, _, _ in flow_info]
+    colors = {label: color for _, label, color, _, _ in flow_info}
+    pooled = {pair: {label: [] for label in label_order} for pair in pairs}
+
+    for experiment in sorted(os.listdir(results_root)):
+        if "bg10" in experiment:
+            continue
+        if _experiment_has_excluded_seed(experiment, exclude_seeds):
+            continue
+        if pfc_filter is not None and f"_prot{pfc_filter}_" not in experiment:
+            continue
+        if link_selection_tag is not None and link_selection_tag not in experiment:
+            continue
+        experiment_path = os.path.join(results_root, experiment)
+        if not os.path.isdir(experiment_path):
+            continue
+
+        workload_csv = _experiment_workload_csv_path(experiment, workload_csv_dir)
+        per_dest_pairs = _per_destination_free_occupied(workload_csv)
+        if per_dest_pairs is None:
+            continue
+        matching = {d: p for d, p in per_dest_pairs.items() if p in pooled}
+        if not matching:
+            continue
+
+        for dst_port, label, _color, _hatch, flow_monitor_path in flow_info:
+            candidate = (
+                flow_monitor_path
+                if os.path.isabs(flow_monitor_path)
+                else os.path.join(experiment_path, flow_monitor_path)
+            )
+            delays_by_dest = _extract_delays_by_destination(candidate, dst_port)
+            for dst_id, pair in matching.items():
+                if delays_by_dest.get(dst_id):
+                    pooled[pair][label].extend(delays_by_dest[dst_id])
+
+    labels = [label for label in label_order if any(pooled[pair][label] for pair in pairs)]
+    if not labels:
+        print(f"Skipping {figure_name}: no protected-flow delay samples found")
+        return
+
+    x = np.arange(len(slo_ms_list))
+    n = len(labels)
+    width = 0.8 / n
+    n_pairs = len(pairs)
+
+    fig, axes = plt.subplots(
+        1, n_pairs,
+        figsize=(max(6, len(slo_ms_list) * 2) * n_pairs * 0.55, 3.5),
+        sharey=True,
+    )
+    if n_pairs == 1:
+        axes = [axes]
+
+    for ax, pair in zip(axes, pairs):
+        occupied, free = pair
+        for i, label in enumerate(labels):
+            delays_list = pooled[pair][label]
+            offset = (i - n / 2.0 + 0.5) * width
+            if not delays_list:
+                continue
+            delays = np.array(delays_list)
+            miss = [float((delays > slo).mean() * 100.0) for slo in slo_ms_list]
+            bars = ax.bar(
+                x + offset, miss, width,
+                label=label,
+                color=colors.get(label, "gray"),
+                alpha=0.85,
+            )
+            for bar, val in zip(bars, miss):
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2.0,
+                    val,
+                    f"{val:.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=7,
+                )
+            print(
+                f"  occupied={occupied} free={free} {label}: "
+                + ", ".join(f"{slo}ms={m:.2f}%" for slo, m in zip(slo_ms_list, miss))
+                + f"  (n_packets={len(delays)})"
+            )
+
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{slo} ms" for slo in slo_ms_list])
+        ax.set_xlabel("Delay SLO", fontsize=11)
+        ax.set_title(f"occupied={occupied}, free={free}", fontsize=12)
+        ax.tick_params(axis="both", which="major", labelsize=10)
+        ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
+
+    axes[0].set_ylabel("Deadline-miss rate [%]", fontsize=12)
+
+    handles, legend_labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles, legend_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.08),
+        ncol=n,
+        fontsize=11,
+    )
 
     plt.savefig(
         os.path.join(figures_path, f"{figure_name}.pdf"),
@@ -974,7 +1454,7 @@ def plot_qlr_avg_delay_by_case_figure(
     )
 
 
-def plot_ipg_cdf_figure(results_root, flow_info, figure_name, link_selection_tag=None):
+def plot_ipg_cdf_figure(results_root, flow_info, figure_name, link_selection_tag=None, exclude_seeds=None):
     """CDF of per-experiment average IPG across all routing schemes in flow_info.
 
     flow_info entries: (dst_port, label, color, linestyle, flow_monitor_relative_path)
@@ -983,6 +1463,8 @@ def plot_ipg_cdf_figure(results_root, flow_info, figure_name, link_selection_tag
     aggregated = {}
     for experiment in sorted(os.listdir(results_root)):
         if "bg10" in experiment:
+            continue
+        if _experiment_has_excluded_seed(experiment, exclude_seeds):
             continue
         if link_selection_tag is not None and link_selection_tag not in experiment:
             continue
@@ -1045,6 +1527,7 @@ def plot_delay_cdf_all_experiments(
     ylim=(0.95, 1.001),
     max_experiment_delay_ms=800,
     link_selection_tag=None,
+    exclude_seeds=None,
 ):
     """Plot one delay CDF per label by aggregating samples over all experiments in results_root.
 
@@ -1069,6 +1552,8 @@ def plot_delay_cdf_all_experiments(
 
     for experiment in sorted(os.listdir(results_root)):
         if "bg10" in experiment:
+            continue
+        if _experiment_has_excluded_seed(experiment, exclude_seeds):
             continue
         if link_selection_tag is not None and link_selection_tag not in experiment:
             continue
@@ -1403,6 +1888,189 @@ def _parse_workload_protected_rate_mbps(workload_csv_path):
     return None
 
 
+def _experiment_has_excluded_seed(experiment, exclude_seeds):
+    """True if `experiment`'s "_seed<N>_" tag matches one of exclude_seeds.
+
+    Use to drop known-bad runs (e.g. a seed whose qlr/local_qlr/central
+    flow_monitor.xml turned out to be byte-identical copies of each other --
+    a broken run, not a real result) from every aggregate/pooled figure.
+    """
+    if not exclude_seeds:
+        return False
+    return any(f"_seed{s}_" in experiment for s in exclude_seeds)
+
+
+def _experiment_workload_csv_path(experiment, workload_csv_dir):
+    """experiment = "{topo_prefix}_{congestion_control}_{workload_base}" ->
+    path to the workload CSV that generated it (same naming convention as
+    plot_protected_flow_slo_comparison).
+    """
+    parts = experiment.split("_")
+    workload_name = "_".join(parts[2:])
+    return os.path.join(workload_csv_dir, f"{workload_name}.csv")
+
+
+def _count_congestion_events_in_workload(workload_csv_path):
+    """Real average number of congestion events PER PROTECTED DESTINATION
+    actually generated in this workload.
+
+    --num-congestion-events (events_per_dest in generate_workloads_simple.py)
+    is a per-destination budget: _congestion_events_per_destination gives
+    EACH distinct protected destination its own disjoint time slot with up
+    to that many events. With protected-flow-count > 1 (up to NODES_NUM=5
+    distinct destinations), the workload's raw congestion-row count is a SUM
+    across destinations, not the per-destination value the "_ce<N>_" tag
+    names -- dividing by the number of distinct protected destinations
+    recovers it (also corrects for bridge/path-diversity shortfalls, same
+    as before: a destination can get fewer events than requested, never
+    more).
+    """
+    congestion_rows = 0
+    destinations = set()
+    try:
+        with open(workload_csv_path, "r") as f:
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) < 6:
+                    continue
+                try:
+                    proto = int(parts[4])
+                    port = int(parts[5])
+                except (ValueError, IndexError):
+                    continue
+                if proto == 17 and port not in (22222, 33333):
+                    congestion_rows += 1
+                elif proto == 6 and port == 22222:
+                    try:
+                        destinations.add(int(parts[1]))
+                    except (ValueError, IndexError):
+                        pass
+    except OSError:
+        pass
+    if not destinations:
+        return congestion_rows
+    return round(congestion_rows / len(destinations))
+
+
+def _read_ce_counts_sidecar(workload_csv_path):
+    """Parse the generator's per-destination sidecar for this workload, if
+    present: resources/<tag>/workloads/<name>.csv ->
+    resources/<tag>/ce_counts/<name>.ce_counts.csv, one line per protected
+    destination, "dst_id,src_id,count,ceiling" (written by
+    generate_workloads_simple_ce_counts.py's _congestion_events_per_destination
+    / main() -- the offline-instrumented copy of generate_workloads_simple.py,
+    kept separate so the live generator used by in-progress experiments is
+    never touched). Kept out of the workloads dir itself so nothing that
+    scans/copies it picks up a different file format. Assumes
+    workload_csv_path always lives in a directory literally named
+    "workloads" (true for every caller in this file -- see workload_csv_dir
+    = f"resources/{resources_tag}/workloads" in plot_zoo.py).
+
+    Returns {dst_id: (src_id, count, ceiling)}, or None if the sidecar
+    doesn't exist (workload generated before this existed, or without
+    --ce-counts-dir).
+    """
+    workloads_dir = os.path.dirname(workload_csv_path)
+    resources_dir = os.path.dirname(workloads_dir)
+    stem = os.path.splitext(os.path.basename(workload_csv_path))[0]
+    sidecar_path = os.path.join(resources_dir, "ce_counts", f"{stem}.ce_counts.csv")
+
+    rows = {}
+    try:
+        with open(sidecar_path, "r") as f:
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) != 4:
+                    continue
+                try:
+                    dst, src, count, ceiling = (int(p) for p in parts)
+                except ValueError:
+                    continue
+                rows[dst] = (src, count, ceiling)
+    except OSError:
+        return None
+    return rows
+
+
+def _per_destination_congestion_counts(workload_csv_path):
+    """Real number of congestion events for EACH protected destination --
+    see _read_ce_counts_sidecar for the sidecar this reads.
+
+    Returns None if the sidecar doesn't exist (workload generated before
+    this existed, or without --ce-counts-dir) -- callers fall back to
+    whole-experiment handling (_count_congestion_events_in_workload).
+    """
+    rows = _read_ce_counts_sidecar(workload_csv_path)
+    if rows is None:
+        return None
+    return {dst: count for dst, (_src, count, _ceiling) in rows.items()}
+
+
+def _per_destination_free_occupied(workload_csv_path):
+    """(occupied, free) path-capacity pair for EACH protected destination in
+    this workload -- occupied = the real number of congestion events
+    generated for that destination (see _per_destination_congestion_counts);
+    free = ceiling - occupied, the remaining successive-block capacity the
+    same greedy algorithm could still exploit for that (src, dst) pair (see
+    generate_workloads_simple_ce_counts.py's _greedy_block_ceiling --
+    deliberately NOT min-cut/edge-connectivity, which doesn't correlate with
+    what the congestion generator or the routing schemes can actually
+    exploit -- verified inversely correlated on real data).
+
+    Grouping by this pair instead of by occupied (real CE) alone controls
+    for a destination's static path capacity, which real-CE-only bucketing
+    conflates with destination identity (see plot_deadline_miss_bar_by_ce_
+    subplots_figure's discussion of this confound).
+
+    Returns {dst_id: (occupied, free)}, or None if the sidecar doesn't
+    exist -- no whole-experiment fallback here (unlike real CE, there's no
+    folder-tag heuristic to fall back to for a graph-capacity metric).
+    """
+    rows = _read_ce_counts_sidecar(workload_csv_path)
+    if rows is None:
+        return None
+    return {dst: (count, ceiling - count) for dst, (_src, count, ceiling) in rows.items()}
+
+
+def _destination_node_id_from_address(address):
+    """Recover the workload node id of a flow's destination host from its
+    ns-3-assigned IP: addHosts() in qlr-utils.cc gives host{node_id+1} the
+    address 10.0.{node_id+1}.1/24, so the third octet minus 1 is the id.
+    """
+    try:
+        return int(str(address).split(".")[2]) - 1
+    except (ValueError, IndexError):
+        return None
+
+
+def _extract_delays_by_destination(flow_monitor_path, dst_port):
+    """Like _extract_delays, but grouped by destination node id (see
+    _destination_node_id_from_address) instead of pooled across every
+    protected destination in the experiment.
+    """
+    candidate = _resolve_flow_monitor_xml(flow_monitor_path)
+    if candidate is None:
+        return {}
+
+    sim: Simulation = parse_xml(candidate)[0]
+    delays_by_dest = {}
+    for flow in sim.flows:
+        flow: Flow = flow
+        t: FiveTuple = flow.fiveTuple
+        if t.destinationPort != dst_port:
+            continue
+        if flow.delayHistogram is None:
+            continue
+        dst_id = _destination_node_id_from_address(t.destinationAddress)
+        if dst_id is None:
+            continue
+        bucket = delays_by_dest.setdefault(dst_id, [])
+        for bin in flow.delayHistogram:
+            bucket.extend([float(bin.get("start")) * 1000] * int(bin.get("count")))
+
+    return delays_by_dest
+
+
 def _extract_per_flow_throughputs_mbps(flow_monitor_path, dst_port):
     """Return list of per-flow throughputs (Mbps) for all flows matching dst_port."""
     candidate = _resolve_flow_monitor_xml(flow_monitor_path)
@@ -1549,6 +2217,7 @@ def plot_protected_flow_slo_comparison(
     workload_csv_dir="resources/11_nodes/workloads",
     threshold=0.95,
     link_selection_tag=None,
+    exclude_seeds=None,
 ):
     """Grouped bar chart: fraction of protected flows meeting >= threshold * set_throughput.
 
@@ -1559,6 +2228,8 @@ def plot_protected_flow_slo_comparison(
     data_by_prot: dict = {}  # prot_value -> label -> list[float]
 
     for experiment in sorted(os.listdir(results_root)):
+        if _experiment_has_excluded_seed(experiment, exclude_seeds):
+            continue
         if link_selection_tag is not None and link_selection_tag not in experiment:
             continue
         experiment_path = os.path.join(results_root, experiment)

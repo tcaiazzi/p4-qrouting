@@ -50,8 +50,8 @@ protected_number_of_flow="${WORKLOAD_PROTECTED_NUMBER_OF_FLOW:-1}"
 # ---------------------------------------------------------------------------
 # Sweep axes
 # ---------------------------------------------------------------------------
-sweep_seeds_csv="${SWEEP_SEEDS:-1234,1312}"
-sweep_protected_flow_counts_csv="${SWEEP_PROTECTED_FLOW_COUNTS:-1,5}"
+sweep_seeds_csv="${SWEEP_SEEDS:-1234,1312,7262,1927,2023,3141,2718}"
+sweep_protected_flow_counts_csv="${SWEEP_PROTECTED_FLOW_COUNTS:-1,5,10,20,50}"
 sweep_dry_run="${SWEEP_DRY_RUN:-0}"
 
 # Which experiment types to run (1 = enabled, 0 = skip)
@@ -88,8 +88,9 @@ profile_matrix=(
     "burst-1|1Mbps|64,512,1400|1|250Mbps|1400|0.25|0.5|0.1|0.1"
     "burst-2|1Mbps|64,512,1400|2|250Mbps|1400|0.25|0.5|0.1|0.1"
     "burst-3|1Mbps|64,512,1400|3|250Mbps|1400|0.25|0.5|0.1|0.1"
-    "burst-4|1Mbps|64,512,1400|4|250Mbps|1400|0.25|0.5|0.1|0.1"
-    "burst-5|1Mbps|64,512,1400|5|250Mbps|1400|0.25|0.5|0.1|0.1"
+    # burst-4/burst-5 dropped: with atlanta's DAGs, per-destination reroute
+    # diversity saturates at ~2-3 events, so ce4/ce5 produced workloads
+    # byte-identical to ce3 (see run.log analysis) — wasted compute, no signal.
     # Long-event variants (central can react to each -> schemes converge):
     # "heavy-2|1Mbps|64,512,1400|2|250Mbps|1400|0.5|2.0|0.2|0.2"
 )
@@ -196,6 +197,16 @@ for seed in "${sweep_seeds[@]}"; do
             # Generate workload
             # ----------------------------------------------------------------
             "${gen_cmd[@]}"
+
+            # ----------------------------------------------------------------
+            # Plot topology + this workload's experiment figure (protected
+            # sources/destinations, DAG paths, congested links) so every
+            # experiment in the sweep has a matching visual companion figure.
+            # ----------------------------------------------------------------
+            python3 plot_topology.py \
+                --topology-file "$topology_file" \
+                --workload-file "$workload_file" \
+                --output-dir "paper_figures/topology"
 
             # ----------------------------------------------------------------
             # Run experiments

@@ -22,7 +22,7 @@ def main():
             f"microbenchmark-1-throughput-{wl}",
             congestion_points=congestions,
             central=True,
-            labels=["Baseline", "QLR", "Central"],
+            labels=["Baseline", "QLR", "Control Plane"],
         )
 
         paper_plot.plot_delay_cdf_figure(

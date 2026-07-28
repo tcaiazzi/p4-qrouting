@@ -16,7 +16,7 @@ export TOPOLOGY_FILE="${TOPOLOGY_FILE:-abilene.topology}"
 # Run both congestion-link-selection variants back to back. The sel_tag baked
 # into workload/results names by run-use-case.sh keeps the two runs isolated
 # (no overwriting), so a single run-dense.sh call produces both datasets.
-for congestion_link_selection in deepest waypoint-random; do
+for congestion_link_selection in waypoint-random; do
     echo "=== run-dense: CONGESTION_LINK_SELECTION=$congestion_link_selection ==="
     CONGESTION_LINK_SELECTION="$congestion_link_selection" bash run-use-case.sh "$@"
 done

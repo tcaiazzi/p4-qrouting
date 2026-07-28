@@ -17,7 +17,7 @@ row_slice_size = 64_000_000 / 4
 max_congestion = 256
 
 
-def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int) -> list[str]:
+def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int, dst_compact_row: dict) -> list[str]:
     cmd = []
     row_slices = [32] * 8
     print("Generating commands for node:", start, "to goal:", goal)
@@ -32,23 +32,33 @@ def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int,
 
     print("Updated Slices after neighbors:", row_slices)
     # print("Row slices:", row_slices)
+    # Row key is the destination's COMPACT index (1..NODES_NUM), not goal+1:
+    # MIN_VALUE in qlr.p4 only sets col_num when row_num == i for i in 1..5
+    # (the 5 physical Q-matrix registers), so row_num must land in that range
+    # regardless of the destination's real topology node id.
     for i, row_slice in enumerate(row_slices):
         if qlr_active and row_slice < 6:
-            cmd.append(f"table_add select_port_from_row_col set_nhop {goal + 1} {i} => {i + 1}")
+            cmd.append(f"table_add select_port_from_row_col set_nhop {dst_compact_row[goal]} {i} => {i + 1}")
 
     row_slices.reverse()
     packed_bytes = struct.pack(">" + ("B" * len(row_slices)), *row_slices)
     print("Packed bytes for goal", goal, ":", packed_bytes)
 
-    cmd.append(f"register_write row{goal + 1} 0 {int.from_bytes(packed_bytes, byteorder='big')}")
+    cmd.append(f"register_write row{dst_compact_row[goal]} 0 {int.from_bytes(packed_bytes, byteorder='big')}")
 
     return cmd
 
 
 def generate_all_commands(network: dict, dags: dict, subnets):
+    # Compact 1..NODES_NUM row index per destination, independent of the real
+    # topology node id (see generate_node_commands_from_dag docstring above).
+    # Identical to node_id+1 when hosts are nodes 0..NODES_NUM-1 (abilene,
+    # abilene-dense), so output for those topologies is unchanged.
+    dst_compact_row = {node_id: i + 1 for i, node_id in enumerate(sorted(dags.keys()))}
+
     node_to_network = {}
     all_node_to_network = {}
-    
+
     for k in sorted(network, key=lambda x: int(x)):
         subnet = next(subnets)
         if k in dags:
@@ -65,7 +75,7 @@ def generate_all_commands(network: dict, dags: dict, subnets):
             if tgt not in dags:
                 continue
 
-            tgt_commands = generate_node_commands_from_dag(dags[tgt], network, node_name, tgt)
+            tgt_commands = generate_node_commands_from_dag(dags[tgt], network, node_name, tgt, dst_compact_row)
             commands.update(tgt_commands)
 
         if qlr_active:
@@ -85,7 +95,7 @@ def generate_all_commands(network: dict, dags: dict, subnets):
                 for edge in dag.edges:
                     if edge[1] == node_name:            # (neighbor -> node_name) in dag[dst]
                         neighbor = edge[0]
-                        neighbor_to_dest_rows.setdefault(neighbor, set()).add(dst + 1)
+                        neighbor_to_dest_rows.setdefault(neighbor, set()).add(dst_compact_row[dst])
 
             for neighbor, dest_rows in neighbor_to_dest_rows.items():
                 headers = "_".join(str(r) for r in sorted(dest_rows))
@@ -102,7 +112,7 @@ def generate_all_commands(network: dict, dags: dict, subnets):
         for (node, subnet) in filter(lambda x: x[0] != node_name, node_to_network.items()):
             port_num =  network[node_name][nx.shortest_path(network_graph, source=node_name, target=node)[1]]
             if qlr_active:
-                commands.add(f"table_add select_row get_row_num {subnet} 6 => {node + 1}")
+                commands.add(f"table_add select_row get_row_num {subnet} 6 => {dst_compact_row[node]}")
             else:
                 commands.add(f"table_add select_row set_nhop {subnet} 6 => {port_num + 1}")
 
