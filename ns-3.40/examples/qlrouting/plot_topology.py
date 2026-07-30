@@ -159,8 +159,9 @@ def load_topology_file(path: str) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 def build_layout(G: nx.Graph) -> dict[int, tuple[float, float]]:
-    """Spring layout with a fixed seed for reproducibility."""
-    return nx.spring_layout(G, seed=42, k=2.0 / math.sqrt(len(G)))
+    """Spring layout with a fixed seed for reproducibility, pulled as tight
+    as networkx allows (small k = short optimal edge length)."""
+    return nx.spring_layout(G, seed=42, k=0.5 / math.sqrt(len(G)))
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +308,7 @@ def _draw_topology(ax, G: nx.Graph, pos, prot_nodes: list[int],
 
 def plot_topology(G: nx.Graph, pos, prot_nodes: list[int], output_dir: str,
                   port_map: dict[tuple[int, int], int] | None = None):
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(4, 3))
     _draw_topology(ax, G, pos, prot_nodes, port_map=port_map, title="Physical Topology")
 
     # Legend
@@ -343,7 +344,7 @@ def plot_dags(G: nx.Graph, pos, prot_nodes: list[int],
     # ---- individual per-destination PDF ----
     for dst in dsts:
         dag_edges = dags[dst]
-        fig, ax = plt.subplots(figsize=(7, 5))
+        fig, ax = plt.subplots(figsize=(4, 3))
         _draw_topology(
             ax, G, pos, prot_nodes,
             dag_edges=dag_edges,
@@ -372,7 +373,7 @@ def plot_dags(G: nx.Graph, pos, prot_nodes: list[int],
     # ---- combined grid figure ----
     cols = min(4, n)
     rows = math.ceil(n / cols)
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 5, rows * 4))
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 3, rows * 2.6))
     axes_flat = [axes] if n == 1 else (axes.flat if rows > 1 else list(axes))
 
     for idx, dst in enumerate(dsts):
@@ -417,7 +418,7 @@ def plot_experiment(G: nx.Graph, pos,
     dst_nodes = sorted({d for _, d in protected_flows})
 
     # ---- overview ----
-    fig, ax = plt.subplots(figsize=(9, 7))
+    fig, ax = plt.subplots(figsize=(5, 3.8))
     _draw_topology(
         ax, G, pos, prot_nodes=src_nodes, dst_nodes=dst_nodes,
         congested_links=congested_links, port_map=port_map,
@@ -445,7 +446,7 @@ def plot_experiment(G: nx.Graph, pos,
             (u, v) for (u, v) in congested_links
             if (u, v) in dag_edge_set.get(dst, set())
         ]
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=(4, 3))
         _draw_topology(
             ax, G, pos, prot_nodes=srcs_for_dst,
             dag_edges=dag_edges, dst=dst,
@@ -536,6 +537,27 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     print(f"Output directory: {output_dir}")
 
+    generate_topology_figures(
+        edges_str, dags_str, hosts_str, output_dir,
+        workload_file=args.workload_file or None,
+        no_dags=args.no_dags,
+    )
+
+    print("Done.")
+
+
+def generate_topology_figures(edges_str, dags_str, hosts_str, output_dir,
+                              workload_file=None, no_dags=False):
+    """Programmatic entry point mirroring main()'s CLI behavior, for reuse
+    from other plotting scripts (e.g. the paper_plot-based benchmark
+    drivers) without going through argparse/subprocess.
+
+    With workload_file: renders the experiment figure (protected source/
+    destination + congested links). Without it: renders the plain topology
+    figure and, unless no_dags, one DAG figure per destination.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
     # Build undirected graph
     edges = parse_edges(edges_str)
     G = nx.Graph()
@@ -552,11 +574,11 @@ def main():
 
     dags = parse_dags(dags_str) if dags_str else {}
 
-    if args.workload_file:
+    if workload_file:
         # Experiment figure: protected sources/destinations, DAG paths, congested links.
-        protected_flows, congested_links = parse_workload(args.workload_file)
-        prefix = os.path.splitext(os.path.basename(args.workload_file))[0]
-        print(f"Workload: {args.workload_file}")
+        protected_flows, congested_links = parse_workload(workload_file)
+        prefix = os.path.splitext(os.path.basename(workload_file))[0]
+        print(f"Workload: {workload_file}")
         print(f"  protected flows: {protected_flows}")
         print(f"  congested links: {congested_links}")
         plot_experiment(G, pos, protected_flows, congested_links, dags,
@@ -567,11 +589,9 @@ def main():
         # Topology figure
         plot_topology(G, pos, prot_nodes, output_dir, port_map=port_map)
         # DAG figures
-        if not args.no_dags and dags:
+        if not no_dags and dags:
             print(f"DAGs: {len(dags)} destinations ({sorted(dags.keys())})")
             plot_dags(G, pos, prot_nodes, dags, output_dir, port_map=port_map)
-
-    print("Done.")
 
 
 if __name__ == "__main__":

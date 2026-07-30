@@ -553,11 +553,16 @@ def plot_avg_throughput_comparison(results_root, flow_info, figure_name, link_se
     )
 
 
-def plot_delay_cdf_figure(results, flow_info, figure_name, xlim=(0, 700), ylim=(0.95, 1.001)):
-    fig = plt.figure(figsize=(5, 3))
-    ax = plt.gca()
+def _no_leading_zero_formatter(x, pos):
+    s = f"{x:.4f}"
+    if s.startswith("0."):
+        return s[1:]
+    if s.startswith("-0."):
+        return "-" + s[2:]
+    return s
 
-    handles = []
+
+def _draw_delay_cdf(ax, flow_info, xlim=(0, 700), ylim=(0.95, 1.001)):
     for dst_port, label, color, hatch, flow_monitor_path in flow_info:
         delays = _extract_delays(flow_monitor_path, dst_port)
         if delays is None:
@@ -565,20 +570,27 @@ def plot_delay_cdf_figure(results, flow_info, figure_name, xlim=(0, 700), ylim=(
         delays_sorted = np.sort(np.array(delays))
         cdf = np.arange(1, len(delays_sorted) + 1) / float(len(delays_sorted))
         ax.step(delays_sorted, cdf, where="post", label=label, color=color, linestyle=hatch)
-        # handles.append(mpatches.Patch(fill=None, edgecolor=color, label=label))
     if xlim:
         ax.set_xlim(xlim)
     if ylim:
         ax.set_ylim(ylim)
     ax.set_xlabel("Delay [ms]", fontsize=12)
-    ax.set_ylabel("CDF", fontsize=12)
+    ax.set_ylabel("CDF", fontsize=12, labelpad=-2)
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(_no_leading_zero_formatter))
     ax.tick_params(axis='both', which='major', labelsize=12)
     ax.grid(linestyle="--", linewidth=0.5)
 
+
+def plot_delay_cdf_figure(results, flow_info, figure_name, xlim=(0, 700), ylim=(0.95, 1.001)):
+    fig = plt.figure(figsize=(4, 2.5))
+    ax = plt.gca()
+
+    _draw_delay_cdf(ax, flow_info, xlim=xlim, ylim=ylim)
+
     fig.legend(
         loc="upper center",
-        bbox_to_anchor=(0.5, 1.02),
-        ncol=len(flow_info),
+        bbox_to_anchor=(0.5, 1.2),
+        ncol=2,
         prop={"size": 12},
     )
 
@@ -841,7 +853,7 @@ def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name,
     n = len(labels)
     width = 0.8 / n
 
-    fig, ax = plt.subplots(figsize=(max(6, len(slo_ms_list) * 2), 3.5))
+    fig, ax = plt.subplots(figsize=(5.5, 3.5))
 
     for i, label in enumerate(labels):
         # Per-run miss rate at each SLO -- shape (n_runs, n_slo).
@@ -851,11 +863,14 @@ def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name,
         ])
         mean_miss = per_run_miss.mean(axis=0)
         std_miss = per_run_miss.std(axis=0)
+        # Miss rate can't go below 0%, so cap the lower whisker at the bar's
+        # own value instead of letting mean - std dip below zero.
+        lower_err = np.minimum(std_miss, mean_miss)
         n_packets = sum(len(run_delays) for run_delays in per_run_delays[label])
         offset = (i - n / 2.0 + 0.5) * width
         bars = ax.bar(
             x + offset, mean_miss, width,
-            yerr=std_miss, capsize=3,
+            yerr=[lower_err, std_miss], capsize=3,
             label=label,
             color=colors.get(label, "gray"),
             alpha=0.85,
@@ -867,7 +882,7 @@ def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name,
                 f"{val:.1f}",
                 ha="center",
                 va="bottom",
-                fontsize=8,
+                fontsize=10,
             )
         print(
             "  "
@@ -881,15 +896,20 @@ def plot_deadline_miss_bar_all_experiments(results_root, flow_info, figure_name,
 
     ax.set_xticks(x)
     ax.set_xticklabels([f"{slo} ms" for slo in slo_ms_list])
-    ax.set_xlabel("Delay SLO", fontsize=12)
-    ax.set_ylabel("Deadline-miss rate [%]", fontsize=12)
-    ax.tick_params(axis="both", which="major", labelsize=11)
+    ax.set_xlabel("Delay SLO", fontsize=14)
+    ax.set_ylabel("Packets violating SLO [%]", fontsize=14)
+    ax.set_ylim(0, 43)
+    ax.set_yticks(np.arange(0, 41, 5))
+    ax.tick_params(axis="both", which="major", labelsize=13)
     ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.7)
     ax.legend(
         loc="upper center",
         bbox_to_anchor=(0.5, 1.18),
         ncol=n,
-        fontsize=11,
+        fontsize=13,
+        columnspacing=1.0,
+        handletextpad=0.4,
+        handlelength=1.5,
     )
 
     plt.savefig(
@@ -1320,10 +1340,9 @@ def _extract_packet_ipgs_ms(scheme_dir):
     return ipgs
 
 
-def plot_ipg_cdf_per_experiment(experiment_path, flow_info, figure_name, xlim=None, ylim=(0.95, 1.001)):
-    """One figure per experiment: CDF of per-packet IPG of protected flows,
-    one step curve per routing scheme. Reads the .ipg files written by the tracer.
-    """
+def _draw_ipg_cdf(ax, flow_info, xlim=None, ylim=(0.95, 1.001)):
+    """Draw one IPG-CDF step curve per scheme onto ax. Returns True if any
+    scheme had data (so callers can skip an otherwise-empty figure)."""
     aggregated = {}
     for dst_port, label, color, linestyle, flow_monitor_path in flow_info:
         scheme_dir = os.path.dirname(flow_monitor_path)
@@ -1331,12 +1350,6 @@ def plot_ipg_cdf_per_experiment(experiment_path, flow_info, figure_name, xlim=No
         if not ipgs:
             continue
         aggregated[label] = {"ipgs": ipgs, "color": color, "linestyle": linestyle}
-
-    if not aggregated:
-        return
-
-    fig = plt.figure(figsize=(5, 3))
-    ax = plt.gca()
 
     for label, info in aggregated.items():
         ipgs_sorted = np.sort(np.array(info["ipgs"]))
@@ -1354,14 +1367,32 @@ def plot_ipg_cdf_per_experiment(experiment_path, flow_info, figure_name, xlim=No
         ax.set_xlim(xlim)
     if ylim:
         ax.set_ylim(ylim)
+    ax.set_xscale("log")
     ax.set_xlabel("IPG [ms]", fontsize=12)
-    ax.set_ylabel("CDF", fontsize=12)
+    # ax.set_ylabel("CDF", fontsize=12)
     ax.tick_params(axis="both", which="major", labelsize=12)
     ax.grid(linestyle="--", linewidth=0.5)
+    return bool(aggregated)
 
-    handles, labels = ax.get_legend_handles_labels()
-    if handles:
-        ax.legend(handles, labels, fontsize=11)
+
+def plot_ipg_cdf_per_experiment(experiment_path, flow_info, figure_name, xlim=None, ylim=(0.95, 1.001)):
+    """One figure per experiment: CDF of per-packet IPG of protected flows,
+    one step curve per routing scheme. Reads the .ipg files written by the tracer.
+    """
+    fig = plt.figure(figsize=(4, 2.5))
+    ax = plt.gca()
+
+    has_data = _draw_ipg_cdf(ax, flow_info, xlim=xlim, ylim=ylim)
+    if not has_data:
+        plt.close(fig)
+        return
+
+    fig.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.2),
+        ncol=2,
+        prop={"size": 12},
+    )
 
     plt.savefig(
         os.path.join(figures_path, f"{figure_name}.pdf"),
@@ -1736,63 +1767,85 @@ def plot_delay_cdf_all_experiments(
     )
 
 
-def plot_throughput_figure(results, source_node, figure_name, congestion_points=None, central=False, local=False,labels=None):
-    def plot_throughput_line(axes, experiment_type, colors, marker, label, linestyle):
-        results_path = os.path.join(results, experiment_type)
-        for experiment_id in os.listdir(results_path):
-            experiment_results_path = os.path.join(results_path, experiment_id, "throughput")
-            color_idx = 0
-            for i, file_name in enumerate(sorted(os.listdir(experiment_results_path))):
-                #port = file_name.split("-")[1].split(".")[0]
-                if source_node not in file_name:
-                    continue
-                file_path = os.path.join(experiment_results_path, file_name)
-                to_plot = parse_data_file(file_path)
-                to_plot_x = [x for x in to_plot["x"] if x <= 25]
-                to_plot_y = to_plot["y"][: len(to_plot_x)]
+def _regrid_hold_or_zero(x, y, grid_step=0.0001, max_hold=0.15):
+    """Resample sparse/irregular (x, y) throughput samples onto a regular time
+    grid, holding each sample's value forward only up to max_hold seconds past
+    its own timestamp. Beyond that -- a real gap in the trace, meaning no new
+    packet arrived to refresh it -- the grid is filled with 0 instead of
+    letting a stale nonzero value persist visually across the gap.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if x.size == 0:
+        return x, y
+    grid = np.arange(x[0], x[-1] + grid_step, grid_step)
+    print(grid)
+    idx = np.searchsorted(x, grid, side="right") - 1
+    print(idx)
 
-                
-                axes.plot(
-                    to_plot_x,
-                    [y / 1000000 for y in to_plot_y],
-                    label=f"{label}",
-                    linestyle=linestyle,
-                    fillstyle="none",
-                    color=colors[color_idx],
-                    marker=marker,
-                    zorder=(5 if label == "QLR" else 4),
-                )
-                color_idx += 1
-    plt.figure(figsize=(5, 3))
-    ax = plt.gca()
-    plt.grid(linestyle="--", linewidth=0.5)
+    idx_clipped = np.clip(idx, 0, len(x) - 1)
+    age = grid - x[idx_clipped]
+    grid_y = np.where((idx >= 0) & (age <= max_hold), y[idx_clipped], 0.0)
+    print(grid_y)
 
-    # plot Baseline first, then QLR so QLR is drawn on top
-    plot_throughput_line(ax, "baseline", ["red", "darkred"], None, labels[0], "-.")
-    plot_throughput_line(ax, "qlr", ["green", "darkgreen"], None, labels[1], "--")
-    if central:
-        plot_throughput_line(ax, "central", ["blue", "darkblue"], None, labels[2], ":")
-    if local:
-        plot_throughput_line(ax, "local_qlr", ["purple", "darkpurple"], None, labels[3], "-")
+    return grid, grid_y
 
+
+def _plot_throughput_line(axes, results, source_node, experiment_type, colors, marker, label, linestyle):
+    results_path = os.path.join(results, experiment_type)
+    for experiment_id in os.listdir(results_path):
+        experiment_results_path = os.path.join(results_path, experiment_id, "throughput")
+        color_idx = 0
+        for i, file_name in enumerate(sorted(os.listdir(experiment_results_path))):
+            #port = file_name.split("-")[1].split(".")[0]
+            if source_node not in file_name:
+                continue
+            file_path = os.path.join(experiment_results_path, file_name)
+            to_plot = parse_data_file(file_path)
+            to_plot_x = [x for x in to_plot["x"] if x <= 25]
+            to_plot_y = to_plot["y"][: len(to_plot_x)]
+            # grid_x, grid_y = _regrid_hold_or_zero(to_plot_x, to_plot_y)
+
+            axes.plot(
+                to_plot_x,
+                [y / 1000000 for y in to_plot_y],
+                label=f"{label}",
+                linestyle=linestyle,
+                drawstyle="steps-post",
+                fillstyle="none",
+                color=colors[color_idx],
+                marker=marker,
+                zorder=(5 if label == "QLR" else 4),
+            )
+            color_idx += 1
+
+    
+
+
+def _draw_congestion_regions(ax, congestion_points):
+    # draw congestion regions if provided (each item may be (start,end) pair)
+    if not congestion_points:
+        return
+    for item in congestion_points:
+        try:
+            s, e = item[0], item[1]
+        except Exception:
+            # fallback: single time -> vertical line
+            s = item
+            e = None
+        if e is None:
+            ax.axvline(s, color="black", linestyle=":", linewidth=1.0, alpha=0.8, zorder=0)
+        else:
+            ax.axvspan(s, e, color="black", alpha=0.12, zorder=0)
+
+
+def _finish_throughput_axes(ax, congestion_points):
     ax.set_xlabel("Time [s]", fontsize=12)
     ax.set_ylabel("Average Throughput [Mbps]", loc="bottom", fontsize=12)
     ax.tick_params(axis='both', which='major', labelsize=12)
     # ax.set_xlim([1, 7])
 
-    # draw congestion regions if provided (each item may be (start,end) pair)
-    if congestion_points:
-        for item in congestion_points:
-            try:
-                s, e = item[0], item[1]
-            except Exception:
-                # fallback: single time -> vertical line
-                s = item
-                e = None
-            if e is None:
-                ax.axvline(s, color="black", linestyle=":", linewidth=1.0, alpha=0.8, zorder=0)
-            else:
-                ax.axvspan(s, e, color="black", alpha=0.12, zorder=0)
+    _draw_congestion_regions(ax, congestion_points)
 
     # consolidated legend (include congestion entry if any)
     handles, labels = ax.get_legend_handles_labels()
@@ -1802,7 +1855,210 @@ def plot_throughput_figure(results, source_node, figure_name, congestion_points=
     if handles:
         ax.legend(handles=handles, labels=labels, loc="upper center", bbox_to_anchor=(0.5, 1.30) if congestion_points else (0.5, 1.15), ncol=2, prop={"size": 12})
 
+
+def _throughput_schemes(labels, central, local):
+    schemes = [
+        ("baseline", ["red", "darkred"], None, labels[0], "-"),
+        ("qlr", ["green", "darkgreen"], None, labels[1], "-"),
+    ]
+    if central:
+        schemes.append(("central", ["blue", "darkblue"], None, labels[2], "-"))
+    if local:
+        schemes.append(("local_qlr", ["purple", "darkpurple"], None, labels[3], "-"))
+    return schemes
+
+
+def _resolve_source_node(results, source_node):
+    if source_node is not None:
+        return source_node
+    detected = _receiver_source_node(results)
+    if detected is None:
+        raise ValueError(
+            f"Could not auto-detect a single protected-flow receiver under {results!r}; "
+            "pass source_node explicitly (e.g. for topologies with multiple concurrent "
+            "protected flows, like the zoo/abilene pipeline)."
+        )
+    return detected
+
+
+def plot_throughput_figure(results, figure_name, congestion_points=None, central=False, local=False, labels=None, source_node=None):
+    source_node = _resolve_source_node(results, source_node)
+    plt.figure(figsize=(5, 3))
+    ax = plt.gca()
+    plt.grid(linestyle="--", linewidth=0.5)
+
+    # plot Baseline first, then QLR so QLR is drawn on top
+    for experiment_type, colors, marker, label, linestyle in _throughput_schemes(labels, central, local):
+        _plot_throughput_line(ax, results, source_node, experiment_type, colors, marker, label, linestyle)
+
+    _finish_throughput_axes(ax, congestion_points)
+
     plt.savefig(os.path.join(figures_path, f"{figure_name}.pdf"), format="pdf", bbox_inches="tight")
+
+
+def plot_throughput_lines_separate_figures(results, figure_name, congestion_points=None, central=False, local=False, labels=None, source_node=None):
+    """Same data as plot_throughput_figure, but one standalone PDF per scheme
+    instead of all lines overlaid on a single axes.
+    """
+    source_node = _resolve_source_node(results, source_node)
+    for experiment_type, colors, marker, label, linestyle in _throughput_schemes(labels, central, local):
+        plt.figure(figsize=(5, 3))
+        ax = plt.gca()
+        plt.grid(linestyle="--", linewidth=0.5)
+
+        _plot_throughput_line(ax, results, source_node, experiment_type, colors, marker, label, linestyle)
+        _finish_throughput_axes(ax, congestion_points)
+
+        plt.savefig(
+            os.path.join(figures_path, f"{figure_name}-{experiment_type}.pdf"),
+            format="pdf",
+            bbox_inches="tight",
+        )
+
+
+def plot_throughput_subplots_figure(results, figure_name, congestion_points=None, central=False, local=False, labels=None, source_node=None):
+    """Same data as plot_throughput_figure, but one subplot per scheme stacked
+    in a single figure/file -- shared x-axis, a single y-axis label, and one
+    legend for the whole figure instead of one per line/subplot.
+    """
+    source_node = _resolve_source_node(results, source_node)
+    schemes = _throughput_schemes(labels, central, local)
+    subplot_order = ["baseline", "central", "local_qlr", "qlr"]
+    schemes.sort(key=lambda s: subplot_order.index(s[0]))
+    n = len(schemes)
+
+    fig, axes = plt.subplots(n, 1, sharex=True, sharey=True, figsize=(3.5, 3))
+    if n == 1:
+        axes = [axes]
+
+    for ax, (experiment_type, colors, marker, label, linestyle) in zip(axes, schemes):
+        ax.grid(linestyle="--", linewidth=0.5)
+        _plot_throughput_line(ax, results, source_node, experiment_type, colors, marker, label, linestyle)
+        _draw_congestion_regions(ax, congestion_points)
+        ax.tick_params(axis='both', which='major', labelsize=12)
+
+    axes[-1].set_xlabel("Time [s]", fontsize=12)
+
+    handles, legend_labels = [], []
+    for ax in axes:
+        h, l = ax.get_legend_handles_labels()
+        handles.extend(h)
+        legend_labels.extend(l)
+    # fig.legend(
+    #     handles, legend_labels,
+    #     loc="upper center",
+    #     bbox_to_anchor=(0.5, 1),
+    #     ncol=2,
+    #     fontsize=11,
+    # )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def plot_throughput_delay_ipg_figure(
+    results, figure_name, flow_info,
+    congestion_points=None, central=False, local=False, labels=None, source_node=None,
+    delay_xlim=(0, 700), delay_ylim=(0.95, 1.001),
+    ipg_xlim=None, ipg_ylim=(0.95, 1.001),
+):
+    """One combined figure per workload: throughput (one row per scheme,
+    stacked in the first column) next to a single delay-CDF panel and a
+    single IPG-CDF panel (each spanning the full height) -- all three
+    columns the same width, throughput rows all the same height, one shared
+    legend across every panel instead of one per panel.
+    """
+    source_node = _resolve_source_node(results, source_node)
+    schemes = _throughput_schemes(labels, central, local)
+    subplot_order = ["baseline", "central", "local_qlr", "qlr"]
+    schemes.sort(key=lambda s: subplot_order.index(s[0]))
+    n = len(schemes)
+
+    fig = plt.figure(figsize=(11, 3.5))
+    gs = fig.add_gridspec(n, 3, width_ratios=[1, 1, 1], height_ratios=[1] * n, hspace=0.5, wspace=0.4)
+
+    tp_axes = [fig.add_subplot(gs[i, 0]) for i in range(n)]
+    for ax in tp_axes[1:]:
+        ax.sharex(tp_axes[0])
+        ax.sharey(tp_axes[0])
+    for ax, (experiment_type, colors, marker, label, linestyle) in zip(tp_axes, schemes):
+        ax.grid(linestyle="--", linewidth=0.5)
+        _plot_throughput_line(ax, results, source_node, experiment_type, colors, marker, label, linestyle)
+        _draw_congestion_regions(ax, congestion_points)
+        ax.tick_params(axis='both', which='major', labelsize=12)
+    tp_axes[-1].set_xlabel("Time [s]", fontsize=12)
+    fig.supylabel("Throughput [Mbps]", fontsize=12, x=0.07)
+
+    ax_delay = fig.add_subplot(gs[:, 1])
+    _draw_delay_cdf(ax_delay, flow_info, xlim=delay_xlim, ylim=delay_ylim)
+
+    ax_ipg = fig.add_subplot(gs[:, 2])
+    _draw_ipg_cdf(ax_ipg, flow_info, xlim=ipg_xlim, ylim=ipg_ylim)
+
+    handles, legend_labels = [], []
+    for ax in tp_axes:
+        h, l = ax.get_legend_handles_labels()
+        handles.extend(h)
+        legend_labels.extend(l)
+    if congestion_points:
+        handles.append(Line2D([0], [0], color="black", lw=4, alpha=0.12))
+        legend_labels.append("Congestion")
+    fig.legend(
+        handles, legend_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=len(legend_labels),
+        fontsize=11,
+    )
+
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def plot_throughput_and_delay_cdf_figure(
+    results, flow_info, figure_name,
+    congestion_points=None, central=False, local=False, labels=None, source_node=None,
+    delay_xlim=(0, 700), delay_ylim=(0.95, 1.001),
+):
+    """One combined figure per workload: throughput over time on top, delay
+    CDF on the bottom -- a single shared legend above the top panel.
+    """
+    source_node = _resolve_source_node(results, source_node)
+    schemes = _throughput_schemes(labels, central, local)
+
+    fig, (ax_tp, ax_delay) = plt.subplots(2, 1, figsize=(4, 6))
+
+    ax_tp.grid(linestyle="--", linewidth=0.5)
+    for experiment_type, colors, marker, label, linestyle in schemes:
+        _plot_throughput_line(ax_tp, results, source_node, experiment_type, colors, marker, label, linestyle)
+    _draw_congestion_regions(ax_tp, congestion_points)
+    ax_tp.set_xlabel("Time [s]", fontsize=12)
+    ax_tp.set_ylabel("Throughput [Mbps]", fontsize=12)
+    ax_tp.tick_params(axis='both', which='major', labelsize=12)
+
+    _draw_delay_cdf(ax_delay, flow_info, xlim=delay_xlim, ylim=delay_ylim)
+
+    fig.tight_layout()
+
+    handles, legend_labels = ax_tp.get_legend_handles_labels()
+    if handles:
+        # Centered on the whole figure (not just the axes box), so the
+        # left-side y-axis label doesn't pull it off-center visually.
+        fig.legend(handles=handles, labels=legend_labels, loc="upper center", bbox_to_anchor=(0.6, 1.05), ncol=2, prop={"size": 12})
+    plt.savefig(
+        os.path.join(figures_path, f"{figure_name}.pdf"),
+        format="pdf",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
 
 
 def plot_fct_histogram_figure(results, flow_info, figure_name):
@@ -2043,6 +2299,32 @@ def _destination_node_id_from_address(address):
         return None
 
 
+def _receiver_source_node(experiment_base_path, dst_port=22222):
+    """Which host receives the (single) protected TCP flow in this experiment --
+    same across every scheme subdir, since routing scheme doesn't change the
+    workload's sender/receiver assignment. Returns None if 0 or >1 distinct
+    destinations are found (ambiguous -- caller must pass source_node explicitly
+    instead of guessing, e.g. multi-flow topologies like the zoo/abilene pipeline).
+    """
+    for scheme in ("baseline", "qlr", "central", "local_qlr"):
+        candidate = _resolve_flow_monitor_xml(
+            os.path.join(experiment_base_path, scheme, "0", "flow_monitor.xml")
+        )
+        if candidate is None:
+            continue
+        sim: Simulation = parse_xml(candidate)[0]
+        dest_ids = {
+            _destination_node_id_from_address(flow.fiveTuple.destinationAddress)
+            for flow in sim.flows
+            if flow.fiveTuple.destinationPort == dst_port
+        }
+        dest_ids.discard(None)
+        if len(dest_ids) == 1:
+            return f"h{next(iter(dest_ids)) + 1}"
+        return None
+    return None
+
+
 def _extract_delays_by_destination(flow_monitor_path, dst_port):
     """Like _extract_delays, but grouped by destination node id (see
     _destination_node_id_from_address) instead of pooled across every
@@ -2135,7 +2417,7 @@ def plot_protected_flow_avg_rx_bytes_per_experiment(
     """
     label_order = [label for _, label, _, _, _ in flow_info]
     colors_by_label = {
-        "Baseline": "red",
+        "Static": "red",
         "QLR": "green",
         "Local QLR": "purple",
         "Central": "blue",
@@ -2288,7 +2570,7 @@ def plot_protected_flow_slo_comparison(
         if any(data_by_prot[prot][label] for prot in prot_values)
     ]
     colors_by_label = {
-        "Baseline": "red",
+        "Static": "red",
         "QLR": "green",
         "Local QLR": "purple",
         "Central": "blue",
@@ -2357,302 +2639,3 @@ def plot_protected_flow_slo_comparison(
         bbox_inches="tight",
     )
 
-
-if __name__ == "__main__":
-
-        results_path = "results_benchmark"
-
-
-        ## BENCHMARK 1 
-        figures_path = os.path.join("paper_figures","benchmark1")
-
-        os.makedirs(figures_path, exist_ok=True)
-
-        for wl, congestions in [("wl1",[(2.0, 2.3)]) , ("wl2",[(2.0, 2.3), (2.6, 2.9)]) , ("wl3",[(2.0, 2.3), (2.6, 2.9), (3.2, 3.5)]) , ("wl4",[(2.0, 2.3), (2.6, 2.9), (3.2, 3.5), (3.8, 4.1)])]:
-
-            plot_throughput_figure(os.path.join(results_path, f"microbenchmark_1_TcpLinuxReno_{wl}"), "h1", f"microbenchmark-1-throughput-{wl}", congestion_points=congestions, central=True, labels=["Baseline", "QLR", "Central"])
-        
-            plot_delay_cdf_figure(
-                os.path.join(results_path, f"microbenchmark_1_TcpLinuxReno_{wl}"),
-                [
-                    (
-                        22222,
-                        "Baseline",
-                        "red",
-                        "-",
-                        os.path.join(results_path, f"microbenchmark_1_TcpLinuxReno_{wl}", "baseline/0/flow_monitor.xml"),
-                    ),
-                    (
-                        22222,
-                        "QLR",
-                        "green",
-                        "-.",
-                        os.path.join(results_path, f"microbenchmark_1_TcpLinuxReno_{wl}", "qlr/0/flow_monitor.xml"),
-                    ),
-                    (
-                        22222,
-                        "Central",
-                        "blue",
-                        ":",
-                        os.path.join(results_path, f"microbenchmark_1_TcpLinuxReno_{wl}", "central/0/flow_monitor.xml"),
-                    ),
-                    (
-                        22222,
-                        "Local",
-                        "purple",
-                        ":",
-                        os.path.join(results_path, f"microbenchmark_1_TcpLinuxReno_{wl}", "local_qlr/0/flow_monitor.xml"),
-                    ),
-                ],
-                f"microbenchmark-1-delay-cdf-{wl}"
-            )
-
-        ## BENCHMARK 2
-        figures_path = os.path.join("paper_figures","benchmark2")
-
-        os.makedirs(figures_path, exist_ok=True)
-
-        for wl in ["wl1", "wl2", "wl3", "wl4", "wl5", "wl6", "wl7", "wl8", "wl9", "wl10"]:
-
-            plot_throughput_figure(os.path.join(results_path, f"microbenchmark_2_TcpLinuxReno_{wl}"), "h1", f"microbenchmark-2-throughput-{wl}", congestion_points=[(2.0, 2.6)], labels=["Baseline", "QLR"])
-        
-            plot_delay_cdf_figure(
-                os.path.join(results_path, f"microbenchmark_2_TcpLinuxReno_{wl}"),
-                [
-                    (
-                        22222,
-                        "Baseline",
-                        "red",
-                        "-",
-                        os.path.join(results_path, f"microbenchmark_2_TcpLinuxReno_{wl}", "baseline/0/flow_monitor.xml"),
-                    ),
-                    (
-                        22222,
-                        "QLR",
-                        "green",
-                        "-.",
-                        os.path.join(results_path, f"microbenchmark_2_TcpLinuxReno_{wl}", "qlr/0/flow_monitor.xml"),
-                    ),
-                ],
-                f"microbenchmark-2-delay-cdf-{wl}"
-            )
-        figures_path = os.path.join("paper_figures","benchmark3")
-
-        os.makedirs(figures_path, exist_ok=True)
-
-        for congestion_control in ["TcpLinuxReno", "TcpVegas"]:
-            for wl, congestions in [("wl1",[(2.0, 2.3)]) , ("wl2",[(2.0, 2.3), (2.6, 2.9)]) , ("wl3",[(2.0, 2.3), (2.6, 2.9), (3.2, 3.5)]) , ("wl4",[(2.0, 2.3), (2.6, 2.9), (3.2, 3.5), (3.8, 4.1)])]:
-
-                plot_throughput_figure(os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}"), "h1", f"microbenchmark-3-throughput-{congestion_control}-{wl}", congestion_points=congestions, central=True, local=True, labels=["Baseline", "QLR", "Central", "QLR Local"])
-        
-                plot_delay_cdf_figure(
-                    os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}"),
-                    [
-                        (
-                            22222,
-                            "Baseline",
-                            "red",
-                            "-",
-                            os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}", "baseline/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "QLR",
-                            "green",
-                            "-.",
-                            os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}", "qlr/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "Central",
-                            "blue",
-                            ":",
-                            os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}", "central/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "QLR Local",
-                            "purple",
-                            "--",
-                            os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}", "local_qlr/0/flow_monitor.xml"),
-                        ),
-                    ],
-                    f"microbenchmark-3-delay-cdf-{congestion_control}-{wl}",
-                    ylim=(0.9995, 1.00001) if congestion_control == "TcpVegas" else (0.95, 1.001)
-                )
-
-                plot_delay_cdf_all_experiments(
-                results_path,
-                [
-                    (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
-                    (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
-                ],
-                "benchmark3-delay-cdf-cumulative",
-                ylim=(0.8, 1.00001),
-                xlim=None,
-            )
-
-            plot_received_bytes_comparison(
-                results_path,
-                [
-                    (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
-                    (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
-                ],
-                "benchmark3-tx-bytes-comparison",
-            )
-
-            plot_avg_throughput_comparison(
-                results_path,
-                [
-                    (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
-                    (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
-                    (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
-                    (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
-                ],
-                "zoo-avg-throughput-comparison",
-            )
-
-        figures_path = os.path.join("paper_figures","zoo")
-        results_path = "results"
-        
-
-        os.makedirs(figures_path, exist_ok=True)
-
-        for experiment in os.listdir(results_path):
-            print(f"Printing figures for experiment {experiment}")
-            try:
-                experiment_split = experiment.split("_")
-                congestion_control = experiment_split[1]
-                wl = "_".join(experiment_split[3:])
-
-                plot_throughput_figure(os.path.join(results_path, experiment), "h3", f"zoo-throughput-{congestion_control}-{wl}", central=False, local=False, labels=["Baseline", "QLR", "Central", "QLR Local"])
-
-                plot_delay_cdf_figure(
-                    os.path.join(results_path, experiment),
-                    [
-                        (
-                            22222,
-                            "Baseline",
-                            "red",
-                            "-",
-                            os.path.join(results_path, experiment, "baseline/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "QLR",
-                            "green",
-                            "-.",
-                            os.path.join(results_path, experiment, "qlr/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "Local QLR",
-                            "purple",
-                            "--",
-                            os.path.join(results_path, experiment, "local_qlr/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "Central",
-                            "blue",
-                            ":",
-                            os.path.join(results_path, experiment, "central/0/flow_monitor.xml"),
-                        ),
-                    ],
-                    f"zoo-delay-cdf-{congestion_control}-{wl}",
-                    ylim=(0.8, 1.00001),
-                    xlim=None,
-                )
-
-                plot_fct_histogram_figure(
-                    os.path.join(results_path, experiment),
-                    [
-                        (
-                            22222,
-                            "Baseline",
-                            "red",
-                            "//",
-                            os.path.join(results_path, experiment, "baseline/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "QLR",
-                            "green",
-                            "||",
-                            os.path.join(results_path, experiment, "qlr/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "Local QLR",
-                            "purple",
-                            "\\\\",
-                            os.path.join(results_path, experiment, "local_qlr/0/flow_monitor.xml"),
-                        ),
-                        (
-                            22222,
-                            "Central",
-                            "blue",
-                            "+",
-                            os.path.join(results_path, experiment, "central/0/flow_monitor.xml"),
-                        ),
-                        
-                    ],
-                    f"zoo-fct-histogram-{congestion_control}-{wl}",
-                )
-            except Exception as e:
-                print(f"Error processing experiment {experiment}: {e}")
-                continue
-
-        
-
-        plot_delay_cdf_all_experiments(
-            results_path,
-            [
-                (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
-                (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
-                (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
-                (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
-            ],
-            "zoo-delay-cdf-cumulative",
-            ylim=(0.8, 1.00001),
-            xlim=None,
-        )
-
-        plot_ipg_cdf_figure(
-            results_path,
-            [
-                (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
-                (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
-                (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
-                (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
-            ],
-            "zoo-ipg-cdf",
-        )
-
-        plot_received_bytes_comparison(
-            results_path,
-            [
-                (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
-                (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
-                (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
-                (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
-            ],
-            "zoo-rx-bytes-comparison",
-        )
-
-        plot_avg_throughput_comparison(
-            results_path,
-            [
-                (22222, "Baseline", "red", "-", "baseline/0/flow_monitor.xml"),
-                (22222, "QLR", "green", "-.", "qlr/0/flow_monitor.xml"),
-                (22222, "Local QLR", "purple", "--", "local_qlr/0/flow_monitor.xml"),
-                (22222, "Central", "blue", ":", "central/0/flow_monitor.xml"),
-            ],
-            "zoo-avg-throughput-comparison",
-        )
-
-
-        
-    
-
-    

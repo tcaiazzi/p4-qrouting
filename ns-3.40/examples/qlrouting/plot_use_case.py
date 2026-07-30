@@ -280,10 +280,11 @@ def main():
 
     # Master system table: (flag, label, color, cdf_linestyle, hist_hatch, subdir)
     _SYSTEMS = [
-        (True,  "Baseline",  "red",    "-",    "//",    "baseline"),
-        (True,  "QLR",       "green",  "-.",   "||",    "qlr"),
-        (True,  "HP-QLR", "purple", "--",   "\\\\",  "local_qlr"),
+        (True,  "Static",  "red",    "-",    "//",    "baseline"),
         (True,  "Control Plane",   "blue",   ":",    "+",     "central"),
+        (True,  "HP-QLR", "purple", "--",   "\\\\",  "local_qlr"),
+        (True,  "QLR",       "green",  "-.",   "||",    "qlr"),
+
     ]
 
     for resources_tag in topologies:

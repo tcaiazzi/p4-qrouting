@@ -186,6 +186,7 @@ ns-3.40/examples/qlrouting/resources/*/commands
 ns-3.40/examples/qlrouting/resources/11_nodes/workloads/*
 behavioral-model
 paper_figures*/
+benchmark_figures*/
 ns-3.40/examples/qlrouting/resources/11_nodes/workloads/*
 ns-3.40/examples/qlrouting/resources/abilene*
 ns-3.40/examples/qlrouting/resources/atlanta*
