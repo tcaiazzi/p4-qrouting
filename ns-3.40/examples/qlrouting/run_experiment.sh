@@ -22,6 +22,7 @@ EXPERIMENT_NAME="${EXPERIMENT_NAME:-qlr-experiment}"
 QLR_UPDATE_INTERVAL="${QLR_UPDATE_INTERVAL:-200ns}"
 P4_PROGRAM="${P4_PROGRAM:-examples/qlrouting/qlr_build/qlr.json}"
 QLR_MODE="${QLR_MODE:-global}"  # local or global
+HYSTERESIS="${HYSTERESIS:-1}"
 
 # Commands live in a topology-named directory (defaults to "<N>_nodes" for
 # standalone/microbenchmark runs). The commands are both GENERATED here and
@@ -29,7 +30,7 @@ QLR_MODE="${QLR_MODE:-global}"  # local or global
 RESOURCES_TAG="${RESOURCES_TAG:-${SWITCHES}_nodes}"
 commands_reldir="resources/${RESOURCES_TAG}/commands"
 
-experiment_params="--host-bw=$HOST_BW --switch-bw=$SWITCH_BW --edges=$EDGES --hosts=$HOSTS --switches=$SWITCHES --workload-file=$WORKLOAD_FILE --end=$END  --cc=$CONGESTION_CONTROL --color-update-interval=$QLR_UPDATE_INTERVAL --mode=$MODE --p4-program=$P4_PROGRAM"
+experiment_params="--host-bw=$HOST_BW --switch-bw=$SWITCH_BW --edges=$EDGES --hosts=$HOSTS --switches=$SWITCHES --workload-file=$WORKLOAD_FILE --end=$END  --cc=$CONGESTION_CONTROL --color-update-interval=$QLR_UPDATE_INTERVAL --mode=$MODE --p4-program=$P4_PROGRAM --hysteresis=$HYSTERESIS"
 experiment_params+=" --p4-command=examples/qlrouting/${commands_reldir}"
 
 if [ "$DUMP_TRAFFIC" = "1" ]; then

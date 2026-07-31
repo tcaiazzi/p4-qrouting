@@ -56,7 +56,7 @@ ParseTimeString(const std::string& timeStr)
 }
 
 void
-updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
+updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval, bool hysteresisEnabled)
 {
     uint64_t totalBufferSlice = queueBufferSlice[p4Device->GetNode()->GetId()];
 
@@ -81,7 +81,7 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
             uint64_t t3 = colorSlice * 3;
             uint64_t t4 = colorSlice * 4;
 
-            uint64_t hysteresis = colorSlice / 10;
+            uint64_t hysteresis = hysteresisEnabled ? (colorSlice / 10) : 0;
 
             if (prevColor == 1)
             {
@@ -139,7 +139,8 @@ updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval)
     Simulator::Schedule(ParseTimeString(colorUpdateInterval),
                         &updateQdepth,
                         p4Device,
-                        colorUpdateInterval);
+                        colorUpdateInterval,
+                        hysteresisEnabled);
 }
 
 void
@@ -239,7 +240,8 @@ configureP4Switch(Ptr<Node> switchNode,
                   std::string commandsPath,
                   P4SwitchHelper switchHelper,
                   std::string colorUpdateInterval,
-                  std::string mode)
+                  std::string mode,
+                  bool hysteresisEnabled)
 {
     if (!commandsPath.empty())
     {
@@ -263,7 +265,11 @@ configureP4Switch(Ptr<Node> switchNode,
     {
         NS_LOG_INFO("Scheduling Qdepth updates for " << Names::FindName(switchNode) << " every "
                                                      << colorUpdateInterval);
-        Simulator::Schedule(MicroSeconds(0), &updateQdepth, p4Switch, colorUpdateInterval);
+        Simulator::Schedule(MicroSeconds(0),
+                           &updateQdepth,
+                           p4Switch,
+                           colorUpdateInterval,
+                           hysteresisEnabled);
     }
 
     return p4Switch;
@@ -281,7 +287,8 @@ createTopology(const std::vector<std::pair<int, int>> edges,
                std::string colorUpdateInterval,
                std::string mode,
                std::string p4programPath,
-               std::string p4baseCommandPath)
+               std::string p4baseCommandPath,
+               bool hysteresisEnabled)
 {
     NS_LOG_INFO("Creating topology with parameters:");
     NS_LOG_INFO("Number of nodes: " << numNodes);
@@ -349,8 +356,12 @@ createTopology(const std::vector<std::pair<int, int>> edges,
         }
         Ptr<Node> switchNode = switches.Get(i);
 
-        Ptr<P4SwitchNetDevice> p4Switch =
-            configureP4Switch(switchNode, commandsPath, qlrHelper, colorUpdateInterval, mode);
+        Ptr<P4SwitchNetDevice> p4Switch = configureP4Switch(switchNode,
+                                                            commandsPath,
+                                                            qlrHelper,
+                                                            colorUpdateInterval,
+                                                            mode,
+                                                            hysteresisEnabled);
 
         p4SwitchMap[switchNode] = p4Switch;
 

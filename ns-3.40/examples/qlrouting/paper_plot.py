@@ -1811,7 +1811,7 @@ def _plot_throughput_line(axes, results, source_node, experiment_type, colors, m
                 [y / 1000000 for y in to_plot_y],
                 label=f"{label}",
                 linestyle=linestyle,
-                drawstyle="steps-post",
+               # drawstyle="steps-post",
                 fillstyle="none",
                 color=colors[color_idx],
                 marker=marker,
@@ -1916,15 +1916,20 @@ def plot_throughput_lines_separate_figures(results, figure_name, congestion_poin
         )
 
 
-def plot_throughput_subplots_figure(results, figure_name, congestion_points=None, central=False, local=False, labels=None, source_node=None):
+def plot_throughput_subplots_figure(results, figure_name, congestion_points=None, central=False, local=False, labels=None, source_node=None, schemes=None):
     """Same data as plot_throughput_figure, but one subplot per scheme stacked
     in a single figure/file -- shared x-axis, a single y-axis label, and one
     legend for the whole figure instead of one per line/subplot.
+
+    Pass `schemes` explicitly (list of (experiment_type, colors, marker, label,
+    linestyle) tuples, as returned by `_throughput_schemes`) to plot a custom
+    set of schemes instead of the default {baseline, central, local_qlr, qlr}.
     """
     source_node = _resolve_source_node(results, source_node)
-    schemes = _throughput_schemes(labels, central, local)
-    subplot_order = ["baseline", "central", "local_qlr", "qlr"]
-    schemes.sort(key=lambda s: subplot_order.index(s[0]))
+    if schemes is None:
+        schemes = _throughput_schemes(labels, central, local)
+        subplot_order = ["baseline", "central", "local_qlr", "qlr"]
+        schemes.sort(key=lambda s: subplot_order.index(s[0]))
     n = len(schemes)
 
     fig, axes = plt.subplots(n, 1, sharex=True, sharey=True, figsize=(3.5, 3))
@@ -1965,17 +1970,23 @@ def plot_throughput_delay_ipg_figure(
     congestion_points=None, central=False, local=False, labels=None, source_node=None,
     delay_xlim=(0, 700), delay_ylim=(0.95, 1.001),
     ipg_xlim=None, ipg_ylim=(0.95, 1.001),
+    schemes=None,
 ):
     """One combined figure per workload: throughput (one row per scheme,
     stacked in the first column) next to a single delay-CDF panel and a
     single IPG-CDF panel (each spanning the full height) -- all three
     columns the same width, throughput rows all the same height, one shared
     legend across every panel instead of one per panel.
+
+    Pass `schemes` explicitly (list of (experiment_type, colors, marker, label,
+    linestyle) tuples, as returned by `_throughput_schemes`) to plot a custom
+    set of schemes instead of the default {baseline, central, local_qlr, qlr}.
     """
     source_node = _resolve_source_node(results, source_node)
-    schemes = _throughput_schemes(labels, central, local)
-    subplot_order = ["baseline", "central", "local_qlr", "qlr"]
-    schemes.sort(key=lambda s: subplot_order.index(s[0]))
+    if schemes is None:
+        schemes = _throughput_schemes(labels, central, local)
+        subplot_order = ["baseline", "central", "local_qlr", "qlr"]
+        schemes.sort(key=lambda s: subplot_order.index(s[0]))
     n = len(schemes)
 
     fig = plt.figure(figsize=(11, 3.5))

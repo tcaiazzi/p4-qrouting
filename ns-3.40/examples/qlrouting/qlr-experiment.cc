@@ -54,6 +54,7 @@ main(int argc, char* argv[])
     std::string p4program = "examples/qlrouting/qlr_build/qlr.json";
     std::string p4baseCommand = "";
     std::string mode = "qlr";
+    bool hysteresisEnabled = true;
 
     float endTime;
     bool dumpTraffic = false;
@@ -79,6 +80,10 @@ main(int argc, char* argv[])
                  "The base path for commands to install in each P4 switch",
                  p4baseCommand);
     cmd.AddValue("mode", "Mode of operation: either qlr or baseline", mode);
+    cmd.AddValue("hysteresis",
+                 "Enable the P4 queue-depth color hysteresis band; disable to demonstrate route "
+                 "flapping",
+                 hysteresisEnabled);
 
     cmd.Parse(argc, argv);
 
@@ -135,6 +140,7 @@ main(int argc, char* argv[])
     NS_LOG_INFO("p4program: " + p4program);
     NS_LOG_INFO("p4baseCommand: " + p4baseCommand);
     NS_LOG_INFO("mode: " + mode);
+    NS_LOG_INFO("hysteresisEnabled: " + std::string(hysteresisEnabled ? "true" : "false"));
 
     NS_LOG_INFO("Configuring Congestion Control.");
     std::string queueDisc = "FifoQueueDisc";
@@ -166,7 +172,8 @@ main(int argc, char* argv[])
                                                                    colorUpdateInterval,
                                                                    mode,
                                                                    p4program,
-                                                                   p4baseCommand);
+                                                                   p4baseCommand,
+                                                                   hysteresisEnabled);
 
     NodeContainer switches = nodes.first;
     NodeContainer hosts = nodes.second;
@@ -184,6 +191,16 @@ main(int argc, char* argv[])
             hosts.Get(i)->GetId(),
             0);
     }
+
+    startThroughputPortTrace(
+            getPath(resultsPath, "throughput/s1-1.tp"),
+            switches.Get(1)->GetId(),
+            1);
+
+    startThroughputPortTrace(
+            getPath(resultsPath, "throughput/s2-1.tp"),
+            switches.Get(2)->GetId(),
+            1);
 
     NS_LOG_INFO("Create Applications.");
     generateWorkloadFromFile(hosts,

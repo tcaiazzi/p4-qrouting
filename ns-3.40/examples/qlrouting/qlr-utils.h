@@ -15,7 +15,9 @@ extern std::map<uint32_t, uint64_t> queueBufferSlice;
 
 void computeQueueBufferSlice(Ptr<P4SwitchNetDevice> p4Device);
 
-void updateQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string colorUpdateInterval = "200ns");
+void updateQdepth(Ptr<P4SwitchNetDevice> p4Device,
+                  std::string colorUpdateInterval = "200ns",
+                  bool hysteresisEnabled = true);
 
 void traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper> qdepthFile);
 
@@ -55,7 +57,8 @@ std::pair<NodeContainer, NodeContainer> createTopology(
     std::string mode,
     std::string colorUpdateInterval,
     std::string p4programPath,
-    std::string p4baseCommandPath);
+    std::string p4baseCommandPath,
+    bool hysteresisEnabled = true);
 
 NodeContainer addHosts(NodeContainer switches,
                        const std::vector<int> hostsVector,
@@ -74,7 +77,8 @@ Ptr<P4SwitchNetDevice> configureP4Switch(Ptr<Node> switchNode,
                                          std::string commandsPath,
                                          P4SwitchHelper switchHelper,
                                          std::string colorUpdateInterval,
-                                         std::string mode);
+                                         std::string mode,
+                                         bool hysteresisEnabled = true);
 
 class QLRDeparser : public P4PacketDeparser
 {
