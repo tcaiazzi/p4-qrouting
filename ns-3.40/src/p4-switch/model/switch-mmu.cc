@@ -28,10 +28,19 @@ NS_LOG_COMPONENT_DEFINE("SwitchMmu");
 
 namespace ns3
 {
-TypeId
-SwitchMmu::GetTypeId(void)
+TypeId SwitchMmu::GetTypeId(void)
 {
-    static TypeId tid = TypeId("ns3::SwitchMmu").SetParent<Object>().AddConstructor<SwitchMmu>();
+    static TypeId tid = TypeId("ns3::SwitchMmu")
+                            .SetParent<Object>()
+                            .AddConstructor<SwitchMmu>()
+                            .AddTraceSource("IngressDropTrace",
+                                            "Tracks ingress drops",
+                                            MakeTraceSourceAccessor(&SwitchMmu::m_igDropTrace),
+                                            "ns3::TracedCallback")
+                            .AddTraceSource("EgressDropTrace",
+                                            "Tracks egress drops",
+                                            MakeTraceSourceAccessor(&SwitchMmu::m_egDropTrace),
+                                            "ns3::TracedCallback");
     return tid;
 }
 
@@ -283,5 +292,35 @@ SwitchMmu::RemoveFromEgressAdmission(uint32_t port, uint32_t qIndex, uint32_t ps
         egressPoolUsed -= psize;
     else
         egressPoolUsed = 0;
+}
+
+void SwitchMmu::LogIngressDrop(uint32_t port, uint32_t qIndex, uint32_t psize)
+{
+    TraceIngressDrop(port, qIndex, ingress_bytes[port][qIndex], DynamicThreshold(port, qIndex, "ingress"), psize);
+}
+
+void SwitchMmu::LogEgressDrop(uint32_t port, uint32_t qIndex, uint32_t psize)
+{
+    TraceEgressDrop(port, qIndex, egress_bytes[port][qIndex], DynamicThreshold(port, qIndex, "egress"), psize);
+}
+
+void SwitchMmu::TraceIngressDrop(uint32_t port, uint32_t qIndex, uint64_t ingress_bytes, uint64_t threshold, uint32_t psize)
+{
+    NS_LOG_INFO(Simulator::Now().GetTimeStep()
+                << " node=" << node_id << " dropping packet at ingress admission port="
+                << port << " qIndex=" << qIndex << " pkt_size=" << psize << " ingress_bytes="
+                << ingress_bytes << " threshold=" << threshold);
+
+    m_igDropTrace(node_id, port, qIndex, ingress_bytes, threshold, psize);
+}
+
+void SwitchMmu::TraceEgressDrop(uint32_t port, uint32_t qIndex, uint64_t egress_bytes, uint64_t threshold, uint32_t psize)
+{
+    NS_LOG_INFO(Simulator::Now().GetTimeStep()
+                << " node=" << node_id << " dropping packet at egress admission port="
+                << port << " qIndex=" << qIndex << " pkt_size=" << psize << " egress_bytes=" << egress_bytes << " threshold="
+                << threshold);
+
+    m_egDropTrace(node_id, port, qIndex, egress_bytes, threshold, psize);
 }
 } // namespace ns3

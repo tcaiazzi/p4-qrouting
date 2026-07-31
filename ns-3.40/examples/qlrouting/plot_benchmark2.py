@@ -8,7 +8,7 @@ def main():
     paper_plot.figures_path = os.path.join("benchmark_figures", "benchmark2")
     os.makedirs(paper_plot.figures_path, exist_ok=True)
 
-    for wl in ["wl1", "wl2", "wl3", "wl4", "wl5", "wl6", "wl7", "wl8", "wl9", "wl10"]:
+    for wl in ["wl1", "wl2", "wl10", "wl100"]:
         base_path = os.path.join(results_path, f"microbenchmark_2_TcpLinuxReno_{wl}")
 
         flow_info = [

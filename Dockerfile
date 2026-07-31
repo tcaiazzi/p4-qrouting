@@ -5,7 +5,7 @@ RUN mkdir -p /ns3
 WORKDIR /ns3
 
 ENV DEBIAN_FRONTEND="noninteractive"
-RUN apt update && apt install -y gdb cmake build-essential
+RUN apt update && apt install -y gdb cmake build-essential libboost-thread-dev libgmp-dev libthrift-dev thrift-compiler
 
 # COPY ns-3.40 /ns3/ns-3.40
 

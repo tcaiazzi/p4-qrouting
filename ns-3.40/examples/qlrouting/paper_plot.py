@@ -30,6 +30,7 @@ class OOMFormatter(matplotlib.ticker.ScalarFormatter):
 
 
 figures_path = "figures"
+MAX_THROUGHPUT_BPS = 100_000_000  # link capacity is 100 Mbps
 
 
 def parse_data_file(file_path):
@@ -562,7 +563,26 @@ def _no_leading_zero_formatter(x, pos):
     return s
 
 
-def _draw_delay_cdf(ax, flow_info, xlim=(0, 700), ylim=(0.95, 1.001)):
+def _annotate_curve_tail(ax, x_value, color, unit="ms"):
+    """Draw an arrow pointing at the top of a CDF curve (where it reaches
+    1.0), labeled with its tail value -- mirrors the "Ideal"-style callout
+    used in the paper's normalized-latency figures."""
+    ax.annotate(
+        f"{x_value:.1f} {unit}",
+        xy=(x_value, 1.0),
+        xytext=(-30, -30),
+        textcoords="offset points",
+        ha="left",
+        va="bottom",
+        fontsize=11,
+        fontweight="bold",
+        color=color,
+        annotation_clip=False,
+        arrowprops=dict(arrowstyle="-|>", color=color, lw=1.3),
+    )
+
+
+def _draw_delay_cdf(ax, flow_info, xlim=(0, 700), ylim=(0.95, 1.001), annotate_qlr=False):
     for dst_port, label, color, hatch, flow_monitor_path in flow_info:
         delays = _extract_delays(flow_monitor_path, dst_port)
         if delays is None:
@@ -570,6 +590,8 @@ def _draw_delay_cdf(ax, flow_info, xlim=(0, 700), ylim=(0.95, 1.001)):
         delays_sorted = np.sort(np.array(delays))
         cdf = np.arange(1, len(delays_sorted) + 1) / float(len(delays_sorted))
         ax.step(delays_sorted, cdf, where="post", label=label, color=color, linestyle=hatch)
+        if annotate_qlr and label == "QLR":
+            _annotate_curve_tail(ax, delays_sorted[-1], color, unit="ms")
     if xlim:
         ax.set_xlim(xlim)
     if ylim:
@@ -1340,7 +1362,7 @@ def _extract_packet_ipgs_ms(scheme_dir):
     return ipgs
 
 
-def _draw_ipg_cdf(ax, flow_info, xlim=None, ylim=(0.95, 1.001)):
+def _draw_ipg_cdf(ax, flow_info, xlim=None, ylim=(0.95, 1.001), annotate_qlr=False):
     """Draw one IPG-CDF step curve per scheme onto ax. Returns True if any
     scheme had data (so callers can skip an otherwise-empty figure)."""
     aggregated = {}
@@ -1362,6 +1384,8 @@ def _draw_ipg_cdf(ax, flow_info, xlim=None, ylim=(0.95, 1.001)):
             color=info["color"],
             linestyle=info["linestyle"],
         )
+        if annotate_qlr and label == "QLR":
+            _annotate_curve_tail(ax, ipgs_sorted[-1], info["color"], unit="ms")
 
     if xlim:
         ax.set_xlim(xlim)
@@ -1803,7 +1827,7 @@ def _plot_throughput_line(axes, results, source_node, experiment_type, colors, m
             file_path = os.path.join(experiment_results_path, file_name)
             to_plot = parse_data_file(file_path)
             to_plot_x = [x for x in to_plot["x"] if x <= 25]
-            to_plot_y = to_plot["y"][: len(to_plot_x)]
+            to_plot_y = [min(y, MAX_THROUGHPUT_BPS) for y in to_plot["y"][: len(to_plot_x)]]
             # grid_x, grid_y = _regrid_hold_or_zero(to_plot_x, to_plot_y)
 
             axes.plot(
@@ -1811,15 +1835,15 @@ def _plot_throughput_line(axes, results, source_node, experiment_type, colors, m
                 [y / 1000000 for y in to_plot_y],
                 label=f"{label}",
                 linestyle=linestyle,
-               # drawstyle="steps-post",
+                drawstyle="steps-post",
                 fillstyle="none",
                 color=colors[color_idx],
                 marker=marker,
                 zorder=(5 if label == "QLR" else 4),
             )
+            axes.set_ylim(-5, 105)
+            axes.set_yticks([0, 50, 100])
             color_idx += 1
-
-    
 
 
 def _draw_congestion_regions(ax, congestion_points):
@@ -2001,14 +2025,16 @@ def plot_throughput_delay_ipg_figure(
         _plot_throughput_line(ax, results, source_node, experiment_type, colors, marker, label, linestyle)
         _draw_congestion_regions(ax, congestion_points)
         ax.tick_params(axis='both', which='major', labelsize=12)
+    for ax in tp_axes[:-1]:
+        ax.tick_params(axis='x', which='both', labelbottom=False)
     tp_axes[-1].set_xlabel("Time [s]", fontsize=12)
     fig.supylabel("Throughput [Mbps]", fontsize=12, x=0.07)
 
     ax_delay = fig.add_subplot(gs[:, 1])
-    _draw_delay_cdf(ax_delay, flow_info, xlim=delay_xlim, ylim=delay_ylim)
+    _draw_delay_cdf(ax_delay, flow_info, xlim=delay_xlim, ylim=delay_ylim, annotate_qlr=False)
 
     ax_ipg = fig.add_subplot(gs[:, 2])
-    _draw_ipg_cdf(ax_ipg, flow_info, xlim=ipg_xlim, ylim=ipg_ylim)
+    _draw_ipg_cdf(ax_ipg, flow_info, xlim=ipg_xlim, ylim=ipg_ylim, annotate_qlr=True)
 
     handles, legend_labels = [], []
     for ax in tp_axes:
@@ -2060,10 +2086,13 @@ def plot_throughput_and_delay_cdf_figure(
     fig.tight_layout()
 
     handles, legend_labels = ax_tp.get_legend_handles_labels()
+    if congestion_points:
+        handles.append(Line2D([0], [0], color="black", lw=4, alpha=0.12))
+        legend_labels.append("Congestion")
     if handles:
         # Centered on the whole figure (not just the axes box), so the
         # left-side y-axis label doesn't pull it off-center visually.
-        fig.legend(handles=handles, labels=legend_labels, loc="upper center", bbox_to_anchor=(0.6, 1.05), ncol=2, prop={"size": 12})
+        fig.legend(handles=handles, labels=legend_labels, loc="upper center", bbox_to_anchor=(0.6, 1.05), ncol=3, prop={"size": 12}, columnspacing=1.0, handletextpad=0.5)
     plt.savefig(
         os.path.join(figures_path, f"{figure_name}.pdf"),
         format="pdf",

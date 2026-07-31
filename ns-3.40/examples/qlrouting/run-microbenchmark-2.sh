@@ -7,16 +7,7 @@ EXPERIMENT_NAME="microbenchmark_2"
 for CONGESTION_CONTROL in TcpLinuxReno
 do
     for WORKLOAD_FILE in \
-        "examples/qlrouting/resources/5_nodes/workloads/wl1.csv" \
-        "examples/qlrouting/resources/5_nodes/workloads/wl2.csv" \
-        "examples/qlrouting/resources/5_nodes/workloads/wl3.csv" \
-        "examples/qlrouting/resources/5_nodes/workloads/wl4.csv" \
-        "examples/qlrouting/resources/5_nodes/workloads/wl5.csv" \
-        "examples/qlrouting/resources/5_nodes/workloads/wl6.csv" \
-        "examples/qlrouting/resources/5_nodes/workloads/wl7.csv" \
-        "examples/qlrouting/resources/5_nodes/workloads/wl8.csv" \
-        "examples/qlrouting/resources/5_nodes/workloads/wl9.csv" \
-        "examples/qlrouting/resources/5_nodes/workloads/wl10.csv"
+        "examples/qlrouting/resources/5_nodes/workloads/wl100.csv"
     do
         WORKLOAD_NAME="$(basename "$WORKLOAD_FILE")"
         WORKLOAD_BASE="${WORKLOAD_NAME%.*}"
@@ -32,8 +23,6 @@ do
         mkdir -p results/${RESULTS_DIR}/qlr/0
         cp -R results/${RESULTS_DIR}/qlr_1/0/* results/${RESULTS_DIR}/qlr/0
         rm -rf results/${RESULTS_DIR}/qlr_1
-
-        python3 plot.py results/${RESULTS_DIR} figures/${RESULTS_DIR}
     done
 done
 

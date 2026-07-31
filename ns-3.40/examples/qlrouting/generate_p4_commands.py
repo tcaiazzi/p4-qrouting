@@ -113,8 +113,10 @@ def generate_all_commands(network: dict, dags: dict, subnets):
             port_num =  network[node_name][nx.shortest_path(network_graph, source=node_name, target=node)[1]]
             if qlr_active:
                 commands.add(f"table_add select_row get_row_num {subnet} 6 => {dst_compact_row[node]}")
+                commands.add(f"table_add select_row get_row_num {subnet} 17 => {dst_compact_row[node]}")
             else:
                 commands.add(f"table_add select_row set_nhop {subnet} 6 => {port_num + 1}")
+                commands.add(f"table_add select_row set_nhop {subnet} 17 => {port_num + 1}")
 
 
         commands.add(f"table_set_default select_row set_nhop 1")

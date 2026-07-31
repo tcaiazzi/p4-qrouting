@@ -32,6 +32,9 @@ class SwitchMmu : public Object
     void UpdateEgressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize);
     void RemoveFromEgressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize);
 
+    void LogIngressDrop(uint32_t port, uint32_t qIndex, uint32_t psize);
+    void LogEgressDrop(uint32_t port, uint32_t qIndex, uint32_t psize);
+
     void SetBufferPool(uint64_t b);
 
     void SetIngressPool(uint64_t b);
@@ -67,6 +70,15 @@ class SwitchMmu : public Object
     // per queue run time
     uint64_t ingress_bytes[pCnt][qCnt];
     uint64_t egress_bytes[pCnt][qCnt];
+
+    private:
+    // Trace functions
+    void TraceIngressDrop(uint32_t port, uint32_t qIndex, uint64_t ingress_bytes, uint64_t threshold, uint32_t psize);
+    void TraceEgressDrop(uint32_t port, uint32_t qIndex, uint64_t egress_bytes, uint64_t threshold, uint32_t psize);
+    
+    // Drops trace functions  
+    TracedCallback<uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint32_t> m_igDropTrace;
+    TracedCallback<uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint32_t> m_egDropTrace;
 };
 
 } /* namespace ns3 */

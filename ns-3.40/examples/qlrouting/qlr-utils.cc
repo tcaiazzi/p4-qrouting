@@ -174,6 +174,51 @@ traceQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string fileName)
     Simulator::Schedule(NanoSeconds(200), &traceQdepthUpdate, p4Device, qdepthFile);
 }
 
+static Ptr<OutputStreamWrapper> dropsFile;
+
+static void
+traceIngressDrop(uint32_t nodeId,
+                 uint32_t port,
+                 uint32_t qIndex,
+                 uint64_t bytes,
+                 uint64_t threshold,
+                 uint32_t psize)
+{
+    *dropsFile->GetStream() << Simulator::Now().GetSeconds() << " INGRESS " << nodeId << " "
+                           << port << " " << qIndex << " " << bytes << " " << threshold << " "
+                           << psize << std::endl;
+    *dropsFile->GetStream() << std::flush;
+}
+
+static void
+traceEgressDrop(uint32_t nodeId,
+                uint32_t port,
+                uint32_t qIndex,
+                uint64_t bytes,
+                uint64_t threshold,
+                uint32_t psize)
+{
+    *dropsFile->GetStream() << Simulator::Now().GetSeconds() << " EGRESS " << nodeId << " "
+                           << port << " " << qIndex << " " << bytes << " " << threshold << " "
+                           << psize << std::endl;
+    *dropsFile->GetStream() << std::flush;
+}
+
+void
+traceDrops(Ptr<P4SwitchNetDevice> p4Device, std::string fileName)
+{
+    if (!dropsFile)
+    {
+        AsciiTraceHelper ascii;
+        dropsFile = ascii.CreateFileStream(fileName);
+    }
+
+    p4Device->m_mmu->TraceConnectWithoutContext("IngressDropTrace",
+                                                MakeCallback(&traceIngressDrop));
+    p4Device->m_mmu->TraceConnectWithoutContext("EgressDropTrace",
+                                                MakeCallback(&traceEgressDrop));
+}
+
 Ptr<Packet>
 QLRDeparser::get_ns3_packet(std::unique_ptr<bm::Packet> bm_packet)
 {
@@ -367,6 +412,8 @@ createTopology(const std::vector<std::pair<int, int>> edges,
 
         traceQdepth(p4Switch,
                     getPath(resultsPath, "qdepth/" + Names::FindName(switchNode) + ".txt"));
+
+        traceDrops(p4Switch, getPath(resultsPath, "drops.txt"));
     }
 
     if (dumpTraffic)
@@ -598,12 +645,16 @@ generateWorkloadFromFile(NodeContainer hosts,
 
         if (hostsVector[i] == 1)
         {
-            ApplicationContainer hostReceiverApp = createSinkTcpApplication(qlrPort, host);
-            hostReceiverApp.Start(Seconds(0.0));
+            ApplicationContainer hostTcpReceiverApp = createSinkTcpApplication(qlrPort, host);
+            hostTcpReceiverApp.Start(Seconds(0.0));
 
             std::string ipgPath =
                 getPath(getPath(resultsPath, "ipg"), Names::FindName(host) + ".ipg");
-            startIpgTrace(hostReceiverApp.Get(0), ipgPath, Names::FindName(host));
+            startIpgTrace(hostTcpReceiverApp.Get(0), ipgPath, Names::FindName(host));
+
+            ApplicationContainer hostUdpReceiverApp = createSinkUdpApplication(qlrPort, host);
+            hostUdpReceiverApp.Start(Seconds(0.0));
+            startIpgTrace(hostUdpReceiverApp.Get(0), ipgPath, Names::FindName(host));
         }
         ApplicationContainer defaultHostReceiverApp = createSinkUdpApplication(defaultPort, host);
         defaultHostReceiverApp.Start(Seconds(0.0));

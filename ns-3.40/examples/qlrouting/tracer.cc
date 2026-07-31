@@ -117,7 +117,7 @@ tracePktTxNetDevice(std::string context, Ptr<const Packet> p)
         proto = ipHdr.GetProtocol();
     }
 
-    if (proto != 6)
+    if (proto != 6 && proto != 17)
         return;
 
     auto ctxIt = ctx2tpInfo.find(context);

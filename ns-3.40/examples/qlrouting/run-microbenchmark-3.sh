@@ -5,16 +5,20 @@ set -e
 CONGESTION_CONTROL="${CONGESTION_CONTROL:-TcpLinuxReno}"
 EXPERIMENT_NAME="microbenchmark_3"
 CONTROLPLANE_SPEED="500ms"
-DUMP_TRAFFIC=1
+DUMP_TRAFFIC=0
 END=4
 
-for CONGESTION_CONTROL in TcpVegas
+for WORKLOAD_FILE in \
+    "examples/qlrouting/resources/microbenchmark_3/workloads/wl3.csv" \
+    "examples/qlrouting/resources/microbenchmark_3/workloads/wl3-udp.csv"
 do
-    for WORKLOAD_FILE in \
-        "examples/qlrouting/resources/microbenchmark_3/workloads/wl3.csv" \
-        # "examples/qlrouting/resources/microbenchmark_3/workloads/wl2.csv" \
-        # "examples/qlrouting/resources/microbenchmark_3/workloads/wl3.csv" \
-        # "examples/qlrouting/resources/microbenchmark_3/workloads/wl4.csv" 
+    if [[ "$WORKLOAD_FILE" == *udp* ]]; then
+        CC_LIST="None"
+    else
+        CC_LIST="TcpLinuxReno TcpVegas"
+    fi
+
+    for CONGESTION_CONTROL in $CC_LIST
     do
         WORKLOAD_NAME="$(basename "$WORKLOAD_FILE")"
         WORKLOAD_BASE="${WORKLOAD_NAME%.*}"

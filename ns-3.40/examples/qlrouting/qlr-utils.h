@@ -23,6 +23,8 @@ void traceQdepthUpdate(Ptr<P4SwitchNetDevice> p4Device, Ptr<OutputStreamWrapper>
 
 void traceQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string fileName);
 
+void traceDrops(Ptr<P4SwitchNetDevice> p4Device, std::string fileName);
+
 void startTcpFlow(Ptr<Node> receiverHost,
                   uint16_t addressIndex,
                   Ptr<Node> senderHost,

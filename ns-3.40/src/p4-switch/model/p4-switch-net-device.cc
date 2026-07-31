@@ -182,6 +182,8 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
                               << " cannot admit in ingress packet with size=" << pkt_size
                               << ", dropping");
 
+        m_mmu->LogIngressDrop(port_idx, 0, pkt_size);      
+
         return;
     }
 
@@ -213,6 +215,8 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
             NS_LOG_WARN(node_name << " | Ouput Port " << outport_n << " qid=" << qid
                                   << " cannot admit in egress packet with size=" << pkt_size
                                   << ", dropping");
+
+            m_mmu->LogEgressDrop(outport_n, qid, pkt_size);         
 
             out_pkt.release();
 

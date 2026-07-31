@@ -9,7 +9,7 @@ HOSTS = "1,1,1,1,1"
 
 
 def main():
-    results_path = "results"
+    results_path = "results_benchmark"
     paper_plot.figures_path = os.path.join("benchmark_figures", "benchmark3")
     os.makedirs(paper_plot.figures_path, exist_ok=True)
 
@@ -20,7 +20,7 @@ def main():
         # ("wl4", [(2.0, 2.3), (2.6, 2.9), (3.2, 3.5), (3.8, 4.1)]),
     ]
 
-    for congestion_control in ["TcpVegas"]:
+    for congestion_control in ["TcpLinuxReno", "TcpVegas"]:
         for wl, congestions in workloads:
             base_path = os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}")
 
@@ -119,7 +119,7 @@ def main():
                 local=True,
                 labels=["Static", "QLR", "Control Plane", "HP-QLR"],
                 delay_ylim=(0.999, 1.00001) if congestion_control == "TcpVegas" else (0.93, 1.001),
-                ipg_ylim=(0.93, 1.0006),
+                ipg_ylim=(0.93, 1.0006) if congestion_control == "TcpVegas" else (0.95, 1.001),
                 ipg_xlim=(0.03, 1000),
             )
 
