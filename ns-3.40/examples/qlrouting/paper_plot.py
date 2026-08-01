@@ -1863,12 +1863,12 @@ def _draw_congestion_regions(ax, congestion_points):
             ax.axvspan(s, e, color="black", alpha=0.12, zorder=0)
 
 
-def _extract_drop_count(drops_path, node_id=1, exclude_pktsize=1442):
+def _extract_drop_count(drops_path, node_id=1, dport=22222):
     """Count queue-drop events from a <scheme>/<run>/drops.txt file (format:
-    time buffer node port queue occupancy threshold pktsize), keeping only
-    drops at `node_id` whose packet size isn't `exclude_pktsize` (the fixed
-    size of the unprotected background traffic, used here to isolate the
-    QLR-protected flow)."""
+    time buffer node port queue occupancy threshold pktsize flowid, where
+    flowid is "srcip|dstip|proto|sport|dport" in hex/decimal), keeping only
+    drops at `node_id` whose flow's destination port is `dport` (used here to
+    isolate the QLR-protected flow from unprotected background traffic)."""
     if not os.path.isfile(drops_path):
         return 0
 
@@ -1876,46 +1876,149 @@ def _extract_drop_count(drops_path, node_id=1, exclude_pktsize=1442):
     with open(drops_path) as drops_file:
         for line in drops_file:
             parts = line.split()
-            if len(parts) < 8:
+            if len(parts) < 9:
                 continue
             try:
                 node = int(parts[2])
-                pktsize = int(parts[7])
-            except ValueError:
+                flow_dport = int(parts[8].split("|")[4])
+            except (ValueError, IndexError):
                 continue
-            if node == node_id and pktsize != exclude_pktsize:
+            if node == node_id and flow_dport == dport:
                 count += 1
     return count
 
 
-def _total_drops_for_scheme(results, experiment_type, node_id=1, exclude_pktsize=1442):
+def _total_drops_for_scheme(results, experiment_type, node_id=1, dport=22222):
     results_path = os.path.join(results, experiment_type)
     if not os.path.isdir(results_path):
         return 0
     return sum(
         _extract_drop_count(
             os.path.join(results_path, experiment_id, "drops.txt"),
-            node_id=node_id, exclude_pktsize=exclude_pktsize,
+            node_id=node_id, dport=dport,
         )
         for experiment_id in sorted(os.listdir(results_path))
     )
 
 
-def _draw_drops_bar(ax, results, schemes, node_id=1, exclude_pktsize=1442):
-    labels = [label for _experiment_type, _colors, _marker, label, _linestyle in schemes]
+def _extract_total_tx_packets(flow_monitor_path, dst_port):
+    """Total txPackets summed across every flow matching dst_port in a
+    scheme's flow_monitor.xml -- the denominator for a drop-rate percentage.
+    Includes retransmissions for TCP flows, so this can differ per scheme
+    even for the same workload."""
+    candidate = _resolve_flow_monitor_xml(flow_monitor_path)
+    if candidate is None:
+        return 0
+    sim: Simulation = parse_xml(candidate)[0]
+    return sum(
+        flow.txPackets
+        for flow in sim.flows
+        if flow.fiveTuple.destinationPort == dst_port
+    )
+
+
+def _total_tx_packets_for_scheme(results, experiment_type, dport=22222):
+    results_path = os.path.join(results, experiment_type)
+    if not os.path.isdir(results_path):
+        return 0
+    return sum(
+        _extract_total_tx_packets(
+            os.path.join(results_path, experiment_id, "flow_monitor.xml"), dport
+        )
+        for experiment_id in sorted(os.listdir(results_path))
+    )
+
+
+def _extract_retransmission_count(rtx_path):
+    """Read the cumulative retransmission count from a
+    <scheme>/<run>/retransmissions/<sender>-<receiver>-<port>.rtx file -- each
+    line is "time count", with `count` already the running total, so the
+    total retransmitted-packet count for that flow is just the last line's
+    value."""
+    if not os.path.isfile(rtx_path):
+        return 0
+    last_count = 0
+    with open(rtx_path) as rtx_file:
+        for line in rtx_file:
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            try:
+                last_count = int(parts[1])
+            except ValueError:
+                continue
+    return last_count
+
+
+def _total_retransmissions_for_scheme(results, experiment_type, dport=22222):
+    results_path = os.path.join(results, experiment_type)
+    if not os.path.isdir(results_path):
+        return 0
+    total = 0
+    for experiment_id in sorted(os.listdir(results_path)):
+        rtx_dir = os.path.join(results_path, experiment_id, "retransmissions")
+        if not os.path.isdir(rtx_dir):
+            continue
+        for entry in os.listdir(rtx_dir):
+            if entry.endswith(f"-{dport}.rtx"):
+                total += _extract_retransmission_count(os.path.join(rtx_dir, entry))
+    return total
+
+
+_DROPS_BAR_LABEL_ABBREVIATIONS = {"Control Plane": "CP"}
+
+
+def _draw_drops_bar(ax, results, schemes, node_id=1, dport=22222, metric="drops"):
+    """`metric` selects the numerator for the percentage bar:
+    - "drops" (default, e.g. for UDP): queue-drop count at `node_id` from
+      drops.txt.
+    - "retransmissions" (e.g. for TCP): TCP retransmission count from the
+      .rtx tracer files, since a lossless-looking flow can still be paying
+      for congestion via retransmissions that drops.txt won't show.
+    Both are expressed as a percentage of the flow's total tx packets from
+    flow_monitor.xml.
+    """
+    labels = [
+        _DROPS_BAR_LABEL_ABBREVIATIONS.get(label, label)
+        for _experiment_type, _colors, _marker, label, _linestyle in schemes
+    ]
     bar_colors = [scheme_colors[0] for _experiment_type, scheme_colors, _marker, _label, _linestyle in schemes]
-    counts = [
-        _total_drops_for_scheme(results, experiment_type, node_id=node_id, exclude_pktsize=exclude_pktsize)
+    if metric == "retransmissions":
+        numerator_counts = [
+            _total_retransmissions_for_scheme(results, experiment_type, dport=dport)
+            for experiment_type, _colors, _marker, _label, _linestyle in schemes
+        ]
+        ylabel = "Delay-Sensitive Flow RTX (%)"
+    else:
+        numerator_counts = [
+            _total_drops_for_scheme(results, experiment_type, node_id=node_id, dport=dport)
+            for experiment_type, _colors, _marker, _label, _linestyle in schemes
+        ]
+        ylabel = "Delay-Sensitive Flow Drops (%)"
+    tx_totals = [
+        _total_tx_packets_for_scheme(results, experiment_type, dport=dport)
         for experiment_type, _colors, _marker, _label, _linestyle in schemes
     ]
+    percentages = [
+        (100.0 * numerator / total) if total else 0.0
+        for numerator, total in zip(numerator_counts, tx_totals)
+    ]
 
-    bars = ax.bar(labels, counts, color=bar_colors)
-    ax.bar_label(bars, labels=[str(c) for c in counts], padding=3, fontsize=11)
-    ax.set_ylabel("Total Drops", fontsize=12)
+    if metric == "drops":
+        # Hatch lines are drawn in the patch's edgecolor, so an unfilled face
+        # with edgecolor=scheme color renders a colored hatch instead of a
+        # colored fill -- visually distinct from the solid retransmission bars.
+        bars = ax.bar(labels, percentages, facecolor="none", edgecolor=bar_colors, hatch="//", linewidth=1.5)
+    else:
+        bars = ax.bar(labels, percentages, color=bar_colors)
+    bar_labels = ax.bar_label(bars, labels=[f"{p:.2f}%" for p in percentages], padding=3, fontsize=11)
+    for text, color in zip(bar_labels, bar_colors):
+        text.set_color(color)
+    ax.set_ylabel(ylabel, fontsize=12)
     ax.tick_params(axis="both", which="major", labelsize=12)
     plt.setp(ax.get_xticklabels(), rotation=20, ha="right")
     ax.grid(axis="y", linestyle="--", linewidth=0.5)
-    ax.set_ylim(0, max(counts + [1]) * 1.15)
+    ax.set_ylim(0, max(percentages + [1]) * 1.15)
 
 
 def _finish_throughput_axes(ax, congestion_points):
@@ -2051,7 +2154,7 @@ def plot_throughput_delay_ipg_figure(
     ipg_xlim=None, ipg_ylim=(0.95, 1.001),
     schemes=None,
     third_panel="ipg",
-    drops_node_id=1, drops_exclude_pktsize=1442,
+    drops_node_id=1, drops_dport=22222, drops_metric="drops",
 ):
     """One combined figure per workload: throughput (one row per scheme,
     stacked in the first column) next to a single delay-CDF panel and a
@@ -2062,11 +2165,16 @@ def plot_throughput_delay_ipg_figure(
     `third_panel` selects what the third column shows:
     - "ipg" (default): IPG-CCDF (log-log survival function) of the protected
       flow, from `flow_info`.
-    - "drops": bar chart of total queue-drop count per scheme for the
-      protected flow at node `drops_node_id`, reading <scheme>/<run>/drops.txt
-      and excluding packets of size `drops_exclude_pktsize` (the fixed size
-      of unprotected background traffic), with the count labeled on top of
-      each bar (including 0).
+    - "drops": bar chart of the protected flow's loss/retransmission rate per
+      scheme, as a percentage of its total tx packets (from flow_monitor.xml).
+      `drops_metric="drops"` (default) counts queue drops at node `drops_node_id`
+      with destination port `drops_dport` from <scheme>/<run>/drops.txt (each
+      line's last field is a "srcip|dstip|proto|sport|dport" flow id);
+      `drops_metric="retransmissions"` counts TCP retransmissions from
+      <scheme>/<run>/retransmissions/*-{drops_dport}.rtx instead (use this for
+      TCP flows, where drops.txt can under-report impact that shows up as
+      retransmissions instead). The percentage is labeled on top of each bar
+      (including 0%).
 
     Pass `schemes` explicitly (list of (experiment_type, colors, marker, label,
     linestyle) tuples, as returned by `_throughput_schemes`) to plot a custom
@@ -2103,7 +2211,7 @@ def plot_throughput_delay_ipg_figure(
     if third_panel == "drops":
         _draw_drops_bar(
             ax_ipg, results, schemes,
-            node_id=drops_node_id, exclude_pktsize=drops_exclude_pktsize,
+            node_id=drops_node_id, dport=drops_dport, metric=drops_metric,
         )
     else:
         _draw_ipg_cdf(ax_ipg, flow_info, xlim=ipg_xlim, ylim=ipg_ylim, annotate_qlr=True)

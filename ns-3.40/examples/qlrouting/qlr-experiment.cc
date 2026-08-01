@@ -146,7 +146,9 @@ main(int argc, char* argv[])
     std::string queueDisc = "FifoQueueDisc";
     queueDisc = std::string("ns3::") + queueDisc;
 
-    Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
+    if (congestionControl != "None") {
+        Config::SetDefault("ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + congestionControl));
+    }
     Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(2 << 17));
     Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(2 << 17));
     Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(100));

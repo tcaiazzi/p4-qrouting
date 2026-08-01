@@ -120,6 +120,30 @@ tracePktTxNetDevice(std::string context, Ptr<const Packet> p)
     if (proto != 6 && proto != 17)
         return;
 
+    pCopy->RemoveHeader(ipHdr);
+
+    uint16_t srcPort = 0;
+    uint16_t dstPort = 0;
+    if (proto == 6) // TCP
+    {
+        TcpHeader tcpHdr;
+        if (!pCopy->PeekHeader(tcpHdr))
+            return;
+        srcPort = tcpHdr.GetSourcePort();
+        dstPort = tcpHdr.GetDestinationPort();
+    }
+    else // UDP
+    {
+        UdpHeader udpHdr;
+        if (!pCopy->PeekHeader(udpHdr))
+            return;
+        srcPort = udpHdr.GetSourcePort();
+        dstPort = udpHdr.GetDestinationPort();
+    }
+
+    if (srcPort != 22222 && dstPort != 22222) // Only trace protected flows
+        return;
+
     auto ctxIt = ctx2tpInfo.find(context);
     if (ctxIt == ctx2tpInfo.end())
     {

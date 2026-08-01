@@ -87,7 +87,8 @@ class Flow(object):
     #  class variable list
     __slots_ = ['flowId', 'delayMean', 'packetLossRatio', 'rxBitrate', 'txBitrate',
                 'fiveTuple', 'packetSizeMean', 'probe_stats_unsorted',
-                'hopCount', 'flowInterruptionsHistogram', 'delayHistogram', 'rx_duration', 'fct']
+                'hopCount', 'flowInterruptionsHistogram', 'delayHistogram', 'rx_duration', 'fct',
+                'txPackets', 'rxPackets']
     def __init__(self, flow_el):
         '''! The initializer.
         @param self The object pointer.
@@ -96,6 +97,8 @@ class Flow(object):
         self.flowId = int(flow_el.get('flowId'))
         rxPackets = float(flow_el.get('rxPackets'))
         txPackets = float(flow_el.get('txPackets'))
+        self.rxPackets = rxPackets
+        self.txPackets = txPackets
 
         tx_duration = (parse_time_ns (flow_el.get('timeLastTxPacket')) - parse_time_ns(flow_el.get('timeFirstTxPacket')))*1e-9
         rx_duration = (parse_time_ns (flow_el.get('timeLastRxPacket')) - parse_time_ns(flow_el.get('timeFirstRxPacket')))*1e-9
