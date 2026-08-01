@@ -99,7 +99,7 @@ TraceCwnd(std::string fileName, uint32_t nodeId, uint32_t socketId)
 
 std::map<std::string, std::pair<uint64_t, uint64_t>> ctx2tpInfo;
 std::map<std::string, FILE*> tpStream;
-Time period = Time::FromInteger(100, Time::Unit::MS);
+Time period = Time::FromInteger(10, Time::Unit::MS);
 
 void
 tracePktTxNetDevice(std::string context, Ptr<const Packet> p)
@@ -158,7 +158,7 @@ tracePktTxNetDevice(std::string context, Ptr<const Packet> p)
         if (interval.Compare(period) >= 0)
         {
             /* Yes, compute the bps and store it */
-            double bps = (*ctxIt).second.second * (1000000 / interval.GetMicroSeconds());
+            double bps = (*ctxIt).second.second * (1000000.0 / interval.GetMicroSeconds());
             fprintf(tpStream[context], "%f %f\n", Simulator::Now().GetSeconds(), bps);
             fflush(tpStream[context]);
             fsync(fileno(tpStream[context]));

@@ -2202,7 +2202,7 @@ def plot_throughput_delay_ipg_figure(
     for ax in tp_axes[:-1]:
         ax.tick_params(axis='x', which='both', labelbottom=False)
     tp_axes[-1].set_xlabel("Time [s]", fontsize=12)
-    fig.supylabel("Throughput [Mbps]", fontsize=12, x=0.07)
+    fig.supylabel("RX Throughput [Mbps]", fontsize=12, x=0.07)
 
     ax_delay = fig.add_subplot(gs[:, 1])
     _draw_delay_cdf(ax_delay, flow_info, xlim=delay_xlim, ylim=delay_ylim, annotate_qlr=False)
@@ -2258,7 +2258,7 @@ def plot_throughput_and_delay_cdf_figure(
         _plot_throughput_line(ax_tp, results, source_node, experiment_type, colors, marker, label, linestyle)
     _draw_congestion_regions(ax_tp, congestion_points)
     ax_tp.set_xlabel("Time [s]", fontsize=12)
-    ax_tp.set_ylabel("Throughput [Mbps]", fontsize=12)
+    ax_tp.set_ylabel("RX Throughput [Mbps]", fontsize=12)
     ax_tp.tick_params(axis='both', which='major', labelsize=12)
 
     _draw_delay_cdf(ax_delay, flow_info, xlim=delay_xlim, ylim=delay_ylim)
