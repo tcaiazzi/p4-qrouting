@@ -294,33 +294,33 @@ SwitchMmu::RemoveFromEgressAdmission(uint32_t port, uint32_t qIndex, uint32_t ps
         egressPoolUsed = 0;
 }
 
-void SwitchMmu::LogIngressDrop(uint32_t port, uint32_t qIndex, uint32_t psize)
+void SwitchMmu::LogIngressDrop(uint32_t port, uint32_t qIndex, Ptr<Packet> p)
 {
-    TraceIngressDrop(port, qIndex, ingress_bytes[port][qIndex], DynamicThreshold(port, qIndex, "ingress"), psize);
+    TraceIngressDrop(port, qIndex, ingress_bytes[port][qIndex], DynamicThreshold(port, qIndex, "ingress"), p);
 }
 
-void SwitchMmu::LogEgressDrop(uint32_t port, uint32_t qIndex, uint32_t psize)
+void SwitchMmu::LogEgressDrop(uint32_t port, uint32_t qIndex, Ptr<Packet> p)
 {
-    TraceEgressDrop(port, qIndex, egress_bytes[port][qIndex], DynamicThreshold(port, qIndex, "egress"), psize);
+    TraceEgressDrop(port, qIndex, egress_bytes[port][qIndex], DynamicThreshold(port, qIndex, "egress"), p);
 }
 
-void SwitchMmu::TraceIngressDrop(uint32_t port, uint32_t qIndex, uint64_t ingress_bytes, uint64_t threshold, uint32_t psize)
+void SwitchMmu::TraceIngressDrop(uint32_t port, uint32_t qIndex, uint64_t ingress_bytes, uint64_t threshold, Ptr<Packet> p)
 {
     NS_LOG_INFO(Simulator::Now().GetTimeStep()
                 << " node=" << node_id << " dropping packet at ingress admission port="
-                << port << " qIndex=" << qIndex << " pkt_size=" << psize << " ingress_bytes="
+                << port << " qIndex=" << qIndex << " pkt_size=" << p->GetSize() << " ingress_bytes="
                 << ingress_bytes << " threshold=" << threshold);
 
-    m_igDropTrace(node_id, port, qIndex, ingress_bytes, threshold, psize);
+    m_igDropTrace(node_id, port, qIndex, ingress_bytes, threshold, p);
 }
 
-void SwitchMmu::TraceEgressDrop(uint32_t port, uint32_t qIndex, uint64_t egress_bytes, uint64_t threshold, uint32_t psize)
+void SwitchMmu::TraceEgressDrop(uint32_t port, uint32_t qIndex, uint64_t egress_bytes, uint64_t threshold, Ptr<Packet> p)
 {
     NS_LOG_INFO(Simulator::Now().GetTimeStep()
                 << " node=" << node_id << " dropping packet at egress admission port="
-                << port << " qIndex=" << qIndex << " pkt_size=" << psize << " egress_bytes=" << egress_bytes << " threshold="
+                << port << " qIndex=" << qIndex << " pkt_size=" << p->GetSize() << " egress_bytes=" << egress_bytes << " threshold="
                 << threshold);
 
-    m_egDropTrace(node_id, port, qIndex, egress_bytes, threshold, psize);
+    m_egDropTrace(node_id, port, qIndex, egress_bytes, threshold, p);
 }
 } // namespace ns3

@@ -1863,6 +1863,61 @@ def _draw_congestion_regions(ax, congestion_points):
             ax.axvspan(s, e, color="black", alpha=0.12, zorder=0)
 
 
+def _extract_drop_count(drops_path, node_id=1, exclude_pktsize=1442):
+    """Count queue-drop events from a <scheme>/<run>/drops.txt file (format:
+    time buffer node port queue occupancy threshold pktsize), keeping only
+    drops at `node_id` whose packet size isn't `exclude_pktsize` (the fixed
+    size of the unprotected background traffic, used here to isolate the
+    QLR-protected flow)."""
+    if not os.path.isfile(drops_path):
+        return 0
+
+    count = 0
+    with open(drops_path) as drops_file:
+        for line in drops_file:
+            parts = line.split()
+            if len(parts) < 8:
+                continue
+            try:
+                node = int(parts[2])
+                pktsize = int(parts[7])
+            except ValueError:
+                continue
+            if node == node_id and pktsize != exclude_pktsize:
+                count += 1
+    return count
+
+
+def _total_drops_for_scheme(results, experiment_type, node_id=1, exclude_pktsize=1442):
+    results_path = os.path.join(results, experiment_type)
+    if not os.path.isdir(results_path):
+        return 0
+    return sum(
+        _extract_drop_count(
+            os.path.join(results_path, experiment_id, "drops.txt"),
+            node_id=node_id, exclude_pktsize=exclude_pktsize,
+        )
+        for experiment_id in sorted(os.listdir(results_path))
+    )
+
+
+def _draw_drops_bar(ax, results, schemes, node_id=1, exclude_pktsize=1442):
+    labels = [label for _experiment_type, _colors, _marker, label, _linestyle in schemes]
+    bar_colors = [scheme_colors[0] for _experiment_type, scheme_colors, _marker, _label, _linestyle in schemes]
+    counts = [
+        _total_drops_for_scheme(results, experiment_type, node_id=node_id, exclude_pktsize=exclude_pktsize)
+        for experiment_type, _colors, _marker, _label, _linestyle in schemes
+    ]
+
+    bars = ax.bar(labels, counts, color=bar_colors)
+    ax.bar_label(bars, labels=[str(c) for c in counts], padding=3, fontsize=11)
+    ax.set_ylabel("Total Drops", fontsize=12)
+    ax.tick_params(axis="both", which="major", labelsize=12)
+    plt.setp(ax.get_xticklabels(), rotation=20, ha="right")
+    ax.grid(axis="y", linestyle="--", linewidth=0.5)
+    ax.set_ylim(0, max(counts + [1]) * 1.15)
+
+
 def _finish_throughput_axes(ax, congestion_points):
     ax.set_xlabel("Time [s]", fontsize=12)
     ax.set_ylabel("Average Throughput [Mbps]", loc="bottom", fontsize=12)
@@ -1995,12 +2050,23 @@ def plot_throughput_delay_ipg_figure(
     delay_xlim=(0, 700), delay_ylim=(0.95, 1.001),
     ipg_xlim=None, ipg_ylim=(0.95, 1.001),
     schemes=None,
+    third_panel="ipg",
+    drops_node_id=1, drops_exclude_pktsize=1442,
 ):
     """One combined figure per workload: throughput (one row per scheme,
     stacked in the first column) next to a single delay-CDF panel and a
-    single IPG-CDF panel (each spanning the full height) -- all three
-    columns the same width, throughput rows all the same height, one shared
-    legend across every panel instead of one per panel.
+    third panel (each spanning the full height) -- all three columns the
+    same width, throughput rows all the same height, one shared legend
+    across every panel instead of one per panel.
+
+    `third_panel` selects what the third column shows:
+    - "ipg" (default): IPG-CCDF (log-log survival function) of the protected
+      flow, from `flow_info`.
+    - "drops": bar chart of total queue-drop count per scheme for the
+      protected flow at node `drops_node_id`, reading <scheme>/<run>/drops.txt
+      and excluding packets of size `drops_exclude_pktsize` (the fixed size
+      of unprotected background traffic), with the count labeled on top of
+      each bar (including 0).
 
     Pass `schemes` explicitly (list of (experiment_type, colors, marker, label,
     linestyle) tuples, as returned by `_throughput_schemes`) to plot a custom
@@ -2034,7 +2100,13 @@ def plot_throughput_delay_ipg_figure(
     _draw_delay_cdf(ax_delay, flow_info, xlim=delay_xlim, ylim=delay_ylim, annotate_qlr=False)
 
     ax_ipg = fig.add_subplot(gs[:, 2])
-    _draw_ipg_cdf(ax_ipg, flow_info, xlim=ipg_xlim, ylim=ipg_ylim, annotate_qlr=True)
+    if third_panel == "drops":
+        _draw_drops_bar(
+            ax_ipg, results, schemes,
+            node_id=drops_node_id, exclude_pktsize=drops_exclude_pktsize,
+        )
+    else:
+        _draw_ipg_cdf(ax_ipg, flow_info, xlim=ipg_xlim, ylim=ipg_ylim, annotate_qlr=True)
 
     handles, legend_labels = [], []
     for ax in tp_axes:

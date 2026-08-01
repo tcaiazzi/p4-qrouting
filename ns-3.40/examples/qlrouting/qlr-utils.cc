@@ -14,9 +14,11 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <random>
+#include <sstream>
 #include <string>
 
 using namespace ns3;
@@ -176,17 +178,51 @@ traceQdepth(Ptr<P4SwitchNetDevice> p4Device, std::string fileName)
 
 static Ptr<OutputStreamWrapper> dropsFile;
 
+static std::string
+GetFlowString(Ptr<Packet> p)
+{
+    Ptr<Packet> pCopy = p->Copy();
+
+    EthernetHeader ethHdr;
+    pCopy->RemoveHeader(ethHdr);
+
+    Ipv4Header ipHdr;
+    pCopy->RemoveHeader(ipHdr);
+
+    uint8_t proto = ipHdr.GetProtocol();
+
+    std::ostringstream oss;
+    oss << std::hex << std::setfill('0') << std::setw(8) << ipHdr.GetSource().Get() << "|"
+        << std::setw(8) << ipHdr.GetDestination().Get() << std::dec << "|"
+        << static_cast<uint32_t>(proto);
+
+    if (proto == 0x06) // TCP
+    {
+        TcpHeader tcpHdr;
+        pCopy->RemoveHeader(tcpHdr);
+        oss << "|" << tcpHdr.GetSourcePort() << "|" << tcpHdr.GetDestinationPort();
+    }
+    else if (proto == 0x11) // UDP
+    {
+        UdpHeader udpHdr;
+        pCopy->RemoveHeader(udpHdr);
+        oss << "|" << udpHdr.GetSourcePort() << "|" << udpHdr.GetDestinationPort();
+    }
+
+    return oss.str();
+}
+
 static void
 traceIngressDrop(uint32_t nodeId,
                  uint32_t port,
                  uint32_t qIndex,
                  uint64_t bytes,
                  uint64_t threshold,
-                 uint32_t psize)
+                 Ptr<Packet> p)
 {
     *dropsFile->GetStream() << Simulator::Now().GetSeconds() << " INGRESS " << nodeId << " "
                            << port << " " << qIndex << " " << bytes << " " << threshold << " "
-                           << psize << std::endl;
+                           << p->GetSize() << " " << GetFlowString(p) << std::endl;
     *dropsFile->GetStream() << std::flush;
 }
 
@@ -196,11 +232,11 @@ traceEgressDrop(uint32_t nodeId,
                 uint32_t qIndex,
                 uint64_t bytes,
                 uint64_t threshold,
-                uint32_t psize)
+                Ptr<Packet> p)
 {
     *dropsFile->GetStream() << Simulator::Now().GetSeconds() << " EGRESS " << nodeId << " "
                            << port << " " << qIndex << " " << bytes << " " << threshold << " "
-                           << psize << std::endl;
+                           << p->GetSize() << " " << GetFlowString(p) << std::endl;
     *dropsFile->GetStream() << std::flush;
 }
 

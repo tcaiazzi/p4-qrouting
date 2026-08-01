@@ -20,8 +20,12 @@ def main():
         # ("wl4", [(2.0, 2.3), (2.6, 2.9), (3.2, 3.5), (3.8, 4.1)]),
     ]
 
-    for congestion_control in ["TcpLinuxReno", "TcpVegas"]:
-        for wl, congestions in workloads:
+    udp_workloads = [
+        ("wl3-udp", [(2.0, 2.2), (2.3, 2.5), (2.6, 2.8)]),
+    ]
+
+    for congestion_control, wl_list in [("TcpLinuxReno", workloads), ("TcpVegas", workloads), (None, udp_workloads)]:
+        for wl, congestions in wl_list:
             base_path = os.path.join(results_path, f"microbenchmark_3_{congestion_control}_{wl}")
 
             plot_topology.generate_topology_figures(
@@ -112,15 +116,16 @@ def main():
 
             paper_plot.plot_throughput_delay_ipg_figure(
                 base_path,
-                f"microbenchmark-3-throughput-delay-ipg-{congestion_control}-{wl}",
+                f"microbenchmark-3-throughput-delay-drops-{congestion_control}-{wl}",
                 flow_info,
                 congestion_points=congestions,
                 central=True,
                 local=True,
                 labels=["Static", "QLR", "Control Plane", "HP-QLR"],
                 delay_ylim=(0.999, 1.00001) if congestion_control == "TcpVegas" else (0.93, 1.001),
-                ipg_ylim=(0.93, 1.0006) if congestion_control == "TcpVegas" else (0.95, 1.001),
-                ipg_xlim=(0.03, 1000),
+                third_panel="drops",
+                drops_node_id=1,
+                drops_exclude_pktsize=1442,
             )
 
     # paper_plot.plot_delay_cdf_all_experiments(
