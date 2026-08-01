@@ -2156,30 +2156,6 @@ def plot_throughput_delay_ipg_figure(
     third_panel="ipg",
     drops_node_id=1, drops_dport=22222, drops_metric="drops",
 ):
-    """One combined figure per workload: throughput (one row per scheme,
-    stacked in the first column) next to a single delay-CDF panel and a
-    third panel (each spanning the full height) -- all three columns the
-    same width, throughput rows all the same height, one shared legend
-    across every panel instead of one per panel.
-
-    `third_panel` selects what the third column shows:
-    - "ipg" (default): IPG-CCDF (log-log survival function) of the protected
-      flow, from `flow_info`.
-    - "drops": bar chart of the protected flow's loss/retransmission rate per
-      scheme, as a percentage of its total tx packets (from flow_monitor.xml).
-      `drops_metric="drops"` (default) counts queue drops at node `drops_node_id`
-      with destination port `drops_dport` from <scheme>/<run>/drops.txt (each
-      line's last field is a "srcip|dstip|proto|sport|dport" flow id);
-      `drops_metric="retransmissions"` counts TCP retransmissions from
-      <scheme>/<run>/retransmissions/*-{drops_dport}.rtx instead (use this for
-      TCP flows, where drops.txt can under-report impact that shows up as
-      retransmissions instead). The percentage is labeled on top of each bar
-      (including 0%).
-
-    Pass `schemes` explicitly (list of (experiment_type, colors, marker, label,
-    linestyle) tuples, as returned by `_throughput_schemes`) to plot a custom
-    set of schemes instead of the default {baseline, central, local_qlr, qlr}.
-    """
     source_node = _resolve_source_node(results, source_node)
     if schemes is None:
         schemes = _throughput_schemes(labels, central, local)
@@ -2202,6 +2178,8 @@ def plot_throughput_delay_ipg_figure(
     for ax in tp_axes[:-1]:
         ax.tick_params(axis='x', which='both', labelbottom=False)
     tp_axes[-1].set_xlabel("Time [s]", fontsize=12)
+    tp_axes[-1].set_xlim(1,4.2)
+    tp_axes[-1].set_xticks([1,2,3,4])
     fig.supylabel("RX Throughput [Mbps]", fontsize=12, x=0.07)
 
     ax_delay = fig.add_subplot(gs[:, 1])

@@ -122,7 +122,7 @@ def main():
                 central=True,
                 local=True,
                 labels=["Static", "QLR", "Control Plane", "HP-QLR"],
-                delay_xlim=(0, 600) if congestion_control is not None else (0, 750),
+                delay_xlim=(0, 600) if congestion_control is not None else (0, 800),
                 delay_ylim=(0.999, 1.00001) if congestion_control == "TcpVegas" else (0.93, 1.001) if congestion_control == "TcpLinuxReno" else (0, 1.01),
                 third_panel="drops",
                 drops_node_id=1,

@@ -19,7 +19,7 @@ max_congestion = 256
 
 def generate_node_commands_from_dag(node_dag: nx.DiGraph, net: dict, start: int, goal: int, dst_compact_row: dict) -> list[str]:
     cmd = []
-    row_slices = [32] * 8
+    row_slices = [90] * 8
     print("Generating commands for node:", start, "to goal:", goal)
     # print(f"Node {start} neighbors:", net[start])
 
@@ -112,11 +112,11 @@ def generate_all_commands(network: dict, dags: dict, subnets):
         for (node, subnet) in filter(lambda x: x[0] != node_name, node_to_network.items()):
             port_num =  network[node_name][nx.shortest_path(network_graph, source=node_name, target=node)[1]]
             if qlr_active:
-                commands.add(f"table_add select_row get_row_num {subnet} 6 22222&&&0xFFFF => {dst_compact_row[node]} 1")
-                commands.add(f"table_add select_row get_row_num {subnet} 17 22222&&&0xFFFF => {dst_compact_row[node]} 1")
+                commands.add(f"table_add select_row get_row_num {subnet} 6 => {dst_compact_row[node]}")
+                # commands.add(f"table_add select_row get_row_num {subnet} 17 => {dst_compact_row[node]}")
             else:
-                commands.add(f"table_add select_row set_nhop {subnet} 6 22222&&&0xFFFF => {port_num + 1} 1")
-                commands.add(f"table_add select_row set_nhop {subnet} 17 22222&&&0xFFFF => {port_num + 1} 1")
+                commands.add(f"table_add select_row set_nhop {subnet} 6 => {port_num + 1}")
+                # commands.add(f"table_add select_row set_nhop {subnet} 17 => {port_num + 1}")
 
 
         commands.add(f"table_set_default select_row set_nhop 1")
@@ -125,7 +125,7 @@ def generate_all_commands(network: dict, dags: dict, subnets):
             if qlr_active and node in network[node_name]:
                 commands.add(f"table_add handle_update send_probe {subnet} 17 33333 0 => {port_num + 1} {node + 1}")
                 commands.add(f"table_add handle_update process_probe {all_node_to_network[node_name]} 17 33333 1 =>")
-            commands.add(f"table_add select_row set_nhop {subnet} 17 0&&&0x0 => {port_num + 1} 2")
+            commands.add(f"table_add select_row set_nhop {subnet} 17 => {port_num + 1}")
 
         if qlr_active:
             color_weights = {}
