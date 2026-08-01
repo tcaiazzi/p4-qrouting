@@ -216,10 +216,9 @@ P4SwitchNetDevice::ReceiveFromDevice(Ptr<NetDevice> incomingPort,
                                   << " cannot admit in egress packet with size=" << pkt_size
                                   << ", dropping");
 
+            m_p4_pipeline->deparse(out_pkt);
             Ptr<Packet> deparsed_pkt = m_pkt_deparser->get_ns3_packet(std::move(out_pkt));
-            m_mmu->LogEgressDrop(outport_n, qid, deparsed_pkt);         
-
-            out_pkt.release();
+            m_mmu->LogEgressDrop(outport_n, qid, deparsed_pkt);
 
             continue;
         }

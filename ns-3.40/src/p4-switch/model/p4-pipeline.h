@@ -89,6 +89,11 @@ class P4Pipeline : public bm::Switch
                        uint64_t deq_qdepth,
                        int64_t enq_tstamp);
 
+    /**
+     * \brief Run only the deparser on a packet, restoring it to wire format without running the egress match-action pipeline.
+     */
+    void deparse(std::unique_ptr<bm::Packet>& packet);
+
   private:
     enum PktInstanceType
     {

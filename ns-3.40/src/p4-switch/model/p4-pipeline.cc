@@ -340,6 +340,13 @@ P4Pipeline::process_egress(std::unique_ptr<bm::Packet>& packet,
 }
 
 void
+P4Pipeline::deparse(std::unique_ptr<bm::Packet>& packet)
+{
+    bm::Deparser* deparser = this->get_deparser("deparser");
+    deparser->deparse(packet.get());
+}
+
+void
 P4Pipeline::process_multicast(
     std::list<std::tuple<uint16_t, uint16_t, std::unique_ptr<bm::Packet>>>* pkts_to_egress,
     bm::Packet* packet,
