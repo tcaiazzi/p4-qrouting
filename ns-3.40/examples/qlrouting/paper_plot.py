@@ -1988,13 +1988,13 @@ def _draw_drops_bar(ax, results, schemes, node_id=1, dport=22222, metric="drops"
             _total_retransmissions_for_scheme(results, experiment_type, dport=dport)
             for experiment_type, _colors, _marker, _label, _linestyle in schemes
         ]
-        ylabel = "Delay-Sensitive Flow RTX (%)"
+        ylabel = "Delay-Sensitive Flow RTX [%]"
     else:
         numerator_counts = [
             _total_drops_for_scheme(results, experiment_type, node_id=node_id, dport=dport)
             for experiment_type, _colors, _marker, _label, _linestyle in schemes
         ]
-        ylabel = "Delay-Sensitive Flow Drops (%)"
+        ylabel = "Delay-Sensitive Flow Drops [%]"
     tx_totals = [
         _total_tx_packets_for_scheme(results, experiment_type, dport=dport)
         for experiment_type, _colors, _marker, _label, _linestyle in schemes
